@@ -1,6 +1,8 @@
 package app.flickpanel.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -38,6 +41,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,6 +57,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -82,6 +92,7 @@ internal fun MusicTile(label: String, entity: Entity?, ready: Boolean, model: Pa
     val transport = if (playing) MediaTransport.PAUSE else MediaTransport.PLAY
     val canBrowse = features.canBrowseMusic()
     val showTransport = features.hasMediaFeature(transport.bit) && (hasCurrent || !canBrowse)
+    val cover = rememberMusicArtwork(entity?.attributes?.text("entity_picture")?.takeIf { ready && hasCurrent }, model)
     val detail = when {
         entity?.available != true -> "Unavailable"
         hasCurrent -> listOfNotNull(entity.attributes.text("media_title"), entity.attributes.text("media_artist"))
@@ -101,7 +112,11 @@ internal fun MusicTile(label: String, entity: Entity?, ready: Boolean, model: Pa
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.MusicNote, null, Modifier.size(30.dp), tint = colors.primary)
+            if (cover != null) {
+                Image(cover, null, Modifier.size(42.dp).clip(RoundedCornerShape(9.dp)), contentScale = ContentScale.Crop)
+            } else {
+                Icon(Icons.Rounded.MusicNote, null, Modifier.size(30.dp), tint = colors.primary)
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (detail != null) {
@@ -203,13 +218,18 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel) {
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
             val wide = maxWidth >= tabletWidthDp.dp
             val cardMinimum = if (wide) 194.dp else 154.dp
+            val speakerInline = maxWidth >= 620.dp
             Column(
                 Modifier.widthIn(max = panelMaxWidth).fillMaxSize()
                     .padding(horizontal = if (wide) panelWidePadding else 20.dp)
                     .padding(top = if (wide) 34.dp else 18.dp),
             ) {
                 MusicHeader(
-                    current?.title ?: "Music", player, current != null, starting, ::back,
+                    collection = current?.title,
+                    player = player,
+                    speakerInline = speakerInline,
+                    starting = starting,
+                    back = ::back,
                     playFolder = current?.takeIf { it.playable }?.let { folder -> { play(folder) } },
                 )
                 if (playFailed) {
@@ -235,6 +255,7 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel) {
                                 shelf.title,
                                 cache[shelf],
                                 cardMinimum,
+                                model,
                                 failed = failures[shelf] == true,
                                 enabled = !starting,
                                 viewAll = { open(shelf) },
@@ -261,7 +282,7 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel) {
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
                         items(results) { item ->
-                            MusicCard(item, !starting, open = { open(item) }, play = { play(item) })
+                            MusicCard(item, model, !starting, open = { open(item) }, play = { play(item) })
                         }
                     }
                 }
@@ -272,60 +293,79 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel) {
 
 @Composable
 private fun MusicHeader(
-    title: String,
+    collection: String?,
     player: String?,
-    nested: Boolean,
+    speakerInline: Boolean,
     starting: Boolean,
     back: () -> Unit,
     playFolder: (() -> Unit)?,
 ) {
-    val colors = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
-    Row(
+    val speaker = player?.trim()?.takeIf { it.isNotEmpty() }
+    val title = when {
+        collection != null -> collection
+        speaker == null -> "Music"
+        speaker.equals("music", ignoreCase = true) || speaker.endsWith(" music", ignoreCase = true) -> speaker
+        else -> "$speaker music"
+    }
+    Column(
         Modifier.fillMaxWidth().padding(bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (nested) {
-            FilledTonalIconButton(onClick = back, enabled = !starting, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            if (collection != null) {
+                FilledTonalIconButton(onClick = back, enabled = !starting, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
+                }
             }
-        }
-        Column(Modifier.weight(1f)) {
             Text(
-                title, Modifier.semantics { heading() }, style = type.displaySmall,
+                title, Modifier.weight(1f).semantics { heading() }, style = type.displaySmall,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
-            if (player != null) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.Speaker, null, Modifier.size(18.dp), tint = colors.onSurfaceVariant)
-                    Text(
-                        player, style = type.bodyMedium, color = colors.onSurfaceVariant,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
+            if (collection != null && speaker != null && speakerInline) {
+                MusicSpeaker(speaker, Modifier.widthIn(max = 192.dp))
+            }
+            if (playFolder != null) {
+                FilledTonalButton(onClick = playFolder, enabled = !starting, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp))
+                    Text("Play", Modifier.padding(start = 6.dp))
+                }
+            }
+            if (starting) {
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(22.dp).semantics {
+                        contentDescription = "Starting playback"
+                    }, strokeWidth = 2.dp)
+                }
+            } else if (collection == null) {
+                FilledTonalIconButton(onClick = back, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.Close, "Close music")
                 }
             }
         }
-        if (playFolder != null) {
-            FilledTonalButton(onClick = playFolder, enabled = !starting, modifier = Modifier.heightIn(min = 48.dp)) {
-                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp))
-                Text("Play", Modifier.padding(start = 6.dp))
-            }
+        if (collection != null && speaker != null && !speakerInline) {
+            MusicSpeaker(speaker, Modifier.padding(start = 62.dp))
         }
-        if (starting) {
-            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(Modifier.size(22.dp).semantics {
-                    contentDescription = "Starting playback"
-                }, strokeWidth = 2.dp)
-            }
-        } else if (!nested) {
-            FilledTonalIconButton(onClick = back, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Rounded.Close, "Close music")
-            }
-        }
+    }
+}
+
+@Composable
+private fun MusicSpeaker(speaker: String, modifier: Modifier) {
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Speaker, null, Modifier.size(21.dp), tint = color)
+        Text(
+            speaker, style = MaterialTheme.typography.titleMedium, color = color,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -334,6 +374,7 @@ private fun MusicShelf(
     title: String,
     choices: List<MediaChoice>?,
     cardMinimum: Dp,
+    model: PanelViewModel,
     failed: Boolean,
     enabled: Boolean,
     viewAll: () -> Unit,
@@ -385,7 +426,7 @@ private fun MusicShelf(
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                     for (item in choices.take(columns)) {
                         MusicCard(
-                            item, enabled, open = { open(item) }, play = { play(item) },
+                            item, model, enabled, open = { open(item) }, play = { play(item) },
                             modifier = Modifier.width(cardWidth),
                         )
                     }
@@ -457,47 +498,95 @@ private fun MusicBrowserStatus(pending: Boolean, failed: Boolean, modifier: Modi
 @Composable
 private fun MusicCard(
     item: MediaChoice,
+    model: PanelViewModel,
     enabled: Boolean,
     open: () -> Unit,
     play: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
+    val artwork = rememberMusicArtwork(item.artwork, model)
+    val buttonContainer = if (artwork == null) colors.secondaryContainer else Color(0xde17191c)
+    val buttonContent = if (artwork == null) colors.onSecondaryContainer else Color.White
     Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
-        Column(
-            Modifier.fillMaxWidth().heightIn(min = 132.dp).clickable(
-                enabled = enabled,
-                role = Role.Button,
-                onClickLabel = if (item.expandable) "Open folder" else "Play",
-                onClick = if (item.expandable) open else play,
-            ).padding(start = 16.dp, top = 12.dp, end = 12.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-        ) {
-            Text(
-                item.title, Modifier.fillMaxWidth().padding(end = 4.dp),
-                style = MaterialTheme.typography.titleMedium,
-                minLines = 2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterEnd) {
-                if (item.expandable && item.playable) {
-                    FilledTonalIconButton(onClick = play, enabled = enabled, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.PlayArrow, "Play ${item.title}", Modifier.size(26.dp))
-                    }
-                } else if (item.playable) {
-                    Surface(shape = CircleShape, color = colors.secondaryContainer, contentColor = colors.onSecondaryContainer) {
-                        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Rounded.PlayArrow, null, Modifier.size(26.dp))
+        Box {
+            if (artwork != null) {
+                Image(artwork, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+                Box(
+                    Modifier.matchParentSize().background(
+                        Brush.verticalGradient(
+                            0.26f to Color.Transparent,
+                            0.51f to Color(0xa5000000),
+                            1f to Color(0xe9000000),
+                        )
+                    ),
+                )
+            }
+            Column(
+                Modifier.fillMaxWidth().heightIn(min = 132.dp).clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClickLabel = if (item.expandable) "Open folder" else "Play",
+                    onClick = if (item.expandable) open else play,
+                ).padding(start = 16.dp, top = 12.dp, end = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+            ) {
+                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterEnd) {
+                    if (item.expandable && item.playable) {
+                        FilledTonalIconButton(
+                            onClick = play,
+                            enabled = enabled,
+                            modifier = Modifier.size(48.dp),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = buttonContainer,
+                                contentColor = buttonContent,
+                            ),
+                        ) {
+                            Icon(Icons.Rounded.PlayArrow, "Play ${item.title}", Modifier.size(26.dp))
+                        }
+                    } else {
+                        val filled = item.playable || artwork != null
+                        Box(
+                            Modifier.size(48.dp).background(
+                                if (filled) buttonContainer else Color.Transparent, CircleShape
+                            ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                if (item.playable) Icons.Rounded.PlayArrow else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                null, Modifier.size(26.dp),
+                                tint = if (filled) buttonContent else colors.onSurfaceVariant,
+                            )
                         }
                     }
-                } else {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.KeyboardArrowRight, null,
-                        Modifier.padding(end = 10.dp).size(24.dp), tint = colors.onSurfaceVariant,
-                    )
                 }
+                Text(
+                    item.title, Modifier.fillMaxWidth().padding(end = 4.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (artwork == null) colors.onSurface else Color.White,
+                    minLines = 2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
+}
+
+@Composable
+private fun rememberMusicArtwork(reference: String?, model: PanelViewModel): ImageBitmap? {
+    if (reference == null) return null
+    var bitmap by remember(model, reference) { mutableStateOf(model.cachedArtwork(reference)) }
+    LaunchedEffect(model, reference) {
+        if (bitmap == null) {
+            bitmap = try {
+                model.loadArtwork(reference)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+    return remember(bitmap) { bitmap?.asImageBitmap() }
 }

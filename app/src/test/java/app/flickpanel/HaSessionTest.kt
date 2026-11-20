@@ -20,6 +20,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -43,6 +44,8 @@ class HaSessionTest {
                 val music = client.browseMusic("media_player.kitchen", null)
                 assertEquals("Radio favourites", music.single().title)
                 assertEquals(true, music.single().playable)
+                assertEquals("/api/media_player_proxy/cover", music.single().artwork)
+                assertNotNull(client.artwork(requireNotNull(music.single().artwork)))
                 client.command("media_player.kitchen", "media_player", "play_media", JSONObject()
                     .put("media_content_id", music.single().id).put("media_content_type", music.single().type))
                 client.command("light.lamp", "light", "turn_on", JSONObject().put("brightness_pct", 50))
@@ -56,6 +59,17 @@ class HaSessionTest {
                 assertFalse(client.entities.value.containsKey("light.lamp"))
                 assertEquals(1, fixture.connections.get())
             } finally { client.stop() }
+        }
+    }
+
+    @Test fun musicAssistantCoverProxyNeverReceivesTheHomeAssistantToken() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/png").setBody("fixture cover"))
+            val client = HaClient(HaCredentials(parseServer("http://127.0.0.1:8123"), "test-fixture-token"), this)
+            val cover = server.url("/imageproxy/cover").newBuilder().host("127.0.0.1").build()
+            assertNotNull(client.artwork(cover.toString()))
+            assertNull(server.takeRequest().getHeader("Authorization"))
+            assertNull(client.artwork("http://192.168.1.2:8095/imageproxy/cover"))
         }
     }
 
@@ -79,7 +93,7 @@ private class FakeHome : Dispatcher() {
 
     override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
         "/api/" -> authorized(request, MockResponse().setBody("""{"message":"API running."}"""))
-        "/api/camera_proxy/camera.front_door" -> authorized(request,
+        "/api/camera_proxy/camera.front_door", "/api/media_player_proxy/cover" -> authorized(request,
             MockResponse().setHeader("Content-Type", "image/jpeg").setBody("fixture image bytes"))
         "/api/websocket" -> MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
             private var subscription = 0
@@ -116,7 +130,7 @@ private class FakeHome : Dispatcher() {
                     "config/device_registry/list" -> result("""[{"id":"h1","area_id":"kitchen"}]""")
                     "config/area_registry/list" -> result("""[{"area_id":"kitchen","name":"Kitchen"}]""")
                     "media_player/browse_media" -> result("""{"children":[
-                        {"media_content_id":"library://playlist/1","media_content_type":"playlist","title":"Radio favourites","media_class":"playlist","can_play":true},
+                        {"media_content_id":"library://playlist/1","media_content_type":"playlist","title":"Radio favourites","media_class":"playlist","can_play":true,"thumbnail":"/api/media_player_proxy/cover"},
                         {"media_content_id":"camera.front_gate","media_content_type":"video","title":"Front gate","media_class":"video","can_play":true}
                     ]}""")
                     "call_service" -> {

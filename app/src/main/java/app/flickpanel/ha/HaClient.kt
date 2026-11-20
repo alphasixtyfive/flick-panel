@@ -196,12 +196,14 @@ internal class HaClient(
         require(validEntity(entity) && entity.startsWith("camera."))
         val url = credentials.server.resolve("api/camera_proxy/$entity")!!.newBuilder()
             .addQueryParameter("width", "720").build()
-        return get(credentials, url) { response ->
-            if (!response.isSuccessful || response.body?.contentType()?.type != "image") return@get null
-            val source = response.body!!.source()
-            if (source.request(3_000_001)) return@get null
-            source.readByteArray()
-        }
+        return get(url, credentials.token, ::imageBody)
+    }
+
+    suspend fun artwork(reference: String): ByteArray? {
+        val server = credentials.server
+        val url = resolveArtwork(server, reference) ?: return null
+        val token = credentials.token.takeIf { server.sameOrigin(url) }
+        return get(url, token, ::imageBody)
     }
 
     suspend fun stream(entity: String): HttpUrl {
@@ -235,7 +237,7 @@ internal class HaClient(
             .pingInterval(20, TimeUnit.SECONDS).build()
 
         suspend fun validate(credentials: HaCredentials) {
-            get(credentials, credentials.server.resolve("api/")!!) {
+            get(credentials.server.resolve("api/")!!, credentials.token) {
                 if (!it.isSuccessful) throw HaProblem(
                     if (it.code in listOf(401, 403)) "Home Assistant rejected the token" else "Couldn't open the Home Assistant API"
                 )
@@ -252,10 +254,20 @@ internal class HaClient(
         private fun indexed(list: JSONArray, key: String): Map<String, JSONObject> =
             objects(list).mapNotNull { row -> row.text(key)?.let { it to row } }.toMap()
 
-        private suspend fun <T> get(credentials: HaCredentials, url: HttpUrl, read: (Response) -> T): T =
+        private fun imageBody(response: Response): ByteArray? {
+            val body = response.body ?: return null
+            val contentType = body.contentType() ?: return null
+            if (!response.isSuccessful || contentType.type != "image" || contentType.subtype == "svg+xml") return null
+            val source = body.source()
+            if (source.request(3_000_001)) return null
+            return source.readByteArray()
+        }
+
+        private suspend fun <T> get(url: HttpUrl, token: String?, read: (Response) -> T): T =
             suspendCancellableCoroutine { continuation ->
-                val call = http.newCall(Request.Builder().url(url)
-                    .header("Authorization", "Bearer " + credentials.token).build())
+                val request = Request.Builder().url(url)
+                if (token != null) request.header("Authorization", "Bearer $token")
+                val call = http.newCall(request.build())
                 continuation.invokeOnCancellation { call.cancel() }
                 call.enqueue(object : Callback {
                     override fun onFailure(call: Call, e: IOException) {
@@ -268,4 +280,15 @@ internal class HaClient(
                 })
             }
     }
+}
+
+internal fun resolveArtwork(server: HttpUrl, reference: String): HttpUrl? {
+    val url = server.resolve(reference) ?: return null
+    if (url.username.isNotEmpty() || url.password.isNotEmpty()) return null
+    val apiPath = server.encodedPath + "api/"
+    val homeAssistantImage = server.sameOrigin(url) &&
+        (url.encodedPath.startsWith(apiPath) || url.encodedPath.startsWith("/api/"))
+    val musicAssistantImage = url.host == server.host && url.encodedPath.startsWith("/imageproxy/")
+    val publicImage = url.isHttps && url.port == 443 && !server.sameOrigin(url)
+    return url.takeIf { homeAssistantImage || musicAssistantImage || publicImage }
 }

@@ -2,9 +2,9 @@
 
 Flick Panel is a native Android wall dashboard for Home Assistant. Favourites contains the
 tiles pinned on this tablet. Rooms uses Home Assistant areas to show lighting and thermostat
-controls. The **Rooms** tab in setup chooses which areas this tablet displays.
-Cameras shows pinned previews and
-opens one full-screen live feed at a time.
+controls in a single scrollable page. The **Rooms** tab in setup chooses which areas
+this tablet displays and their order. Cameras shows pinned previews and opens one
+full-screen live feed at a time.
 In setup, use **Cameras** to choose gallery feeds and star one for Home. Use **Add app** to
 pin a launcher shortcut to an app already installed on the tablet.
 
@@ -29,6 +29,8 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - Add a **Weather** entity to put current conditions and temperature next to the clock.
 - Add a **Music player** tile for playback controls. **Browse music** opens the selected
   player's Home Assistant media library when the player supports browsing and playback.
+  Music Assistant playlists and radio stations get their own shelves, with cover art
+  and station logos when available.
 - **Home message** takes a sensor or text helper whose state is the rendered message. Use a
   text source controlled by the existing Home Assistant logic.
 - **Wake on approach** takes an existing binary occupancy sensor. Select a tested radar zone
@@ -42,10 +44,12 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 ## Data flow
 
 `ha` owns the authenticated connection and entity capabilities. `config` stores the
-versioned tablet layout and local setup. `ui` shares the theme and tile grid across the
-dashboard. Home Assistant owns device state and actions. The panel subscribes to pinned
-entities and the selected room. Camera previews use a bounded memory cache and refresh
-while visible.
+versioned tablet layout and local setup. `PanelUi.kt` resolves configured areas into room
+sections. `ui/Tiles.kt` renders the shared dashboard tiles. Home Assistant owns device
+state and actions. The panel loads configured areas after connecting and subscribes to
+their controls alongside pinned entities. `PanelImages.kt` bounds image memory and decodes
+scaled copies off the UI thread. Camera previews refresh while visible. Music artwork and
+recent folders are reused when reopening the browser.
 
 ## Build
 

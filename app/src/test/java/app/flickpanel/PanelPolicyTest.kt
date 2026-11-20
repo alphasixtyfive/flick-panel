@@ -129,10 +129,10 @@ class PanelPolicyTest {
             "friendly_name":"Kitchen pendant","supported_color_modes":["brightness"]
         }"""))
         val catalogue = Catalogue(listOf(Entry(dimmer, kitchen.id, diagnostic = false, visible = true)), listOf(kitchen))
-        val state = PanelUi(catalogue = catalogue, room = kitchen.id)
-        assertEquals(TileSpec(dimmer.id, TileKind.TOGGLE, "Pendant"), state.roomTiles.single())
+        val state = RoomLayout(catalogue = catalogue)
+        assertEquals(TileSpec(dimmer.id, TileKind.TOGGLE, "Pendant"), state.sections.single().tiles.single())
         val pinned = state.copy(config = PanelConfig(favourites = listOf(TileSpec(dimmer.id, TileKind.SLIDER, "Main light"))))
-        assertEquals(TileSpec(dimmer.id, TileKind.SLIDER, "Main light"), pinned.roomTiles.single())
+        assertEquals(TileSpec(dimmer.id, TileKind.SLIDER, "Main light"), pinned.sections.single().tiles.single())
     }
 
     @Test fun enabledRoomsKeepTheirConfiguredOrder() {
@@ -145,9 +145,9 @@ class PanelPolicyTest {
         val config = PanelConfig(roomIds = listOf(dining.id, "missing_area", kitchen.id))
         val loaded = PanelConfigCodec.decode(PanelConfigCodec.encode(config))
         assertEquals(config, loaded)
-        assertEquals(listOf(dining, kitchen), PanelUi(config = loaded, catalogue = catalogue).rooms)
+        assertEquals(listOf(dining, kitchen), RoomLayout(loaded, catalogue).sections.map(RoomSection::area))
         val empty = PanelConfigCodec.decode(PanelConfigCodec.encode(PanelConfig(roomIds = emptyList())))
-        assertTrue(PanelUi(config = empty, catalogue = catalogue).rooms.isEmpty())
+        assertTrue(RoomLayout(empty, catalogue).sections.isEmpty())
     }
 
     @Test fun compactEventPatchesStateAndAttributesWithoutMutatingPreviousState() {
