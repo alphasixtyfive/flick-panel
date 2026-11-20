@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.SystemClock
+import android.util.LruCache
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.flickpanel.config.PanelConfig
@@ -19,6 +20,10 @@ import app.flickpanel.ha.HaClient
 import app.flickpanel.ha.HaCredentials
 import app.flickpanel.ha.HaProblem
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.MediaChoice
+import app.flickpanel.ha.MediaTransport
+import app.flickpanel.ha.canBrowseMusic
+import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.parseServer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +34,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl
@@ -50,6 +57,7 @@ internal data class PanelUi(
     val room: String? = null,
     val clock: Boolean = false,
     val camera: String? = null,
+    val musicBrowser: String? = null,
     val unlocking: Boolean = false,
     val editor: Boolean = false,
     val connectionEditor: Boolean = false,
@@ -58,11 +66,43 @@ internal data class PanelUi(
     val pending: Map<String, String> = emptyMap(),
     val graphs: Map<String, List<GraphPoint>> = emptyMap()
 ) {
-    val rooms: List<Area> get() = catalogue.areas.filter { catalogue.room(it.id).isNotEmpty() }
-    val roomTiles: List<TileSpec> get() = (room ?: rooms.firstOrNull()?.id)?.let { area ->
-        catalogue.room(area).take(32).map { TileSpec(it.entity.id, it.entity.kinds().first()) }
-    }.orEmpty()
-    fun entity(id: String) = entities[id] ?: catalogue.entries.firstOrNull { it.entity.id == id }?.entity
+    val rooms: List<Area> get() {
+        val visible = config.roomIds ?: return catalogue.rooms
+        val areas = catalogue.rooms.associateBy(Area::id)
+        return visible.mapNotNull(areas::get)
+    }
+    val preferredRoom: Area? get() {
+        for (tile in config.favourites) {
+            if (tile.kind !in setOf(TileKind.TOGGLE, TileKind.SLIDER, TileKind.CLIMATE)) continue
+            val area = catalogue.areaOf(tile.entity)
+            rooms.firstOrNull { it.id == area }?.let { return it }
+        }
+        return rooms.firstOrNull()
+    }
+    val roomTiles: List<TileSpec> get() {
+        val selected = rooms.firstOrNull { it.id == room } ?: return emptyList()
+        val pinned = config.favourites.filter { it.showOnHome }.associateBy { it.entity }
+        return catalogue.room(selected.id).sortedWith(compareBy({ it.entity.domain != "light" }, { it.entity.id !in pinned }))
+            .take(32).map { entry ->
+                val device = entry.entity
+                val favourite = pinned[device.id]
+                val kind = when {
+                    device.domain == "climate" -> TileKind.CLIMATE
+                    favourite?.kind == TileKind.SLIDER && TileKind.SLIDER in device.kinds() -> TileKind.SLIDER
+                    else -> TileKind.TOGGLE
+                }
+                val original = device.name
+                val roomPrefix = "${selected.name} "
+                val label = favourite?.label ?: when {
+                    kind == TileKind.CLIMATE && original.equals(selected.name, ignoreCase = true) -> "Heating"
+                    original.startsWith(roomPrefix, ignoreCase = true) -> original.drop(roomPrefix.length)
+                        .trimStart().replaceFirstChar { it.uppercase() }.ifBlank { original }
+                    else -> null
+                }
+                TileSpec(device.id, kind, label)
+            }
+    }
+    fun entity(id: String) = entities[id] ?: catalogue.entity(id)
     fun label(spec: TileSpec) = spec.label ?: entity(spec.entity)?.name ?: spec.entity.substringAfter('.').replace('_', ' ')
 
     val message: String? get() = if (link != Link.ONLINE) null else config.messageEntity?.let(entities::get)
@@ -83,6 +123,11 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var approachJob: Job? = null
     private val graphTimes = mutableMapOf<String, Long>()
     private val graphRequests = mutableSetOf<String>()
+    private data class CachedStill(val image: Bitmap, val fetchedAt: Long)
+    private val snapshots = object : LruCache<String, CachedStill>(12 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: CachedStill) = value.image.allocationByteCount
+    }
+    private val snapshotRequests = Semaphore(2)
     private var foreground = false
     private var securityEpoch = 0
     private var presence: Boolean? = null
@@ -110,7 +155,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             client?.stop()
             presence = null
             relock()
-            _ui.update { it.copy(camera = null, pending = emptyMap()) }
+            _ui.update { it.copy(camera = null, musicBrowser = null, pending = emptyMap()) }
         }
     }
 
@@ -120,7 +165,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         idleJob = viewModelScope.launch {
             delay(_ui.value.config.idleSeconds * 1000L)
             val current = _ui.value
-            if (foreground && !current.editor && !current.unlocking && current.camera == null &&
+            if (foreground && !current.editor && !current.unlocking && current.camera == null && current.musicBrowser == null &&
                 presence != true) _ui.update { it.copy(clock = true) }
         }
     }
@@ -131,14 +176,14 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun selectPage(page: Page) {
-        _ui.update { it.copy(page = page) }
+        _ui.update { it.copy(page = page, room = null) }
         if (page == Page.ROOMS && _ui.value.catalogue.areas.isEmpty()) loadCatalogue()
         updateSelection()
         touch()
     }
 
-    fun selectRoom(id: String) {
-        if (_ui.value.rooms.none { it.id == id }) return
+    fun selectRoom(id: String?) {
+        if (id != null && _ui.value.rooms.none { it.id == id }) return
         _ui.update { it.copy(room = id) }
         updateSelection()
         touch()
@@ -231,6 +276,33 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
     fun closeCamera() { _ui.update { it.copy(camera = null) }; touch() }
 
+    fun openMusic(id: String) {
+        val current = _ui.value
+        if (current.config.favourites.none { it.entity == id && it.kind == TileKind.MEDIA } ||
+            current.entities[id]?.mediaFeatures?.canBrowseMusic() != true) return
+        idleJob?.cancel()
+        _ui.update { it.copy(musicBrowser = id) }
+    }
+
+    fun closeMusic() { _ui.update { it.copy(musicBrowser = null) }; touch() }
+
+    suspend fun browseMusic(id: String, folder: MediaChoice?) =
+        client?.browseMusic(id, folder) ?: throw HaProblem("Home Assistant isn't connected")
+
+    fun mediaTransport(entity: Entity, transport: MediaTransport) {
+        if (!entity.mediaFeatures.hasMediaFeature(transport.bit)) return
+        val active = client ?: return
+        viewModelScope.launch { safely { active.command(entity.id, "media_player", transport.service) } }
+    }
+
+    suspend fun playMusic(id: String, media: MediaChoice) {
+        if (!media.playable || _ui.value.musicBrowser != id) return
+        val active = client ?: throw HaProblem("Home Assistant isn't connected")
+        active.command(id, "media_player", "play_media",
+            JSONObject().put("media_content_type", media.type).put("media_content_id", media.id))
+        closeMusic()
+    }
+
     fun toggle(entity: Entity, checked: Boolean) = send(entity, if (checked) "turn_on" else "turn_off",
         pending = if (checked) "On" else "Off", matches = { it.state == if (checked) "on" else "off" })
 
@@ -278,9 +350,13 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    suspend fun snapshot(id: String): Bitmap? {
-        val data = client?.snapshot(id) ?: return null
-        return withContext(Dispatchers.Default) {
+    fun cachedSnapshot(id: String): Bitmap? = snapshots[id]?.image
+
+    suspend fun snapshot(id: String): Bitmap? = snapshotRequests.withPermit {
+        snapshots[id]?.takeIf { SystemClock.elapsedRealtime() - it.fetchedAt < 24_000 }?.let { return@withPermit it.image }
+        val active = client ?: return@withPermit null
+        val data = active.snapshot(id) ?: return@withPermit null
+        val bitmap = withContext(Dispatchers.Default) {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
             val edge = maxOf(bounds.outWidth, bounds.outHeight)
@@ -292,6 +368,8 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             }
             BitmapFactory.decodeByteArray(data, 0, data.size, options)
         }
+        if (bitmap != null && client === active) snapshots.put(id, CachedStill(bitmap, SystemClock.elapsedRealtime()))
+        bitmap
     }
     suspend fun stream(id: String): HttpUrl = client?.stream(id) ?: throw HaProblem("Home Assistant isn't connected")
     fun videoTransport(): OkHttpClient = client?.videoClient() ?: throw HaProblem("Home Assistant isn't connected")
@@ -337,6 +415,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         client?.stop()
         graphTimes.clear()
         graphRequests.clear()
+        snapshots.evictAll()
         presence = null
         _ui.update { it.copy(entities = emptyMap(), catalogue = Catalogue(), graphs = emptyMap(), pending = emptyMap(), link = Link.CONNECTING) }
         val active = HaClient(credentials, viewModelScope)
@@ -376,7 +455,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     private fun updateSelection() {
         val current = _ui.value
-        val ids = current.config.favourites.mapTo(mutableSetOf()) { it.entity }
+        val ids = current.config.favourites.filter { it.kind != TileKind.APP }.mapTo(mutableSetOf()) { it.entity }
         current.config.favourites.mapNotNullTo(ids) { it.statusEntity }
         if (current.page == Page.ROOMS) current.roomTiles.mapTo(ids) { it.entity }
         current.config.presenceEntity?.let(ids::add)

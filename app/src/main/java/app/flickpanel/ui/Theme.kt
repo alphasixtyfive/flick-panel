@@ -3,6 +3,7 @@ package app.flickpanel.ui
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -10,18 +11,59 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.flickpanel.R
 import app.flickpanel.config.PanelTheme
 
-private val Slate = darkColorScheme(
-    primary = Color(0xffb2d5f5), onPrimary = Color(0xff17334c),
-    primaryContainer = Color(0xff2c4560), onPrimaryContainer = Color(0xffdfedff),
-    secondary = Color(0xffb8cbdf), secondaryContainer = Color(0xff304255),
-    onSecondaryContainer = Color(0xffe0eaf4), background = Color(0xff171e27),
-    onBackground = Color(0xffedf3fb), surface = Color(0xff171e27), onSurface = Color(0xffedf3fb),
-    surfaceContainerLow = Color(0xff1c2530), surfaceContainer = Color(0xff222d3a),
-    surfaceContainerHigh = Color(0xff283543), surfaceContainerHighest = Color(0xff324152),
-    surfaceVariant = Color(0xff344251), onSurfaceVariant = Color(0xffbdc9d7),
-    outline = Color(0xff8796a8), outlineVariant = Color(0xff3a4858)
+internal val panelMaxWidth = 1240.dp
+internal val panelWidePadding = 36.dp
+
+@OptIn(ExperimentalTextApi::class)
+private val PanelFont = FontFamily(
+    Font(R.font.google_sans_flex, weight = FontWeight.Normal, variationSettings = FontVariation.Settings(FontVariation.weight(400))),
+    Font(R.font.google_sans_flex, weight = FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    Font(R.font.google_sans_flex, weight = FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+)
+
+private val PanelType = Typography().run {
+    copy(
+        displayMedium = displayMedium.copy(fontFamily = PanelFont, fontSize = 48.sp, lineHeight = 54.sp),
+        displaySmall = displaySmall.copy(fontFamily = PanelFont, fontSize = 38.sp, lineHeight = 43.sp),
+        headlineMedium = headlineMedium.copy(fontFamily = PanelFont, fontSize = 31.sp, lineHeight = 36.sp),
+        headlineSmall = headlineSmall.copy(fontFamily = PanelFont),
+        titleLarge = titleLarge.copy(fontFamily = PanelFont, fontSize = 23.sp, lineHeight = 29.sp),
+        titleMedium = titleMedium.copy(fontFamily = PanelFont, fontSize = 19.sp, lineHeight = 25.sp),
+        bodyLarge = bodyLarge.copy(fontFamily = PanelFont, fontSize = 18.sp, lineHeight = 24.sp),
+        bodyMedium = bodyMedium.copy(fontFamily = PanelFont, fontSize = 16.sp, lineHeight = 22.sp),
+        labelLarge = labelLarge.copy(fontFamily = PanelFont, fontSize = 16.sp, lineHeight = 20.sp),
+        labelMedium = labelMedium.copy(fontFamily = PanelFont, fontSize = 14.sp, lineHeight = 18.sp),
+        labelSmall = labelSmall.copy(fontFamily = PanelFont, fontSize = 13.sp, lineHeight = 17.sp),
+    )
+}
+
+private val Graphite = darkColorScheme(
+    primary = Color(0xffbbd9f5), onPrimary = Color(0xff12283a),
+    primaryContainer = Color(0xff2d455d), onPrimaryContainer = Color(0xffeff8ff),
+    inversePrimary = Color(0xff315b83),
+    secondary = Color(0xffbbc8d5), onSecondary = Color(0xff263440),
+    secondaryContainer = Color(0xff354658), onSecondaryContainer = Color(0xffeef5fc),
+    tertiary = Color(0xff9dd4cb), onTertiary = Color(0xff123630),
+    tertiaryContainer = Color(0xff2a4e48), onTertiaryContainer = Color(0xffc8f0e8),
+    background = Color(0xff0d0f12), onBackground = Color(0xfffbfcfd),
+    surface = Color(0xff0d0f12), onSurface = Color(0xfffbfcfd),
+    surfaceDim = Color(0xff0d0f12), surfaceBright = Color(0xff393f46),
+    surfaceContainerLowest = Color(0xff090b0d), surfaceContainerLow = Color(0xff1b1f24),
+    surfaceContainer = Color(0xff262a30), surfaceContainerHigh = Color(0xff2d333b),
+    surfaceContainerHighest = Color(0xff373f47),
+    surfaceVariant = Color(0xff38434d), onSurfaceVariant = Color(0xffdce5ee),
+    inverseSurface = Color(0xffebedf0), inverseOnSurface = Color(0xff20262d),
+    outline = Color(0xffa7b5c2), outlineVariant = Color(0xff4d5965),
 )
 
 private val Amber = darkColorScheme(
@@ -53,12 +95,12 @@ internal fun PanelColors(theme: PanelTheme, content: @Composable () -> Unit) {
     val context = LocalContext.current
     val dark = isSystemInDarkTheme()
     val colors = when {
-        theme == PanelTheme.SLATE -> Slate
+        theme == PanelTheme.SLATE -> Graphite
         theme == PanelTheme.AMBER -> Amber
         theme == PanelTheme.PORCELAIN -> Porcelain
         Build.VERSION.SDK_INT >= 31 -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> Slate
+        dark -> Graphite
         else -> Porcelain
     }
-    MaterialTheme(colorScheme = colors, content = content)
+    MaterialTheme(colorScheme = colors, typography = PanelType, content = content)
 }

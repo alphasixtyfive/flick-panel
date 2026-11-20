@@ -4,8 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,29 +16,29 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material.icons.rounded.Thermostat
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material.icons.rounded.MeetingRoom
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,12 +55,19 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.flickpanel.Page
@@ -75,10 +82,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import java.text.NumberFormat
 import kotlin.math.roundToInt
 
-private val cellShape = RoundedCornerShape(25.dp)
-private val cellHeight = 123.dp
+internal val panelCardShape = RoundedCornerShape(26.dp)
+internal const val tabletWidthDp = 840
+private val cellHeight = 132.dp
+private val tileGap = 14.dp
 
 @Composable
 private fun clockTime(): ZonedDateTime {
@@ -111,22 +121,34 @@ internal fun AmbientClock(message: String?, wake: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     val colors = MaterialTheme.colorScheme
     val now = clockTime()
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= 720.dp
-        val side = if (wide) 36.dp else 19.dp
-        Column(Modifier.fillMaxSize().padding(horizontal = side)) {
-            Row(Modifier.fillMaxWidth().padding(top = if (wide) 24.dp else 18.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Home", style = if (wide) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displaySmall,
+    val weather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        val wide = maxWidth >= tabletWidthDp.dp
+        val compactNavigation = maxWidth < 600.dp
+        val cameraColumns = if (maxWidth >= 1100.dp) 4 else if (wide) 3 else 2
+        val side = if (wide) panelWidePadding else 20.dp
+        Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
+            Row(Modifier.fillMaxWidth().padding(top = if (wide) 34.dp else 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                if (state.page == Page.ROOMS) RoomTitle(model, wide, Modifier.weight(1f, fill = false))
+                else Text("Home", style = if (wide) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.combinedClickable(onClick = {}, onLongClickLabel = "Unlock setup", onLongClick = model::showUnlock))
-                Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), style = MaterialTheme.typography.titleLarge,
-                    color = colors.onSurfaceVariant)
+                    modifier = Modifier.combinedClickable(onClick = {}, onLongClickLabel = "Unlock setup", onLongClick = model::showUnlock)
+                        .heightIn(min = 48.dp).semantics { heading() })
+                Row(horizontalArrangement = Arrangement.spacedBy(if (wide) 34.dp else 15.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (weather != null) {
+                        WeatherSummary(state.entity(weather.entity), compact = !wide, prominent = wide)
+                    }
+                    Text(now.format(DateTimeFormatter.ofPattern("HH:mm")),
+                        style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge)
+                }
             }
             state.message?.let { message ->
                 Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -143,28 +165,51 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
             }
             if (status != null) Text(status, style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            PrimaryScrollableTabRow(
-                selectedTabIndex = state.page.ordinal,
-                edgePadding = 0.dp,
-                modifier = Modifier.padding(top = 9.dp),
-                containerColor = colors.surface,
-                divider = { HorizontalDivider(color = colors.outlineVariant) }
-            ) {
-                Page.entries.forEach { page ->
-                    Tab(selected = state.page == page, onClick = { model.selectPage(page) }, text = { Text(page.label) })
+            DashboardNavigation(state.page, wide, compactNavigation, model::selectPage)
+            key(state.page) {
+                val body = Modifier.fillMaxSize().padding(top = 22.dp)
+                when (state.page) {
+                    Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
+                    Page.ROOMS -> Rooms(state, model, wide, body)
+                    Page.FAVOURITES -> Column(body.verticalScroll(rememberScrollState()).padding(bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(tileGap)) { Favourites(state, model, wide) }
                 }
             }
-            key(state.page) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    when (state.page) {
-                        Page.FAVOURITES -> Favourites(state, model, wide)
-                        Page.ROOMS -> Rooms(state, model, wide)
-                        Page.CAMERAS -> {
-                            val cameras = state.config.favourites.filter { it.kind == TileKind.CAMERA }
-                            if (cameras.isEmpty()) EmptyState("No cameras pinned", "Add a camera in setup.")
-                            else TileGrid(cameras, state, model, if (wide) 4 else 2)
-                        }
+        }
+    }
+}
+
+@Composable
+private fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, selectPage: (Page) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val scroll = if (compact) Modifier else Modifier.horizontalScroll(rememberScrollState())
+    Row(Modifier.fillMaxWidth().padding(top = if (wide) 28.dp else 20.dp)
+        .then(scroll).selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (page in Page.entries) {
+            val icon = when (page) {
+                Page.FAVOURITES -> Icons.Rounded.FavoriteBorder
+                Page.ROOMS -> Icons.Rounded.MeetingRoom
+                Page.CAMERAS -> Icons.Rounded.Videocam
+            }
+            val selected = current == page
+            Surface(selected = selected, onClick = { selectPage(page) }, shape = CircleShape,
+                color = if (selected) colors.primaryContainer else colors.surfaceContainer,
+                contentColor = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
+                modifier = (if (compact) Modifier.weight(1f) else Modifier).semantics { role = Role.Tab }) {
+                if (compact) {
+                    Column(Modifier.heightIn(min = 56.dp).padding(horizontal = 4.dp, vertical = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
+                        Icon(icon, null, Modifier.size(20.dp))
+                        Text(page.label, style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                } else {
+                    Row(Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(icon, null, Modifier.size(24.dp))
+                        Text(page.label, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                     }
                 }
             }
@@ -174,50 +219,57 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
 
 @Composable
 private fun Favourites(state: PanelUi, model: PanelViewModel, wide: Boolean) {
-    val tiles = state.config.favourites
+    val headerWeather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
+    val tiles = state.config.favourites.filter { it.showOnHome && it != headerWeather }
     if (tiles.isEmpty()) {
         EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.")
         return
     }
     val camera = tiles.firstOrNull { it.kind == TileKind.CAMERA }
     val controls = tiles.filterNot { it == camera }
-    if (wide && camera != null && controls.isNotEmpty()) {
-        val rows = remember(controls) { packRows(controls, 2).size.coerceIn(1, 3) }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                TileGrid(controls, state, model, 2)
+    val rows = remember(controls) { packRows(controls, 2) }
+    if (wide && camera != null && rows.size >= 2) {
+        val featureRows = rows.take(if (rows.size > 3) 2 else 3)
+        Layout(modifier = Modifier.fillMaxWidth(), content = {
+            Column(verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                for (row in featureRows) TileRow(row, state, model, 2)
             }
-            CameraTile(camera, state, model, Modifier.weight(1f).height(cellHeight * rows + 12.dp * (rows - 1)))
+            CameraTile(camera, state, model, Modifier.fillMaxSize())
+        }) { children, constraints ->
+            val gap = tileGap.roundToPx()
+            val width = constraints.maxWidth
+            val controlsWidth = (width - gap) / 2
+            val grid = children[0].measure(Constraints.fixedWidth(controlsWidth))
+            val preview = children[1].measure(Constraints.fixed(width - controlsWidth - gap, grid.height))
+            layout(width, grid.height) {
+                grid.placeRelative(0, 0)
+                preview.placeRelative(controlsWidth + gap, 0)
+            }
         }
+        TileGrid(rows.drop(featureRows.size).flatten(), state, model, 4)
     } else {
         TileGrid(tiles, state, model, if (wide) 4 else 2)
     }
 }
 
 @Composable
-private fun Rooms(state: PanelUi, model: PanelViewModel, wide: Boolean) {
-    val rooms = state.rooms
-    if (rooms.isEmpty()) {
-        val message = if (state.loadingCatalogue || state.link == Link.CONNECTING) "Finding rooms…" else "No rooms to show"
-        EmptyState(message, if (state.link == Link.ONLINE && !state.loadingCatalogue) "Assign lights or thermostats to an area in Home Assistant." else null)
+private fun CameraGallery(state: PanelUi, model: PanelViewModel, columns: Int, modifier: Modifier) {
+    val cameras = state.config.favourites.filter { it.kind == TileKind.CAMERA }.sortedByDescending { it.showOnHome }
+    if (cameras.isEmpty()) {
+        Column(modifier) { EmptyState("No cameras pinned", "Add a camera in setup.") }
         return
     }
-    var menu by remember { mutableStateOf(false) }
-    val selected = rooms.firstOrNull { it.id == state.room } ?: rooms.first()
-    Box {
-        FilledTonalButton(onClick = { menu = true }) {
-            Text(selected.name)
-            Icon(Icons.Rounded.ArrowDropDown, "Choose room")
-        }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            for (room in rooms) DropdownMenuItem(text = { Text(room.name) }, onClick = { menu = false; model.selectRoom(room.id) })
+    LazyVerticalGrid(GridCells.Fixed(columns), modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(tileGap), verticalArrangement = Arrangement.spacedBy(tileGap),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 20.dp)) {
+        items(cameras, key = { it.entity }) { camera ->
+            CameraTile(camera, state, model, Modifier.fillMaxWidth(), widescreen = true)
         }
     }
-    TileGrid(state.roomTiles, state, model, if (wide) 4 else 2)
 }
 
 @Composable
-private fun EmptyState(title: String, note: String?) {
+internal fun EmptyState(title: String, note: String?) {
     Column(Modifier.fillMaxWidth().padding(vertical = 42.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
@@ -225,7 +277,10 @@ private fun EmptyState(title: String, note: String?) {
     }
 }
 
-private fun span(tile: TileSpec) = if (tile.kind in setOf(TileKind.SLIDER, TileKind.CAMERA, TileKind.CLIMATE)) 2 else 1
+private fun span(tile: TileSpec) = when (tile.kind) {
+    TileKind.SLIDER, TileKind.CAMERA, TileKind.CLIMATE, TileKind.MEDIA -> 2
+    else -> 1
+}
 
 private fun packRows(tiles: List<TileSpec>, columns: Int): List<List<TileSpec>> {
     val result = mutableListOf<MutableList<TileSpec>>()
@@ -240,17 +295,42 @@ private fun packRows(tiles: List<TileSpec>, columns: Int): List<List<TileSpec>> 
 }
 
 @Composable
-private fun TileGrid(tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int) {
+internal fun TileGrid(tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int) {
     val rows = remember(tiles, columns) { packRows(tiles, columns) }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        for (row in rows) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            for (tile in row) key(tile.entity) {
-                val modifier = Modifier.weight(span(tile).toFloat())
-                if (tile.kind == TileKind.CAMERA) CameraTile(tile, state, model, modifier.height(207.dp))
-                else ControlTile(tile, state, model, modifier.heightIn(min = cellHeight))
+    if (rows.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(tileGap)) {
+        for (row in rows) TileRow(row, state, model, columns)
+    }
+}
+
+@Composable
+private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int) {
+    Layout(modifier = Modifier.fillMaxWidth(), content = {
+        for (tile in row) key(tile.entity) {
+            val minimum = when (tile.kind) {
+                TileKind.APP -> 76.dp
+                TileKind.CAMERA -> 226.dp
+                else -> cellHeight
             }
-            val remaining = columns - row.sumOf(::span)
-            if (remaining > 0) Spacer(Modifier.weight(remaining.toFloat()))
+            val modifier = Modifier.heightIn(min = minimum)
+            if (tile.kind == TileKind.CAMERA) CameraTile(tile, state, model, modifier)
+            else ControlTile(tile, state, model, modifier)
+        }
+    }) { children, constraints ->
+        val width = constraints.maxWidth
+        val gap = tileGap.roundToPx().coerceAtMost(width / columns)
+        val cells = width - gap * (columns - 1)
+        var column = 0
+        val slots = row.map { tile ->
+            val start = cells * column / columns + gap * column
+            column += span(tile)
+            val end = cells * column / columns + gap * (column - 1)
+            start to (end - start)
+        }
+        val height = constraints.constrainHeight(children.indices.maxOf { children[it].minIntrinsicHeight(slots[it].second) })
+        val measured = children.mapIndexed { index, child -> child.measure(Constraints.fixed(slots[index].second, height)) }
+        layout(width, height) {
+            measured.forEachIndexed { index, child -> child.placeRelative(slots[index].first, 0) }
         }
     }
 }
@@ -280,53 +360,55 @@ private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
                 if (live != null) { if (action) model.action(live) else model.toggle(live, !on) }
             }, enabled = ready, modifier = modifier.semantics {
                 stateDescription = text
-            }, shape = cellShape, color = if (active) colors.primaryContainer else colors.surfaceContainer,
+            }, shape = panelCardShape, color = if (active) colors.primaryContainer else colors.surfaceContainer,
                 contentColor = if (active) colors.onPrimaryContainer else colors.onSurface) {
-                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Icon(if (action) Icons.Rounded.PlayArrow else Icons.Rounded.Lightbulb, null,
-                        tint = if (active) colors.onPrimaryContainer else colors.primary)
-                    Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(text, style = MaterialTheme.typography.bodyMedium)
+                Column(Modifier.fillMaxSize().padding(19.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Icon(if (action) Icons.Rounded.PlayArrow else Icons.Rounded.Lightbulb, null,
+                            tint = if (active) colors.onPrimaryContainer else colors.primary, modifier = Modifier.size(29.dp))
+                    }
+                    Text(text, style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
         TileKind.SLIDER -> {
-            val reported = entity?.brightness ?: 0
-            var dragging by remember(tile.entity) { mutableStateOf(false) }
-            var level by remember(tile.entity) { mutableStateOf(0f) }
-            val shown = if (dragging) level.roundToInt() else pending?.removeSuffix("%")?.toIntOrNull() ?: reported
-            Surface(modifier, shape = cellShape, color = colors.surfaceContainer) {
-                Column(Modifier.padding(horizontal = 15.dp, vertical = 12.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Lightbulb, null, tint = colors.primary, modifier = Modifier.size(20.dp))
-                        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (entity?.available == true) "$shown%" else "—", color = colors.primary)
+            Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
+                Column(Modifier.padding(horizontal = 19.dp, vertical = 17.dp)) {
+                    BrightnessControl(label, entity, live, pending, ready, model, Modifier.padding(top = 7.dp)) { level ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(if (entity?.available == true) "$level%" else "—", style = MaterialTheme.typography.titleMedium,
+                                color = colors.primary)
+                        }
                     }
-                    Slider(value = shown.toFloat(), valueRange = 0f..100f, enabled = ready,
-                        onValueChange = { dragging = true; level = it },
-                        onValueChangeFinished = {
-                            if (dragging && live != null) model.dim(live, level.roundToInt())
-                            dragging = false
-                        }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp).semantics { contentDescription = "$label brightness" })
                 }
             }
         }
         TileKind.CLIMATE -> Climate(tile, state, model, modifier, live, ready)
+        TileKind.MEDIA -> MusicTile(label, entity, ready, model, modifier)
+        TileKind.WEATHER -> Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
+            Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                WeatherSummary(entity, compact = false)
+            }
+        }
         TileKind.VALUE, TileKind.TREND -> {
             val trend = tile.kind == TileKind.TREND
             if (trend && state.link == Link.ONLINE) LaunchedEffect(tile.entity) {
                 while (isActive) { model.loadGraph(tile.entity); delay(60_000) }
             }
-            Surface(modifier, shape = cellShape, color = colors.surfaceContainer) {
-                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
+                Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         if (trend) Text("6 h", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
                     }
-                    Text(displayValue(entity), style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(displayValue(entity), style = MaterialTheme.typography.headlineMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (trend) {
                         val points = state.graphs[tile.entity].orEmpty()
-                        if (points.size > 1) Sparkline(points, Modifier.fillMaxWidth().height(35.dp))
+                        if (points.size > 1) Sparkline(points, Modifier.fillMaxWidth().height(21.dp))
                         else Text(if (state.graphs.containsKey(tile.entity)) "No history" else "History", style = MaterialTheme.typography.labelSmall,
                             color = colors.onSurfaceVariant)
                     } else if (state.link == Link.OFFLINE && entity?.available == true) {
@@ -335,40 +417,91 @@ private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
                 }
             }
         }
+        TileKind.APP -> AppTile(tile, modifier)
         TileKind.CAMERA -> Unit
     }
+}
+
+@Composable
+private fun BrightnessControl(
+    label: String,
+    entity: Entity?,
+    live: Entity?,
+    pending: String?,
+    enabled: Boolean,
+    model: PanelViewModel,
+    modifier: Modifier = Modifier,
+    heading: @Composable (Int) -> Unit,
+) {
+    var draggingLevel by remember { mutableStateOf<Float?>(null) }
+    val shown = draggingLevel?.roundToInt() ?: pending?.removeSuffix("%")?.toIntOrNull() ?: entity?.brightness ?: 0
+    heading(shown)
+    Slider(value = shown.toFloat(), valueRange = 0f..100f, enabled = enabled,
+        onValueChange = { draggingLevel = it },
+        onValueChangeFinished = {
+            draggingLevel?.let { if (live != null) model.dim(live, it.roundToInt()) }
+            draggingLevel = null
+        }, modifier = modifier.fillMaxWidth().semantics { contentDescription = "$label brightness" })
 }
 
 private fun displayValue(entity: Entity?): String {
     if (entity == null || !entity.available) return "Unavailable"
     val value = entity.state.take(120)
     return if (entity.unit.isBlank()) value.replaceFirstChar { it.uppercase() }
-    else "$value ${entity.unit}"
+    else {
+        val precision = when (entity.unit) {
+            "°C", "°F" -> 1
+            "W", "VA" -> 0
+            else -> 3
+        }
+        val formatted = value.toDoubleOrNull()?.takeIf(Double::isFinite)?.let { formatNumber(it, precision) } ?: value
+        "$formatted ${entity.unit}"
+    }
 }
+
+internal fun formatNumber(value: Double, precision: Int): String =
+    NumberFormat.getNumberInstance().apply {
+        maximumFractionDigits = precision
+        isGroupingUsed = false
+    }.format(value)
 
 @Composable
 private fun Climate(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, entity: Entity?, enabled: Boolean) {
     val info = entity ?: state.entity(tile.entity)
-    val attrs = info?.attributes
-    val current = attrs?.optDouble("current_temperature")?.takeIf(Double::isFinite)
-    val target = attrs?.optDouble("temperature")?.takeIf(Double::isFinite)
-    val step = attrs?.optDouble("target_temp_step", .5)?.takeIf { it > 0 } ?: .5
-    Surface(modifier, shape = cellShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp),
+    val current = info?.attributes?.optDouble("current_temperature")?.takeIf(Double::isFinite)
+    Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+        Row(Modifier.fillMaxWidth().padding(19.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(state.label(tile), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(current?.let { "$it°" } ?: "—", style = MaterialTheme.typography.headlineSmall)
+                Text(current?.let { formatNumber(it, 1) + "°" } ?: "—", style = MaterialTheme.typography.headlineMedium)
             }
-            FilledTonalIconButton(onClick = { if (entity != null && target != null) model.setTemperature(entity, target - step) },
-                enabled = enabled && target != null) { Icon(Icons.Rounded.Remove, "Lower target") }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(state.pending[tile.entity] ?: target?.let { "$it°" } ?: "—")
-                Text("Target", style = MaterialTheme.typography.labelSmall)
-            }
-            FilledTonalIconButton(onClick = { if (entity != null && target != null) model.setTemperature(entity, target + step) },
-                enabled = enabled && target != null) { Icon(Icons.Rounded.Add, "Raise target") }
+            TemperatureSetpoint(info, entity, state.pending[tile.entity], enabled, model, gap = 9.dp)
         }
+    }
+}
+
+@Composable
+private fun TemperatureSetpoint(
+    info: Entity?,
+    live: Entity?,
+    pending: String?,
+    enabled: Boolean,
+    model: PanelViewModel,
+    gap: Dp,
+) {
+    val attrs = info?.attributes
+    val target = attrs?.optDouble("temperature")?.takeIf(Double::isFinite)
+    val step = attrs?.optDouble("target_temp_step", .5)?.takeIf { it > 0 } ?: .5
+    Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
+        FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target - step) },
+            enabled = enabled && target != null) { Icon(Icons.Rounded.Remove, "Lower target") }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(pending ?: target?.let { "$it°" } ?: "—")
+            Text("Target", style = MaterialTheme.typography.labelSmall)
+        }
+        FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target + step) },
+            enabled = enabled && target != null) { Icon(Icons.Rounded.Add, "Raise target") }
     }
 }
 

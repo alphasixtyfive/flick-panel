@@ -4,8 +4,10 @@ import app.flickpanel.ha.HaClient
 import app.flickpanel.ha.HaCredentials
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.parseServer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -35,9 +37,14 @@ class HaSessionTest {
                 client.start()
                 withTimeout(6_000) { client.link.first { it == Link.ONLINE } }
                 assertEquals("off", client.entities.value.getValue("light.lamp").state)
-                val catalogue = client.catalogue()
+                val catalogue = withContext(Dispatchers.Default) { client.catalogue() }
                 assertEquals("Kitchen", catalogue.areas.single().name)
                 assertEquals("light.lamp", catalogue.room("kitchen").single().entity.id)
+                val music = client.browseMusic("media_player.kitchen", null)
+                assertEquals("Radio favourites", music.single().title)
+                assertEquals(true, music.single().playable)
+                client.command("media_player.kitchen", "media_player", "play_media", JSONObject()
+                    .put("media_content_id", music.single().id).put("media_content_type", music.single().type))
                 client.command("light.lamp", "light", "turn_on", JSONObject().put("brightness_pct", 50))
                 withTimeout(6_000) { client.entities.first { it["light.lamp"]?.state == "on" } }
                 assertEquals(50, client.entities.value.getValue("light.lamp").brightness)
@@ -76,6 +83,7 @@ private class FakeHome : Dispatcher() {
             MockResponse().setHeader("Content-Type", "image/jpeg").setBody("fixture image bytes"))
         "/api/websocket" -> MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
             private var subscription = 0
+            private var lastId = 0
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 connections.incrementAndGet()
                 webSocket.send("""{"type":"auth_required"}""")
@@ -83,6 +91,13 @@ private class FakeHome : Dispatcher() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val message = JSONObject(text)
                 val id = message.optInt("id")
+                if (message.optString("type") != "auth") {
+                    if (id <= lastId) {
+                        webSocket.send("""{"id":$id,"type":"result","success":false,"error":{"code":"id_reuse"}}""")
+                        return
+                    }
+                    lastId = id
+                }
                 fun result(value: String = "null") =
                     webSocket.send("""{"id":$id,"type":"result","success":true,"result":$value}""")
                 when (message.getString("type")) {
@@ -97,14 +112,28 @@ private class FakeHome : Dispatcher() {
                     }
                     "unsubscribe_events" -> result()
                     "get_states" -> result("""[{"entity_id":"light.lamp","state":"off","attributes":{"friendly_name":"Lamp","supported_color_modes":["brightness"]}}]""")
-                    "config/entity_registry/list" -> result("""[{"entity_id":"light.lamp","device_id":"h1"}]""")
+                    "config/entity_registry/list_for_display" -> result("""{"entities":[{"ei":"light.lamp","di":"h1"}]}""")
                     "config/device_registry/list" -> result("""[{"id":"h1","area_id":"kitchen"}]""")
                     "config/area_registry/list" -> result("""[{"area_id":"kitchen","name":"Kitchen"}]""")
+                    "media_player/browse_media" -> result("""{"children":[
+                        {"media_content_id":"library://playlist/1","media_content_type":"playlist","title":"Radio favourites","media_class":"playlist","can_play":true},
+                        {"media_content_id":"camera.front_gate","media_content_type":"video","title":"Front gate","media_class":"video","can_play":true}
+                    ]}""")
                     "call_service" -> {
-                        assertEquals("light.lamp", message.getJSONObject("target").getString("entity_id"))
-                        assertEquals(50, message.getJSONObject("service_data").getInt("brightness_pct"))
-                        result()
-                        webSocket.send("""{"id":$subscription,"type":"event","event":{"c":{"light.lamp":{"+":{"s":"on","a":{"brightness":128}}}}}}""")
+                        val target = message.getJSONObject("target").getString("entity_id")
+                        val data = message.getJSONObject("service_data")
+                        if (message.getString("domain") == "media_player") {
+                            assertEquals("media_player.kitchen", target)
+                            assertEquals("play_media", message.getString("service"))
+                            assertEquals("library://playlist/1", data.getString("media_content_id"))
+                            assertEquals("playlist", data.getString("media_content_type"))
+                            result()
+                        } else {
+                            assertEquals("light.lamp", target)
+                            assertEquals(50, data.getInt("brightness_pct"))
+                            result()
+                            webSocket.send("""{"id":$subscription,"type":"event","event":{"c":{"light.lamp":{"+":{"s":"on","a":{"brightness":128}}}}}}""")
+                        }
                     }
                     "history/history_during_period" -> result("""{"sensor.power":[{"s":"801","lu":1780000000},{"s":"840","lu":1780000100}]}""")
                     "camera/stream" -> result("""{"url":"/api/hls/abcdefgh123456/master_playlist.m3u8"}""")

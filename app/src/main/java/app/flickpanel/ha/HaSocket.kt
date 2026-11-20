@@ -10,12 +10,12 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
 
 internal class HaSocket(client: OkHttpClient, private val credentials: HaCredentials) {
     private val inbox = Channel<String>(capacity = 64)
     private val requests = ConcurrentHashMap<Int, CompletableDeferred<JSONObject>>()
-    private val nextId = AtomicInteger(0)
+    private val sendLock = Any()
+    private var nextId = 0
     private val socket = client.newWebSocket(
         Request.Builder().url(credentials.server.resolve("api/websocket")!!).build(),
         object : WebSocketListener() {
@@ -50,8 +50,6 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
         } ?: throw HaProblem("Home Assistant sign-in timed out")
     }
 
-    fun id(): Int = nextId.incrementAndGet()
-
     suspend fun pump(event: (JSONObject) -> Unit) {
         for (text in inbox) {
             val msg = JSONObject(text)
@@ -63,17 +61,29 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
         throw HaProblem("Home Assistant disconnected")
     }
 
-    suspend fun request(type: String, data: JSONObject = JSONObject(), id: Int = id()): JSONObject {
+    suspend fun request(type: String, data: JSONObject = JSONObject(), onSend: (Int) -> Unit = {}): JSONObject {
         val reply = CompletableDeferred<JSONObject>()
-        requests[id] = reply
+        // Home Assistant requires IDs to increase in wire order, including for concurrent calls.
+        val id = synchronized(sendLock) {
+            val requestId = ++nextId
+            requests[requestId] = reply
+            try {
+                onSend(requestId)
+                send(data.put("type", type).put("id", requestId))
+            } catch (error: Exception) {
+                requests.remove(requestId)
+                throw error
+            }
+            requestId
+        }
         try {
-            send(data.put("type", type).put("id", id))
             val result = withTimeoutOrNull(8_000) { reply.await() }
                 ?: throw HaProblem("Home Assistant didn't reply")
             if (!result.optBoolean("success")) throw HaProblem(
                 when (result.optJSONObject("error")?.optString("code")) {
                     "unauthorized" -> "This Home Assistant user isn't allowed to do that"
                     "unknown_command" -> "This Home Assistant server doesn't support this feature"
+                    "id_reuse" -> "Home Assistant received an out-of-order request"
                     else -> "Home Assistant couldn't complete the request"
                 }
             )

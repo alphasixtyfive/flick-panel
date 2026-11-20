@@ -6,10 +6,14 @@ import app.flickpanel.config.PanelTheme
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.config.validPin
+import app.flickpanel.ha.Area
+import app.flickpanel.ha.Catalogue
+import app.flickpanel.ha.Entry
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.parseServer
 import app.flickpanel.ha.reduceEntities
 import app.flickpanel.ha.sameOrigin
+import app.flickpanel.ha.weather
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -74,6 +78,76 @@ class PanelPolicyTest {
         assertEquals(listOf(TileKind.SLIDER, TileKind.TOGGLE), dimmer.kinds())
         assertEquals(0, dimmer.brightness)
         assertEquals(emptyList<TileKind>(), Entity("lock.door", "locked").kinds())
+    }
+
+    @Test fun weatherUsesHomeAssistantConditionsAndUnits() {
+        val entity = Entity("weather.barnet", "partlycloudy",
+            JSONObject("""{"temperature":5.9,"temperature_unit":"°C"}"""))
+        assertEquals(listOf(TileKind.WEATHER), entity.kinds())
+        assertEquals("Partly cloudy", entity.weather()?.condition)
+        assertEquals(5.9, entity.weather()?.temperature)
+        assertEquals("°C", entity.weather()?.unit)
+        assertNull(entity.copy(state = "unavailable").weather())
+    }
+
+    @Test fun camerasCanStayInTheGalleryWithoutOccupyingHome() {
+        val original = PanelConfig(favourites = listOf(TileSpec("camera.driveway", TileKind.CAMERA, showOnHome = false)))
+        assertEquals(original, PanelConfigCodec.decode(PanelConfigCodec.encode(original)))
+        val legacy = """{"version":1,"tiles":[{"entity":"camera.front_door","kind":"CAMERA"}]}"""
+        assertTrue(PanelConfigCodec.decode(legacy).favourites.single().showOnHome)
+    }
+
+    @Test fun shortcutsRoundTripAsLocalPackages() {
+        val shortcut = TileSpec("app:org.example.player", TileKind.APP, "Player")
+        val config = PanelConfig(favourites = listOf(shortcut, TileSpec("https://example.org", TileKind.APP)))
+        val saved = PanelConfigCodec.decode(PanelConfigCodec.encode(config)).favourites.single()
+        assertEquals(shortcut, saved)
+        assertEquals("org.example.player", saved.appPackage)
+    }
+
+    @Test fun roomsKeepOnlyVisibleHouseholdControlsInTheirOwnArea() {
+        val kitchen = Area("area_1", "Kitchen")
+        val hall = Area("area_2", "Hall")
+        val light = Entity("light.pendant", "on")
+        val heat = Entity("climate.kitchen", "heat")
+        val catalogue = Catalogue(listOf(
+            Entry(heat, kitchen.id, diagnostic = false, visible = true),
+            Entry(Entity("light.status", "off"), kitchen.id, diagnostic = true, visible = true),
+            Entry(Entity("light.hidden", "off"), hall.id, diagnostic = false, visible = false),
+            Entry(light, kitchen.id, diagnostic = false, visible = true),
+            Entry(Entity("switch.hall", "off"), hall.id, diagnostic = false, visible = true)
+        ), listOf(hall, kitchen))
+        assertEquals(listOf(kitchen), catalogue.rooms)
+        assertEquals(listOf(light, heat), catalogue.room(kitchen.id).map { it.entity })
+        assertEquals(light, catalogue.entity(light.id))
+        assertTrue(catalogue.room(hall.id).isEmpty())
+    }
+
+    @Test fun roomTilesUseShortNamesAndKeepAnExplicitBrightnessControl() {
+        val kitchen = Area("area_1", "Kitchen")
+        val dimmer = Entity("light.pendant", "off", JSONObject("""{
+            "friendly_name":"Kitchen pendant","supported_color_modes":["brightness"]
+        }"""))
+        val catalogue = Catalogue(listOf(Entry(dimmer, kitchen.id, diagnostic = false, visible = true)), listOf(kitchen))
+        val state = PanelUi(catalogue = catalogue, room = kitchen.id)
+        assertEquals(TileSpec(dimmer.id, TileKind.TOGGLE, "Pendant"), state.roomTiles.single())
+        val pinned = state.copy(config = PanelConfig(favourites = listOf(TileSpec(dimmer.id, TileKind.SLIDER, "Main light"))))
+        assertEquals(TileSpec(dimmer.id, TileKind.SLIDER, "Main light"), pinned.roomTiles.single())
+    }
+
+    @Test fun enabledRoomsKeepTheirConfiguredOrder() {
+        val kitchen = Area("kitchen", "Kitchen")
+        val dining = Area("dining_room", "Dining room")
+        val catalogue = Catalogue(listOf(
+            Entry(Entity("light.kitchen", "on"), kitchen.id, diagnostic = false, visible = true),
+            Entry(Entity("light.dining", "off"), dining.id, diagnostic = false, visible = true)
+        ), listOf(kitchen, dining))
+        val config = PanelConfig(roomIds = listOf(dining.id, "missing_area", kitchen.id))
+        val loaded = PanelConfigCodec.decode(PanelConfigCodec.encode(config))
+        assertEquals(config, loaded)
+        assertEquals(listOf(dining, kitchen), PanelUi(config = loaded, catalogue = catalogue).rooms)
+        val empty = PanelConfigCodec.decode(PanelConfigCodec.encode(PanelConfig(roomIds = emptyList())))
+        assertTrue(PanelUi(config = empty, catalogue = catalogue).rooms.isEmpty())
     }
 
     @Test fun compactEventPatchesStateAndAttributesWithoutMutatingPreviousState() {

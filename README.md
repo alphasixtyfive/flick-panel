@@ -1,8 +1,12 @@
 # Flick Panel
 
 Flick Panel is a native Android wall dashboard for Home Assistant. Favourites contains the
-tiles pinned on this tablet. Rooms uses Home Assistant area assignments to show lighting
-and thermostats. Cameras shows pinned camera snapshots and opens one live HLS viewer at a time.
+tiles pinned on this tablet. Rooms uses Home Assistant areas to show lighting and thermostat
+controls. The **Rooms** tab in setup chooses which areas this tablet displays.
+Cameras shows pinned previews and
+opens one full-screen live feed at a time.
+In setup, use **Cameras** to choose gallery feeds and star one for Home. Use **Add app** to
+pin a launcher shortcut to an app already installed on the tablet.
 
 ## First run
 
@@ -11,9 +15,9 @@ and thermostats. Cameras shows pinned camera snapshots and opens one live HLS vi
 2. Open Flick Panel, enter the Home Assistant URL and token, and choose a setup PIN.
 3. Add favourites by searching for entities. For a numeric sensor choose **Value** or
    **Small graph**. For a dimmable light choose **Slider** or **Switch**. **Done** saves the layout.
-4. Hold **Home** and enter the setup PIN to return to setup. The grip reorders tiles with a
-   hold-and-drag gesture or opens a Move menu with a tap. Leaving the app or five minutes
-   in setup closes the editor.
+4. Hold **Home** and use the PIN keypad to return to setup. Hold and drag a tile by its
+   handle, or tap the handle to move it one place. The tile’s options menu lets you edit
+   or remove it. Leaving the app or five minutes in setup closes the editor.
 
 The token is encrypted with Android Keystore. Use HTTPS when available. The app also accepts
 explicit private IPv4 addresses such as a local Home Assistant server at
@@ -21,15 +25,27 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 
 ## Panel options
 
-- **Colour scheme** offers Slate blue, Charcoal amber, Porcelain, and Android colours.
+- **Colour scheme** offers Graphite, Charcoal amber, Porcelain, and Android colours.
+- Add a **Weather** entity to put current conditions and temperature next to the clock.
+- Add a **Music player** tile for playback controls. **Browse music** opens the selected
+  player's Home Assistant media library when the player supports browsing and playback.
 - **Home message** takes a sensor or text helper whose state is the rendered message. Use a
   text source controlled by the existing Home Assistant logic.
 - **Wake on approach** takes an existing binary occupancy sensor. Select a tested radar zone
   near the tablet. The sensor opens the dashboard from the app's idle clock when the display
   is on. Android and any existing device-management schedule handle physical wake and sleep.
-- **Wall display** keeps Flick Panel visible while charging and dims the idle clock.
+- **Wall display** keeps the foreground panel awake and dims the idle clock, including
+  while a managed charger has paused charging.
 - For the kitchen boost, pin the existing boost button and link its timer in the tile's
   settings. Home Assistant owns the boost and its countdown.
+
+## Data flow
+
+`ha` owns the authenticated connection and entity capabilities. `config` stores the
+versioned tablet layout and local setup. `ui` shares the theme and tile grid across the
+dashboard. Home Assistant owns device state and actions. The panel subscribes to pinned
+entities and the selected room. Camera previews use a bounded memory cache and refresh
+while visible.
 
 ## Build
 

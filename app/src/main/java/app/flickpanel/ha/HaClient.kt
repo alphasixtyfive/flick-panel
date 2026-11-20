@@ -92,10 +92,9 @@ internal class HaClient(
                     _entities.value = emptyMap()
                     _link.value = Link.ONLINE
                 } else {
-                    val next = Subscription(session.id(), ids)
-                    subscription.set(next)
-                    _link.value = Link.CONNECTING
-                    session.request("subscribe_entities", JSONObject().put("entity_ids", JSONArray(ids)), next.id)
+                    session.request("subscribe_entities", JSONObject().put("entity_ids", JSONArray(ids))) { id ->
+                        subscription.set(Subscription(id, ids))
+                    }
                 }
                 if (previous != null) {
                     session.request("unsubscribe_events", JSONObject().put("subscription", previous.id))
@@ -115,7 +114,7 @@ internal class HaClient(
 
     suspend fun catalogue(): Catalogue = coroutineScope {
         val stateResponse = async { request("get_states").optJSONArray("result") ?: JSONArray() }
-        val entitiesById = async { indexed(optionalList("config/entity_registry/list"), "entity_id") }
+        val entitiesById = async { registryForDisplay() }
         val devices = async { indexed(optionalList("config/device_registry/list"), "id") }
         val areas = async {
             val list = optionalList("config/area_registry/list")
@@ -131,12 +130,25 @@ internal class HaClient(
             val entity = Entity(id, row.optString("state"), row.optJSONObject("attributes") ?: JSONObject())
             if (entity.kinds().isEmpty()) return@mapNotNull null
             val metadata = registry[id]
-            Entry(entity,
-                metadata?.text("area_id") ?: hardware[metadata?.text("device_id")]?.text("area_id"),
-                metadata?.text("entity_category") != null,
-                metadata?.text("hidden_by") == null && metadata?.text("disabled_by") == null)
+            Entry(entity, metadata?.area ?: hardware[metadata?.device]?.text("area_id"),
+                metadata?.diagnostic == true, metadata?.hidden != true)
         }.sortedBy { it.entity.name.lowercase() }
         Catalogue(entries, areas.await())
+    }
+
+    private data class RegistryEntry(val area: String?, val device: String?, val diagnostic: Boolean, val hidden: Boolean)
+
+    private suspend fun registryForDisplay(): Map<String, RegistryEntry> {
+        val compact = try {
+            request("config/entity_registry/list_for_display").optJSONObject("result")?.optJSONArray("entities")
+        } catch (_: HaProblem) { null }
+        if (compact != null) return indexed(compact, "ei").mapValues { (_, row) ->
+            RegistryEntry(row.text("ai"), row.text("di"), !row.isNull("ec"), row.optBoolean("hb"))
+        }
+        return indexed(optionalList("config/entity_registry/list"), "entity_id").mapValues { (_, row) ->
+            RegistryEntry(row.text("area_id"), row.text("device_id"), row.text("entity_category") != null,
+                row.text("hidden_by") != null || row.text("disabled_by") != null)
+        }
     }
 
     suspend fun command(
@@ -149,6 +161,15 @@ internal class HaClient(
         if (_link.value != Link.ONLINE) throw HaProblem("Home Assistant is reconnecting")
         request("call_service", JSONObject().put("domain", domain).put("service", service)
             .put("target", JSONObject().put("entity_id", entity)).put("service_data", values))
+    }
+
+    suspend fun browseMusic(entity: String, folder: MediaChoice?): List<MediaChoice> {
+        require(validEntity(entity) && entity.startsWith("media_player."))
+        val data = JSONObject().put("entity_id", entity)
+        if (folder != null) data.put("media_content_id", folder.id).put("media_content_type", folder.type)
+        val response = request("media_player/browse_media", data)
+        val entries = response.optJSONObject("result")?.optJSONArray("children") ?: JSONArray()
+        return objects(entries).mapNotNull(MediaChoice::from)
     }
 
     suspend fun history(entity: String): List<GraphPoint> {

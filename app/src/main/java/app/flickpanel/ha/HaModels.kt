@@ -45,6 +45,7 @@ internal data class Entity(
         .replaceFirstChar { it.uppercase() }
     val available get() = state.isNotBlank() && state !in setOf("unavailable", "unknown")
     val unit get() = attributes.text("unit_of_measurement").orEmpty()
+    val mediaFeatures get() = attributes.optLong("supported_features")
     val brightness get() = if (state == "off") 0 else
         attributes.optInt("brightness", -1).takeIf { it in 0..255 }?.let { (it * 100 + 127) / 255 }
 
@@ -62,16 +63,73 @@ internal data class Entity(
         "input_button", "button", "scene", "script" -> listOf(TileKind.ACTION)
         "camera" -> listOf(TileKind.CAMERA)
         "climate" -> listOf(TileKind.CLIMATE)
+        "media_player" -> if (mediaFeatures.hasMediaFeature(MediaTransport.PLAY.bit) || mediaFeatures.canBrowseMusic())
+            listOf(TileKind.MEDIA) else emptyList()
+        "weather" -> listOf(TileKind.WEATHER)
         else -> emptyList()
     }
+}
+
+internal enum class MediaTransport(val bit: Long, val service: String) {
+    PAUSE(1, "media_pause"), PLAY(16_384, "media_play")
+}
+
+internal fun Long.hasMediaFeature(bit: Long) = this and bit != 0L
+internal fun Long.canBrowseMusic() = hasMediaFeature(131_072L) && hasMediaFeature(512L)
+
+internal data class MediaChoice(
+    val id: String, val type: String, val title: String, val expandable: Boolean, val playable: Boolean
+) {
+    companion object {
+        fun from(row: JSONObject): MediaChoice? {
+            val id = row.text("media_content_id")?.takeIf { it.length <= 2048 } ?: return null
+            val type = row.text("media_content_type")?.take(100) ?: return null
+            val title = row.text("title")?.take(140) ?: return null
+            val group = row.optString("media_class")
+            val isAudio = group in setOf("music", "artist", "album", "track", "playlist", "genre", "podcast", "audiobook", "episode", "channel")
+            val folder = row.optBoolean("can_expand") && (isAudio || group == "directory" || id.startsWith("media-source://radio_browser"))
+            val playable = row.optBoolean("can_play") && (isAudio || type.startsWith("audio/"))
+            return if (folder || playable) MediaChoice(id, type, title, folder, playable) else null
+        }
+    }
+}
+
+internal data class WeatherReading(val condition: String, val temperature: Double?, val unit: String)
+
+internal fun Entity.weather(): WeatherReading? {
+    if (domain != "weather" || !available) return null
+    val condition = when (state) {
+        "clear-night" -> "Clear night"
+        "partlycloudy" -> "Partly cloudy"
+        "lightning-rainy" -> "Thundery rain"
+        "lightning" -> "Thunderstorms"
+        "pouring" -> "Heavy rain"
+        "rainy" -> "Rain"
+        "snowy" -> "Snow"
+        "snowy-rainy" -> "Sleet"
+        "windy-variant" -> "Windy and cloudy"
+        else -> state.replace('-', ' ').replace('_', ' ').replaceFirstChar { it.uppercase() }
+    }
+    return WeatherReading(
+        condition,
+        attributes.optDouble("temperature", Double.NaN).takeIf(Double::isFinite),
+        attributes.text("temperature_unit").orEmpty().take(5)
+    )
 }
 
 internal data class Area(val id: String, val name: String)
 internal data class Entry(val entity: Entity, val area: String?, val diagnostic: Boolean, val visible: Boolean)
 internal data class Catalogue(val entries: List<Entry> = emptyList(), val areas: List<Area> = emptyList()) {
-    fun room(area: String): List<Entry> = entries.filter {
-        it.area == area && it.visible && !it.diagnostic && it.entity.domain in setOf("light", "climate")
-    }.sortedWith(compareBy({ it.entity.domain != "light" }, { it.entity.name.lowercase() }))
+    private val byId = entries.associateBy { it.entity.id }
+    private val byRoom = entries.asSequence()
+        .filter { it.area != null && it.visible && !it.diagnostic && it.entity.domain in setOf("light", "climate") }
+        .sortedBy { it.entity.domain != "light" }
+        .groupBy { it.area }
+    val rooms = areas.filter { it.id in byRoom }
+
+    fun entity(id: String) = byId[id]?.entity
+    fun areaOf(id: String) = byId[id]?.area
+    fun room(area: String): List<Entry> = byRoom[area].orEmpty()
 }
 
 internal data class GraphPoint(val time: Long, val value: Double)
