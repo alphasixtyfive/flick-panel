@@ -285,11 +285,11 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun cachedSnapshot(id: String): Bitmap? = images.snapshots.cached(id)
+    fun cachedSnapshot(id: String, revision: String = ""): Bitmap? = images.snapshots.cached("$id@$revision")
 
-    suspend fun snapshot(id: String): Bitmap? {
+    suspend fun snapshot(id: String, revision: String = ""): Bitmap? {
         val active = client ?: return null
-        return images.snapshots.load(id) { active.snapshot(id) }
+        return images.snapshots.load("$id@$revision") { active.snapshot(id) }
     }
 
     fun cachedArtwork(reference: String): Bitmap? = images.artwork.fresh(reference)

@@ -54,6 +54,7 @@ class HaSessionTest {
                 assertEquals(listOf(801.0, 840.0), client.history("sensor.power").map { it.value })
                 assertEquals("/api/hls/abcdefgh123456/master_playlist.m3u8", client.stream("camera.front_door").encodedPath)
                 assertNotNull(client.snapshot("camera.front_door"))
+                assertNotNull(client.snapshot("image.vacuum_map"))
                 val album = client.photoAlbum("media-source://synology_dsm/nas/album")
                 assertEquals(listOf("media-source://synology_dsm/nas/album/photo"), album.photos)
                 assertEquals("cover photo", client.photo(album.photos.single())?.decodeToString())
@@ -96,7 +97,7 @@ private class FakeHome : Dispatcher() {
 
     override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
         "/api/" -> authorized(request, MockResponse().setBody("""{"message":"API running."}"""))
-        "/api/camera_proxy/camera.front_door", "/api/media_player_proxy/cover" -> authorized(request,
+        "/api/camera_proxy/camera.front_door", "/api/image_proxy/image.vacuum_map", "/api/media_player_proxy/cover" -> authorized(request,
             MockResponse().setHeader("Content-Type", "image/jpeg").setBody("fixture image bytes"))
         "/synology_dsm/nas/cover.jpg" -> authorized(request,
             MockResponse().setHeader("Content-Type", "image/jpeg").setBody("cover photo"))

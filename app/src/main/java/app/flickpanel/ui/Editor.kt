@@ -4,7 +4,6 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -58,11 +57,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,7 +66,6 @@ import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.PanelConfig
-import app.flickpanel.config.PanelTheme
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
@@ -171,6 +166,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     var section by remember { mutableStateOf(SetupSection.FAVOURITES) }
     var picker by remember { mutableStateOf<Source?>(null) }
     var format by remember { mutableStateOf<Format?>(null) }
+    var panelPage by remember { mutableStateOf<PanelPage?>(null) }
     var choosingPhotos by remember { mutableStateOf(false) }
     val activePicker = picker
     val activeFormat = format
@@ -178,7 +174,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
         state.connectionEditor -> "Connection"
         activeFormat != null -> if (activeFormat.current == null) "Add tile" else "Edit tile"
         activePicker != null -> activePicker.title
-        else -> null
+        else -> panelPage?.label
     }
 
     SetupLayout(
@@ -187,10 +183,12 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
         openSection = {
             format = null
             picker = null
+            panelPage = null
             model.cancelConnectionChange()
             section = it
         },
         detailTitle = detailTitle,
+        canSave = activeFormat == null && activePicker == null && !state.connectionEditor,
         busy = state.busy,
         back = {
             if (!state.busy) {
@@ -198,6 +196,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                     activeFormat != null -> format = null
                     activePicker != null -> picker = null
                     state.connectionEditor -> model.cancelConnectionChange()
+                    panelPage != null -> panelPage = null
                     else -> model.relock()
                 }
             }
@@ -223,7 +222,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                 when (activePicker) {
                     Source.TILE -> {
                         val kinds = entity.kinds()
-                        if (kinds.size == 1) {
+                        if (kinds.size == 1 && kinds.single() != TileKind.IMAGE) {
                             val kind = kinds.single()
                             val featured = kind != TileKind.CAMERA || draft.favourites.none { it.kind == TileKind.CAMERA && it.showOnHome }
                             draft = draft.copy(favourites = draft.favourites + TileSpec(entity.id, kind, showOnHome = featured))
@@ -261,8 +260,17 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                     )
                     SetupSection.ROOMS -> RoomSetup(draft, state) { draft = it }
                     SetupSection.CAMERAS -> CameraSetup(draft, state) { draft = it }
-                    SetupSection.PANEL -> PanelOptions(draft, state, { draft = it }, { picker = it },
-                        { choosingPhotos = true }, model::changeConnection)
+                    SetupSection.PANEL -> PanelSettings(
+                        page = panelPage,
+                        draft = draft,
+                        state = state,
+                        open = { panelPage = it },
+                        change = { draft = it },
+                        choosePhotos = { choosingPhotos = true },
+                        chooseMessage = { picker = Source.MESSAGE },
+                        choosePresence = { picker = Source.PRESENCE },
+                        changeConnection = model::changeConnection,
+                    )
                 }
             }
         }
@@ -510,6 +518,7 @@ private fun FormatPanel(format: Format, state: PanelUi, apply: (TileSpec) -> Uni
     var label by remember(format) { mutableStateOf(format.current?.label.orEmpty()) }
     var status by remember(format) { mutableStateOf(format.current?.statusEntity) }
     var showOnHome by remember(format) { mutableStateOf(format.current?.showOnHome ?: true) }
+    var wideOnTablet by remember(format) { mutableStateOf(format.current?.wideOnTablet ?: false) }
     var timersOpen by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(setupPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -520,6 +529,13 @@ private fun FormatPanel(format: Format, state: PanelUi, apply: (TileSpec) -> Uni
         FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             for (option in format.kinds) FilterChip(selected = kind == option,
                 onClick = { kind = option }, label = { Text(option.label) })
+        }
+        if (kind.resizable) {
+            Text("Width on tablets", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = !wideOnTablet, onClick = { wideOnTablet = false }, label = { Text("Standard") })
+                FilterChip(selected = wideOnTablet, onClick = { wideOnTablet = true }, label = { Text("Wide") })
+            }
         }
         if (kind == TileKind.ACTION) {
             Box {
@@ -543,96 +559,10 @@ private fun FormatPanel(format: Format, state: PanelUi, apply: (TileSpec) -> Uni
             }
         }
         Button(onClick = { apply(TileSpec(format.entity.id, kind, label.trim().takeIf(String::isNotEmpty),
-            status.takeIf { kind == TileKind.ACTION }, showOnHome = kind != TileKind.CAMERA || showOnHome)) }) {
+            status.takeIf { kind == TileKind.ACTION }, showOnHome = kind != TileKind.CAMERA || showOnHome,
+            wideOnTablet = kind.resizable && wideOnTablet)) }) {
             Text(if (format.current == null) "Add" else "Apply")
         }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PanelOptions(
-    draft: PanelConfig, state: PanelUi, change: (PanelConfig) -> Unit,
-    pick: (Source) -> Unit, choosePhotos: () -> Unit, connection: () -> Unit,
-) {
-    val context = LocalContext.current
-    val colors = MaterialTheme.colorScheme
-    Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = setupPadding, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
-        SettingsGroup("Display") {
-            SettingLink("Idle photos", draft.idleAlbum?.title ?: "Clock only", choosePhotos,
-                if (draft.idleAlbum != null) ({ change(draft.copy(idleAlbum = null)) }) else null)
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Text("Show idle screen after", style = MaterialTheme.typography.titleMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (seconds in listOf(30, 60, 120, 300)) {
-                        FilterChip(selected = draft.idleSeconds == seconds,
-                            onClick = { change(draft.copy(idleSeconds = seconds)) },
-                            label = { Text(if (seconds < 60) "$seconds sec" else "${seconds / 60} min") })
-                    }
-                }
-            }
-            ListItem(
-                headlineContent = { Text("Wall display", style = MaterialTheme.typography.titleMedium) },
-                supportingContent = { Text("Keep the display on and dim the idle screen") },
-                trailingContent = { Switch(checked = draft.wallMode, onCheckedChange = { change(draft.copy(wallMode = it)) }) },
-                colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer),
-            )
-        }
-
-        SettingsGroup("Appearance") {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-                Text("Colour scheme", style = MaterialTheme.typography.titleMedium)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (theme in PanelTheme.entries) {
-                        FilterChip(selected = draft.theme == theme, onClick = { change(draft.copy(theme = theme)) },
-                            label = { Text(theme.label) })
-                    }
-                }
-            }
-        }
-
-        SettingsGroup("Home Assistant") {
-            SettingLink("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity",
-                { pick(Source.MESSAGE) }, if (draft.messageEntity != null) ({ change(draft.copy(messageEntity = null)) }) else null)
-            SettingLink("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity",
-                { pick(Source.PRESENCE) }, if (draft.presenceEntity != null) ({ change(draft.copy(presenceEntity = null)) }) else null)
-            SettingLink("Change Home Assistant connection", null, connection)
-        }
-
-        SettingsGroup("Device") {
-            SettingLink("Android Home app", "Use the Home gesture to return from other apps",
-                { openHomeAppSettings(context) })
-        }
-    }
-}
-
-@Composable
-private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
-        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 3.dp), content = content)
-        }
-    }
-}
-
-@Composable
-private fun SettingLink(title: String, subtitle: String?, open: () -> Unit, clear: (() -> Unit)? = null) {
-    val colors = MaterialTheme.colorScheme
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Surface(onClick = open, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp),
-            color = colors.surfaceContainer) {
-            ListItem(
-                headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
-                supportingContent = subtitle?.let { { Text(it) } },
-                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer),
-            )
-        }
-        if (clear != null) IconButton(onClick = clear) { Icon(Icons.Rounded.Close, "Clear $title") }
     }
 }
 

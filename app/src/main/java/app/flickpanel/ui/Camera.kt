@@ -156,7 +156,7 @@ internal fun CameraViewer(id: String, label: String?, canStream: Boolean, opened
             val player = remember(stream) {
                 val applicationContext = context.applicationContext
                 val renderers = DefaultRenderersFactory(applicationContext).setEnableDecoderFallback(true)
-                val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(6_000, 12_000, 250, 1_000).build()
+                val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(10_000, 20_000, 500, 1_500).build()
                 ExoPlayer.Builder(applicationContext, renderers).setLoadControl(loadControl).build().apply {
                     volume = 0f
                     trackSelectionParameters = trackSelectionParameters.buildUpon()

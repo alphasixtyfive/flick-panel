@@ -62,12 +62,26 @@ internal data class Entity(
         "binary_sensor", "input_text", "timer" -> listOf(TileKind.VALUE)
         "input_button", "button", "scene", "script" -> listOf(TileKind.ACTION)
         "camera" -> listOf(TileKind.CAMERA)
+        "image" -> listOf(TileKind.IMAGE)
         "climate" -> listOf(TileKind.CLIMATE)
         "media_player" -> if (mediaFeatures.hasMediaFeature(MediaTransport.PLAY.bit) || mediaFeatures.canBrowseMusic())
             listOf(TileKind.MEDIA) else emptyList()
         "weather" -> listOf(TileKind.WEATHER)
         else -> emptyList()
     }
+}
+
+internal fun Entity.binaryStatus(): String? {
+    if (domain != "binary_sensor" || state !in setOf("on", "off")) return null
+    val labels = when (attributes.text("device_class")) {
+        "door", "window", "garage_door", "opening" -> "Open" to "Closed"
+        "motion", "occupancy", "presence" -> "Detected" to "Clear"
+        "moisture" -> "Wet" to "Dry"
+        "problem" -> "Problem" to "Clear"
+        "running" -> "Running" to "Stopped"
+        else -> return null
+    }
+    return if (state == "on") labels.first else labels.second
 }
 
 internal enum class MediaTransport(val bit: Long, val service: String) {

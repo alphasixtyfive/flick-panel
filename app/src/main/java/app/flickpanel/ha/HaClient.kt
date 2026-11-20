@@ -193,9 +193,13 @@ internal class HaClient(
     }
 
     suspend fun snapshot(entity: String): ByteArray? {
-        require(validEntity(entity) && entity.startsWith("camera."))
-        val url = credentials.server.resolve("api/camera_proxy/$entity")!!.newBuilder()
-            .addQueryParameter("width", "720").build()
+        require(validEntity(entity))
+        val path = when {
+            entity.startsWith("camera.") -> "api/camera_proxy/$entity?width=720"
+            entity.startsWith("image.") -> "api/image_proxy/$entity"
+            else -> return null
+        }
+        val url = credentials.server.resolve(path) ?: return null
         return get(url, credentials.token, ::imageBody)
     }
 

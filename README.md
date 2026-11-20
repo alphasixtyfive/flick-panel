@@ -20,6 +20,10 @@ from other apps.
    **Small graph**. For a dimmable light choose **Slider** or **Switch**. Swipe across a
    brightness tile to set the level, or tap it to turn the light on or off. **Done** saves
    the layout.
+   **Image** displays a Home Assistant image entity like a vacuum map. In **Edit tile**,
+   choose **Wide** when you want two columns on a tablet. A Home Assistant template
+   sensor can supply a value or status for an existing tile without running templates on
+   the tablet.
 4. Hold **Home** and use the PIN keypad to return to setup. Hold and drag a tile by its
    handle, or tap the handle to move it one place. The tile’s options menu lets you edit
    or remove it. Leaving the app or five minutes in setup closes the editor.

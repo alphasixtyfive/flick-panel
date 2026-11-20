@@ -64,6 +64,7 @@ internal fun SetupLayout(
     section: SetupSection,
     openSection: (SetupSection) -> Unit,
     detailTitle: String?,
+    canSave: Boolean,
     busy: Boolean,
     back: () -> Unit,
     close: () -> Unit,
@@ -91,7 +92,7 @@ internal fun SetupLayout(
                                 }
                                 Text(detailTitle ?: if (expanded) section.label else "Setup", Modifier.weight(1f).semantics { heading() },
                                     style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (!detail) Button(onClick = save, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
+                                if (canSave) Button(onClick = save, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
                                     Text("Done")
                                 }
                             }

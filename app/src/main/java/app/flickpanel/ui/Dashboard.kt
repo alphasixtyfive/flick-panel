@@ -40,7 +40,9 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
@@ -80,19 +82,20 @@ private fun clockTime(): ZonedDateTime {
 @Composable
 internal fun AmbientClock(message: String?, albumId: String?, model: PanelViewModel) {
     val now = clockTime()
+    val shadow = if (albumId == null) null else Shadow(Color(0xcc000000), Offset(0f, 3f), blurRadius = 14f)
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xff10151b))
         .clickable(interactionSource = null, indication = null, onClickLabel = "Open home controls", onClick = model::wake)) {
         IdlePhotos(albumId, model::browsePhotos, model::loadPhoto, Modifier.matchParentSize())
         if (message != null) {
-            Text(message, color = Color(0xffc1d1e1), fontSize = 23.sp, textAlign = TextAlign.Center,
+            Text(message, color = Color(0xffeef4fa), fontSize = 23.sp, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
                 maxLines = 2, modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 34.dp, vertical = 34.dp))
         }
         val size = (maxWidth.value * .18f).coerceIn(68f, 160f).sp
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(now.format(clockFormat), fontSize = size, lineHeight = size,
-                fontWeight = FontWeight.Medium, color = Color(0xffdce7f3))
-            Text(now.format(dateFormat), style = MaterialTheme.typography.titleLarge,
-                color = Color(0xffa9baca), modifier = Modifier.padding(top = 12.dp))
+                fontWeight = FontWeight.Medium, color = Color(0xfff1f6fb), style = MaterialTheme.typography.displayMedium.copy(shadow = shadow))
+            Text(now.format(dateFormat), style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
+                color = Color(0xffedf3fa), modifier = Modifier.padding(top = 12.dp))
         }
     }
 }

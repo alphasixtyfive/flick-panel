@@ -62,6 +62,7 @@ import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.GraphPoint
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.binaryStatus
 import java.text.NumberFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -143,8 +144,8 @@ private fun FeaturedCamera(camera: TileSpec, rows: List<List<TileSpec>>, state: 
 
 private fun span(tile: TileSpec, compact: Boolean) = when (tile.kind) {
     TileKind.CAMERA -> 2
-    TileKind.SLIDER, TileKind.CLIMATE, TileKind.MEDIA -> if (compact) 1 else 2
-    else -> 1
+    TileKind.SLIDER, TileKind.CLIMATE, TileKind.MEDIA -> if (!compact || tile.wideOnTablet) 2 else 1
+    else -> if (compact && tile.wideOnTablet) 2 else 1
 }
 
 private fun packRows(tiles: List<TileSpec>, columns: Int, compact: Boolean): List<List<TileSpec>> {
@@ -166,6 +167,7 @@ private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, 
             val minimum = when (tile.kind) {
                 TileKind.APP -> if (compact) shortcutHeight else 76.dp
                 TileKind.CAMERA -> 226.dp
+                TileKind.IMAGE -> if (compact && tile.wideOnTablet) 190.dp else 144.dp
                 else -> if (compact) compactCellHeight else cellHeight
             }
             val modifier = Modifier.heightIn(min = minimum)
@@ -240,6 +242,7 @@ private fun ControlTile(
         TileKind.SLIDER -> BrightnessTile(label, entity, live, pending, ready, model, modifier)
         TileKind.CLIMATE -> Climate(tile, state, model, modifier, live, ready, compact)
         TileKind.MEDIA -> MusicTile(label, entity, ready, model, modifier)
+        TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, state.link == Link.ONLINE && entity?.available == true, model, modifier)
         TileKind.WEATHER -> Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
             Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -357,6 +360,7 @@ private fun BrightnessTile(
 
 private fun displayValue(entity: Entity?): String {
     if (entity == null || !entity.available) return "Unavailable"
+    entity.binaryStatus()?.let { return it }
     val value = entity.state.take(120)
     return if (entity.unit.isBlank()) value.replaceFirstChar { it.uppercase() }
     else {
@@ -430,9 +434,9 @@ private fun TemperatureSetpoint(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(if (compact) Modifier.weight(1f) else Modifier.padding(end = 10.dp)) {
+            Text("Set to", style = MaterialTheme.typography.labelMedium, maxLines = 1)
             Text(pending ?: target?.let { formatNumber(it, 1) + "°" } ?: "—",
-                style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("Target", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target - step) },
             enabled = adjustable, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Remove, "Lower target") }
