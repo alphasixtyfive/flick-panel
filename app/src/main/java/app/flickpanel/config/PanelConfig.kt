@@ -11,7 +11,7 @@ enum class PanelTheme(val label: String) {
 
 enum class TileKind(val label: String) {
     TOGGLE("Switch"), VALUE("Value"), SLIDER("Slider"), TREND("Small graph"),
-    ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"), APP("Android app"), IMAGE("Image");
+    ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"), APP("Android app"), IMAGE("Image"), TIMER("Countdown");
 
     internal val resizable get() = this != CAMERA && this != WEATHER && this != APP
 }
@@ -23,6 +23,7 @@ data class TileSpec(
     val statusEntity: String? = null,
     val showOnHome: Boolean = true,
     val wideOnTablet: Boolean = false,
+    val cameraGate: String? = null,
 ) {
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
@@ -43,7 +44,7 @@ internal object PanelConfigCodec {
         .put("version", 1)
         .put("tiles", JSONArray(config.favourites.map { tile ->
             JSONObject().put("entity", tile.entity).put("kind", tile.kind.name).put("label", tile.label)
-                .put("status", tile.statusEntity).put("home", tile.showOnHome)
+                .put("status", tile.statusEntity).put("home", tile.showOnHome).put("gate", tile.cameraGate)
                 .apply { if (tile.wideOnTablet) put("wide", true) }
         }))
         .put("theme", config.theme.name)
@@ -67,7 +68,8 @@ internal object PanelConfigCodec {
             TileSpec(entity, kind, tile.text("label")?.take(72), tile.text("status")?.takeIf {
                 kind == TileKind.ACTION && validEntity(it) && it.startsWith("timer.")
             }, showOnHome = kind != TileKind.CAMERA || tile.optBoolean("home", true),
-                wideOnTablet = kind.resizable && tile.optBoolean("wide"))
+                wideOnTablet = kind.resizable && tile.optBoolean("wide"),
+                cameraGate = tile.text("gate")?.takeIf { kind == TileKind.CAMERA && validEntity(it) && it.startsWith("cover.") })
         }.distinctBy { it.entity }
         return PanelConfig(
             favourites = tiles.take(48),

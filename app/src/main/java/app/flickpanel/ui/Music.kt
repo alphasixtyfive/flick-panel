@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelViewModel
 import app.flickpanel.ha.Entity
+import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MediaChoice
 import app.flickpanel.ha.MediaTransport
 import app.flickpanel.ha.canBrowseMusic
@@ -83,7 +84,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun MusicTile(label: String, entity: Entity?, ready: Boolean, model: PanelViewModel, modifier: Modifier) {
+internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: Boolean, model: PanelViewModel, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     val features = entity?.mediaFeatures ?: 0L
     val state = entity?.state
@@ -91,9 +92,13 @@ internal fun MusicTile(label: String, entity: Entity?, ready: Boolean, model: Pa
     val hasCurrent = playing || state == "paused"
     val transport = if (playing) MediaTransport.PAUSE else MediaTransport.PLAY
     val canBrowse = features.canBrowseMusic()
+    val volume = entity?.volumePercent?.takeIf { features.hasMediaFeature(MEDIA_VOLUME_SET) }
+    val preview = remember(entity?.id) { mutableStateOf<Int?>(null) }
+    val adjusting = preview.value ?: pending?.removeSuffix("%")?.toIntOrNull()
     val showTransport = features.hasMediaFeature(transport.bit) && (hasCurrent || !canBrowse)
     val cover = rememberMusicArtwork(entity?.attributes?.text("entity_picture")?.takeIf { ready && hasCurrent }, model)
     val detail = when {
+        adjusting != null -> "Volume $adjusting%"
         entity?.available != true -> "Unavailable"
         hasCurrent -> listOfNotNull(entity.attributes.text("media_title"), entity.attributes.text("media_artist"))
             .joinToString(" \u00B7 ").takeIf { it.isNotEmpty() }
@@ -109,6 +114,10 @@ internal fun MusicTile(label: String, entity: Entity?, ready: Boolean, model: Pa
     Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
         Column(
             Modifier.fillMaxSize().clip(panelCardShape).then(browseAction)
+                .tileSlider(ready && volume != null, adjusting ?: volume ?: 0, preview) { level ->
+                    entity?.let { model.setVolume(it, level) }
+                }
+                .tileFill((adjusting ?: volume ?: 0) / 100f, colors.primary.copy(alpha = if (adjusting == null) .08f else .22f))
                 .padding(start = 19.dp, top = 12.dp, end = 19.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {

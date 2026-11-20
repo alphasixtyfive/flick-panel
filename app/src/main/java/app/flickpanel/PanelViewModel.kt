@@ -15,6 +15,7 @@ import app.flickpanel.ha.HaClient
 import app.flickpanel.ha.HaCredentials
 import app.flickpanel.ha.HaProblem
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MediaChoice
 import app.flickpanel.ha.MediaTransport
 import app.flickpanel.ha.canBrowseMusic
@@ -205,6 +206,14 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
     fun closeCamera() { _ui.update { it.copy(camera = null) }; touch() }
 
+    fun openCameraGate(camera: String) {
+        val current = _ui.value
+        if (current.camera != camera) return
+        val gateId = current.config.favourites.firstOrNull { it.entity == camera && it.kind == TileKind.CAMERA }?.cameraGate ?: return
+        val gate = current.entities[gateId]?.takeIf { it.state == "closed" && it.gateWithOpenControl } ?: return
+        send(gate, "open_cover", matches = { it.state == "opening" || it.state == "open" })
+    }
+
     fun openMusic(id: String) {
         val current = _ui.value
         if (current.config.favourites.none { it.entity == id && it.kind == TileKind.MEDIA } ||
@@ -228,6 +237,13 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (!entity.mediaFeatures.hasMediaFeature(transport.bit)) return
         val active = client ?: return
         viewModelScope.launch { safely { active.command(entity.id, "media_player", transport.service) } }
+    }
+
+    fun setVolume(entity: Entity, percent: Int) {
+        if (entity.domain != "media_player" || !entity.mediaFeatures.hasMediaFeature(MEDIA_VOLUME_SET)) return
+        val value = percent.coerceIn(0, 100)
+        send(entity, "volume_set", JSONObject().put("volume_level", value / 100.0), pending = "$value%",
+            matches = { it.volumePercent?.let { reported -> abs(reported - value) <= 1 } == true })
     }
 
     suspend fun playMusic(id: String, media: MediaChoice) {
@@ -396,6 +412,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val current = _ui.value
         val ids = current.config.favourites.filter { it.kind != TileKind.APP }.mapTo(mutableSetOf()) { it.entity }
         current.config.favourites.mapNotNullTo(ids) { it.statusEntity }
+        current.config.favourites.mapNotNullTo(ids) { it.cameraGate }
         if (current.config.roomIds?.isNotEmpty() == true || current.page == Page.ROOMS) {
             current.roomSections.forEach { section -> section.tiles.mapTo(ids) { it.entity } }
         }

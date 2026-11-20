@@ -74,9 +74,11 @@ class MainActivity : ComponentActivity() {
                 val music = state.musicBrowser
                 when {
                     camera != null -> {
-                        val title = state.config.favourites.firstOrNull { it.entity == camera }?.let(state::label)
+                        val tile = state.config.favourites.firstOrNull { it.entity == camera }
+                        val title = tile?.let(state::label)
                         val features = state.entity(camera)?.attributes?.optLong("supported_features", -1L) ?: -1L
-                        CameraViewer(camera, title, canStream = features and 2L != 0L, openedAt = state.cameraOpenedAt, model = model)
+                        CameraViewer(camera, title, canStream = features and 2L != 0L, openedAt = state.cameraOpenedAt,
+                            gateId = tile?.cameraGate, state = state, model = model)
                         BackHandler(onBack = model::closeCamera)
                     }
                     music != null -> MusicBrowser(music, state.entity(music)?.name, model)

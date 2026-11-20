@@ -41,6 +41,7 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - Add a **Weather** entity to put current conditions and temperature next to the clock.
 - Add a **Music player** tile for playback controls. **Browse music** opens the selected
   player's Home Assistant media library when the player supports browsing and playback.
+  On players that support volume control, swipe across the tile to set volume.
   Music Assistant playlists and radio stations get their own shelves, with cover art
   and station logos when available.
 - **Home message** takes a sensor or text helper whose state is the rendered message. Use a
@@ -54,7 +55,11 @@ explicit private IPv4 addresses such as a local Home Assistant server at
   idle screen shows its photos with the clock and any configured message. Tap the clock
   on the dashboard to open it, and tap anywhere on the idle screen to return.
 - For the kitchen boost, pin the existing boost button and link its timer in the tile's
-  settings. Home Assistant owns the boost and its countdown.
+  settings. The tile shows the remaining time when the boost runs. A standalone timer
+  can use the **Countdown** format. Home Assistant owns both the boost and the timer.
+- A camera can link an existing Home Assistant **gate** cover. The live viewer offers
+  **Open gate** when that cover is closed and asks for confirmation. The cover's Home
+  Assistant automation still controls when and how the gate moves.
 
 ## Data flow
 

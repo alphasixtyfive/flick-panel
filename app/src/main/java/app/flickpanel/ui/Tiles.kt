@@ -3,7 +3,6 @@ package app.flickpanel.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,29 +29,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
@@ -66,7 +54,6 @@ import app.flickpanel.ha.binaryStatus
 import java.text.NumberFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlin.math.roundToInt
 
 internal val panelCardShape = RoundedCornerShape(26.dp)
 internal val tileGap = 14.dp
@@ -208,7 +195,9 @@ private fun ControlTile(
     when (tile.kind) {
         TileKind.TOGGLE, TileKind.ACTION -> {
             val action = tile.kind == TileKind.ACTION
-            val running = tile.statusEntity?.let(state.entities::get)?.state == "active"
+            val timer = tile.statusEntity?.let(state.entities::get)
+            val running = timer?.state == "active" || timer?.state == "paused"
+            val countdown = if (running) timerReadout(timer) else null
             val active = if (action) running else on
             val background by animateColorAsState(
                 if (active) colors.primaryContainer else colors.surfaceContainer,
@@ -217,7 +206,7 @@ private fun ControlTile(
             )
             val text = pending ?: when {
                 !ready -> "Unavailable"
-                running -> "Running"
+                countdown != null -> countdown.label
                 action -> "Run"
                 on -> "On"
                 else -> "Off"
@@ -228,7 +217,8 @@ private fun ControlTile(
                 stateDescription = text
             }, shape = panelCardShape, color = background,
                 contentColor = if (active) colors.onPrimaryContainer else colors.onSurface) {
-                Column(Modifier.fillMaxSize().padding(19.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.fillMaxSize().tileFill(countdown?.progress ?: 0f, colors.primary.copy(alpha = .16f))
+                    .padding(19.dp), verticalArrangement = Arrangement.SpaceBetween) {
                     Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -241,12 +231,22 @@ private fun ControlTile(
         }
         TileKind.SLIDER -> BrightnessTile(label, entity, live, pending, ready, model, modifier)
         TileKind.CLIMATE -> Climate(tile, state, model, modifier, live, ready, compact)
-        TileKind.MEDIA -> MusicTile(label, entity, ready, model, modifier)
+        TileKind.MEDIA -> MusicTile(label, entity, pending, ready, model, modifier)
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, state.link == Link.ONLINE && entity?.available == true, model, modifier)
         TileKind.WEATHER -> Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
             Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 WeatherSummary(entity, compact = false)
+            }
+        }
+        TileKind.TIMER -> {
+            val countdown = timerReadout(entity)
+            Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
+                Column(Modifier.fillMaxSize().tileFill(countdown.progress ?: 0f, colors.primaryContainer).padding(19.dp),
+                    verticalArrangement = Arrangement.SpaceBetween) {
+                    Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(countdown.label, style = MaterialTheme.typography.titleLarge)
+                }
             }
         }
         TileKind.VALUE, TileKind.TREND -> {
@@ -291,9 +291,8 @@ private fun BrightnessTile(
     modifier: Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
-    val direction = LocalLayoutDirection.current
-    val currentLive by rememberUpdatedState(live)
-    var draggingLevel by remember(entity?.id) { mutableStateOf<Int?>(null) }
+    val preview = remember(entity?.id) { mutableStateOf<Int?>(null) }
+    val draggingLevel = preview.value
     val on = entity?.state == "on"
     val level = draggingLevel ?: pending?.removeSuffix("%")?.toIntOrNull() ?: entity?.brightness
     val status = when {
@@ -307,45 +306,14 @@ private fun BrightnessTile(
     Surface(
         onClick = { live?.let { model.toggle(it, !on) } },
         enabled = enabled,
-        modifier = modifier.pointerInput(enabled, direction) {
-            if (!enabled) return@pointerInput
-            fun levelAt(x: Float): Int {
-                val fraction = (x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
-                return ((if (direction == LayoutDirection.Ltr) fraction else 1f - fraction) * 100).roundToInt()
-            }
-            try {
-                detectHorizontalDragGestures(
-                    onDragStart = { draggingLevel = levelAt(it.x) },
-                    onHorizontalDrag = { change, _ -> draggingLevel = levelAt(change.position.x) },
-                    onDragEnd = {
-                        val target = draggingLevel
-                        draggingLevel = null
-                        if (target != null) currentLive?.let { model.dim(it, target) }
-                    },
-                    onDragCancel = { draggingLevel = null },
-                )
-            } finally {
-                draggingLevel = null
-            }
-        }.semantics {
-            stateDescription = status
-            progressBarRangeInfo = ProgressBarRangeInfo((level ?: 0).toFloat(), 0f..100f)
-            if (enabled && live != null) setProgress { requested ->
-                if (!requested.isFinite()) false else {
-                    model.dim(live, requested.roundToInt().coerceIn(0, 100))
-                    true
-                }
-            }
-        },
+        modifier = modifier.tileSlider(enabled, level ?: 0, preview) { value ->
+            live?.let { model.dim(it, value) }
+        }.semantics { stateDescription = status },
         shape = panelCardShape,
         color = colors.surfaceContainer,
     ) {
         Column(
-            Modifier.fillMaxSize().drawBehind {
-                val fillWidth = size.width * (level ?: 0).coerceIn(0, 100) / 100f
-                val left = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - fillWidth
-                drawRect(colors.primaryContainer, Offset(left, 0f), Size(fillWidth, size.height))
-            }.padding(19.dp),
+            Modifier.fillMaxSize().tileFill((level ?: 0) / 100f, colors.primaryContainer).padding(19.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {

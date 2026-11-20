@@ -130,7 +130,9 @@ internal fun CameraTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-internal fun CameraViewer(id: String, label: String?, canStream: Boolean, openedAt: Long, model: PanelViewModel) {
+internal fun CameraViewer(
+    id: String, label: String?, canStream: Boolean, openedAt: Long, gateId: String?, state: PanelUi, model: PanelViewModel,
+) {
     var url by remember(id) { mutableStateOf<HttpUrl?>(null) }
     var status by remember(id) { mutableStateOf(if (canStream) "Connecting…" else "Still image") }
     var firstFrame by remember(id) { mutableStateOf(false) }
@@ -225,6 +227,14 @@ internal fun CameraViewer(id: String, label: String?, canStream: Boolean, opened
                     Text(status, color = Color(0xffe1e7ed), style = MaterialTheme.typography.bodyMedium)
                 }
             }
+        }
+        if (gateId != null) {
+            val gatePosition = if (maxWidth < 600.dp) {
+                Modifier.align(Alignment.TopEnd).padding(top = 96.dp, end = 24.dp)
+            } else {
+                Modifier.align(Alignment.BottomEnd).padding(24.dp)
+            }
+            GateControl(state, gateId, { model.openCameraGate(id) }, gatePosition)
         }
     }
 }

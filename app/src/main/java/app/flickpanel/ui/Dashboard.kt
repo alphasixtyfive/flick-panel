@@ -82,7 +82,7 @@ private fun clockTime(): ZonedDateTime {
 @Composable
 internal fun AmbientClock(message: String?, albumId: String?, model: PanelViewModel) {
     val now = clockTime()
-    val shadow = if (albumId == null) null else Shadow(Color(0xcc000000), Offset(0f, 3f), blurRadius = 14f)
+    val shadow = if (albumId == null) null else Shadow(Color(0x66000000), Offset(0f, 2f), blurRadius = 10f)
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xff10151b))
         .clickable(interactionSource = null, indication = null, onClickLabel = "Open home controls", onClick = model::wake)) {
         IdlePhotos(albumId, model::browsePhotos, model::loadPhoto, Modifier.matchParentSize())
@@ -104,7 +104,6 @@ internal fun AmbientClock(message: String?, albumId: String?, model: PanelViewMo
 @Composable
 internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     val colors = MaterialTheme.colorScheme
-    val now = clockTime()
     val weather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val wide = maxWidth >= tabletWidthDp.dp
@@ -128,12 +127,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                     if (weather != null) {
                         WeatherSummary(state.entity(weather.entity), compact = !wide, prominent = wide)
                     }
-                    Box(Modifier.heightIn(min = 48.dp).clickable(interactionSource = null, indication = null,
-                        onClickLabel = "Show idle screen", role = Role.Button, onClick = model::showIdleScreen),
-                        contentAlignment = Alignment.Center) {
-                        Text(now.format(clockFormat),
-                            style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge)
-                    }
+                    HeaderClock(wide, model::showIdleScreen)
                 }
             }
             state.message?.let { message ->
@@ -162,6 +156,16 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HeaderClock(wide: Boolean, showIdleScreen: () -> Unit) {
+    Box(Modifier.heightIn(min = 48.dp).clickable(interactionSource = null, indication = null,
+        onClickLabel = "Show idle screen", role = Role.Button, onClick = showIdleScreen),
+        contentAlignment = Alignment.Center) {
+        Text(clockTime().format(clockFormat),
+            style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge)
     }
 }
 

@@ -2,6 +2,7 @@ package app.flickpanel.ha
 
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.validEntity
+import kotlin.math.roundToInt
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONObject
@@ -46,6 +47,11 @@ internal data class Entity(
     val available get() = state.isNotBlank() && state !in setOf("unavailable", "unknown")
     val unit get() = attributes.text("unit_of_measurement").orEmpty()
     val mediaFeatures get() = attributes.optLong("supported_features")
+    val volumePercent get() = attributes.optDouble("volume_level", Double.NaN)
+        .takeIf { it in 0.0..1.0 }?.let { (it * 100).roundToInt() }
+
+    val gateWithOpenControl get() = domain == "cover" && attributes.text("device_class") == "gate" &&
+        attributes.optLong("supported_features") and 1L != 0L
     val brightness get() = if (state == "off") 0 else
         attributes.optInt("brightness", -1).takeIf { it in 0..255 }?.let { (it * 100 + 127) / 255 }
 
@@ -59,7 +65,8 @@ internal data class Entity(
         "switch", "input_boolean" -> listOf(TileKind.TOGGLE)
         "sensor", "input_number", "number" -> if (domain == "sensor" && state.toDoubleOrNull()?.isFinite() == true)
             listOf(TileKind.VALUE, TileKind.TREND) else listOf(TileKind.VALUE)
-        "binary_sensor", "input_text", "timer" -> listOf(TileKind.VALUE)
+        "timer" -> listOf(TileKind.TIMER, TileKind.VALUE)
+        "binary_sensor", "input_text", "cover" -> listOf(TileKind.VALUE)
         "input_button", "button", "scene", "script" -> listOf(TileKind.ACTION)
         "camera" -> listOf(TileKind.CAMERA)
         "image" -> listOf(TileKind.IMAGE)
@@ -87,6 +94,8 @@ internal fun Entity.binaryStatus(): String? {
 internal enum class MediaTransport(val bit: Long, val service: String) {
     PAUSE(1, "media_pause"), PLAY(16_384, "media_play")
 }
+
+internal const val MEDIA_VOLUME_SET = 4L
 
 internal fun Long.hasMediaFeature(bit: Long) = this and bit != 0L
 internal fun Long.canBrowseMusic() = hasMediaFeature(131_072L) && hasMediaFeature(512L)

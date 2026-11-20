@@ -519,7 +519,9 @@ private fun FormatPanel(format: Format, state: PanelUi, apply: (TileSpec) -> Uni
     var status by remember(format) { mutableStateOf(format.current?.statusEntity) }
     var showOnHome by remember(format) { mutableStateOf(format.current?.showOnHome ?: true) }
     var wideOnTablet by remember(format) { mutableStateOf(format.current?.wideOnTablet ?: false) }
+    var cameraGate by remember(format) { mutableStateOf(format.current?.cameraGate) }
     var timersOpen by remember { mutableStateOf(false) }
+    var gatesOpen by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(setupPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(format.entity.name, style = MaterialTheme.typography.titleLarge)
@@ -557,10 +559,22 @@ private fun FormatPanel(format: Format, state: PanelUi, apply: (TileSpec) -> Uni
                 Text("Pin to Favourites")
                 Switch(checked = showOnHome, onCheckedChange = { showOnHome = it })
             }
+            Box {
+                FilledTonalButton(onClick = { gatesOpen = true }) {
+                    Text(cameraGate?.let { state.entity(it)?.name ?: it } ?: "Link a gate control")
+                }
+                DropdownMenu(gatesOpen, onDismissRequest = { gatesOpen = false }) {
+                    DropdownMenuItem(text = { Text("No gate control") }, onClick = { cameraGate = null; gatesOpen = false })
+                    for (gate in state.catalogue.entries.filter { it.visible && it.entity.gateWithOpenControl }) {
+                        DropdownMenuItem(text = { Text(gate.entity.name) },
+                            onClick = { cameraGate = gate.entity.id; gatesOpen = false })
+                    }
+                }
+            }
         }
         Button(onClick = { apply(TileSpec(format.entity.id, kind, label.trim().takeIf(String::isNotEmpty),
             status.takeIf { kind == TileKind.ACTION }, showOnHome = kind != TileKind.CAMERA || showOnHome,
-            wideOnTablet = kind.resizable && wideOnTablet)) }) {
+            wideOnTablet = kind.resizable && wideOnTablet, cameraGate = cameraGate.takeIf { kind == TileKind.CAMERA })) }) {
             Text(if (format.current == null) "Add" else "Apply")
         }
     }

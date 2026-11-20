@@ -15,6 +15,7 @@ import app.flickpanel.ha.parseServer
 import app.flickpanel.ha.reduceEntities
 import app.flickpanel.ha.sameOrigin
 import app.flickpanel.ha.weather
+import app.flickpanel.ui.timerSecondsRemaining
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -97,6 +98,26 @@ class PanelPolicyTest {
         assertEquals(original, PanelConfigCodec.decode(PanelConfigCodec.encode(original)))
         val legacy = """{"version":1,"tiles":[{"entity":"camera.front_door","kind":"CAMERA"}]}"""
         assertTrue(PanelConfigCodec.decode(legacy).favourites.single().showOnHome)
+    }
+
+    @Test fun cameraGateLinksRequireAnOpenableGateCover() {
+        val gateId = "cover.front_gate"
+        val gate = Entity(gateId, "closed", JSONObject("""{"device_class":"gate","supported_features":1}"""))
+        assertTrue(gate.gateWithOpenControl)
+        assertFalse(gate.copy(attributes = JSONObject("""{"device_class":"garage","supported_features":1}""")).gateWithOpenControl)
+        assertFalse(gate.copy(attributes = JSONObject("""{"device_class":"gate","supported_features":2}""")).gateWithOpenControl)
+        val camera = TileSpec("camera.driveway", TileKind.CAMERA, cameraGate = gateId)
+        val sensor = TileSpec("sensor.power", TileKind.VALUE, cameraGate = gateId)
+        val config = PanelConfig(favourites = listOf(camera, sensor))
+        assertEquals(listOf(camera, sensor.copy(cameraGate = null)),
+            PanelConfigCodec.decode(PanelConfigCodec.encode(config)).favourites)
+    }
+
+    @Test fun countdownKeepsTheFinalSecondVisibleUntilItExpires() {
+        assertEquals(listOf(2L, 1L, 0L, 0L), listOf(3_999L, 4_999L, 5_000L, 6_000L).map {
+            timerSecondsRemaining(deadline = 5_000L, now = it)
+        })
+        assertEquals(listOf(TileKind.TIMER, TileKind.VALUE), Entity("timer.boost", "active").kinds())
     }
 
     @Test fun shortcutsRoundTripAsLocalPackages() {
