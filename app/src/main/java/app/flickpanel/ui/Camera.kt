@@ -1,5 +1,8 @@
 package app.flickpanel.ui
 
+import android.os.SystemClock
+import android.util.Log
+
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.Image
@@ -127,7 +130,7 @@ internal fun CameraTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-internal fun CameraViewer(id: String, label: String?, canStream: Boolean, model: PanelViewModel) {
+internal fun CameraViewer(id: String, label: String?, canStream: Boolean, openedAt: Long, model: PanelViewModel) {
     var url by remember(id) { mutableStateOf<HttpUrl?>(null) }
     var status by remember(id) { mutableStateOf(if (canStream) "Connecting…" else "Still image") }
     var firstFrame by remember(id) { mutableStateOf(false) }
@@ -138,7 +141,10 @@ internal fun CameraViewer(id: String, label: String?, canStream: Boolean, model:
             status = "Still image"
             return@LaunchedEffect
         }
-        try { url = model.stream(id) }
+        try {
+            url = model.stream(id)
+            Log.i("FlickPanelCamera", "hls_url_ms=${SystemClock.elapsedRealtime() - openedAt}")
+        }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { status = "Live stream unavailable" }
     }
@@ -150,7 +156,7 @@ internal fun CameraViewer(id: String, label: String?, canStream: Boolean, model:
             val player = remember(stream) {
                 val applicationContext = context.applicationContext
                 val renderers = DefaultRenderersFactory(applicationContext).setEnableDecoderFallback(true)
-                val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(10_000, 20_000, 500, 1_500).build()
+                val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(6_000, 12_000, 250, 1_000).build()
                 ExoPlayer.Builder(applicationContext, renderers).setLoadControl(loadControl).build().apply {
                     volume = 0f
                     trackSelectionParameters = trackSelectionParameters.buildUpon()
@@ -162,6 +168,7 @@ internal fun CameraViewer(id: String, label: String?, canStream: Boolean, model:
             DisposableEffect(player) {
                 val listener = object : Player.Listener {
                     override fun onRenderedFirstFrame() {
+                        if (!firstFrame) Log.i("FlickPanelCamera", "first_frame_ms=${SystemClock.elapsedRealtime() - openedAt} transport=hls")
                         firstFrame = true
                         status = "Live"
                     }
@@ -185,9 +192,10 @@ internal fun CameraViewer(id: String, label: String?, canStream: Boolean, model:
                 player.playWhenReady = true
                 onDispose { player.removeListener(listener); player.release() }
             }
-            LaunchedEffect(player) {
-                delay(20_000)
-                if (!firstFrame) {
+            LaunchedEffect(player, status) {
+                if (status == "Connecting…") {
+                    delay(15_000)
+                    firstFrame = false
                     status = "Live stream unavailable"
                     url = null
                 }

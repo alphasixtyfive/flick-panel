@@ -1,5 +1,7 @@
 package app.flickpanel.config
 
+import app.flickpanel.ha.PhotoFolder
+import app.flickpanel.ha.isPhotoSourceId
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -22,14 +24,15 @@ data class TileSpec(
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
 
-data class PanelConfig(
+internal data class PanelConfig(
     val favourites: List<TileSpec> = emptyList(),
     val theme: PanelTheme = PanelTheme.SLATE,
     val messageEntity: String? = null,
     val presenceEntity: String? = null,
     val idleSeconds: Int = 60,
     val wallMode: Boolean = true,
-    val roomIds: List<String>? = null
+    val roomIds: List<String>? = null,
+    internal val idleAlbum: PhotoFolder? = null
 )
 
 internal object PanelConfigCodec {
@@ -45,6 +48,7 @@ internal object PanelConfigCodec {
         .put("idle", config.idleSeconds)
         .put("wall", config.wallMode)
         .put("rooms", config.roomIds?.let(::JSONArray))
+        .put("idleAlbum", config.idleAlbum?.let { JSONObject().put("id", it.id).put("title", it.title) })
         .toString()
 
     fun decode(json: String): PanelConfig {
@@ -69,6 +73,10 @@ internal object PanelConfigCodec {
             wallMode = obj.optBoolean("wall", true),
             roomIds = obj.optJSONArray("rooms")?.let { areas ->
                 (0 until areas.length()).mapNotNull { areas.optString(it).takeIf(::validAreaId) }.distinct().take(48)
+            },
+            idleAlbum = obj.optJSONObject("idleAlbum")?.let { album ->
+                val id = album.text("id")?.takeIf(::isPhotoSourceId) ?: return@let null
+                PhotoFolder(id, album.text("title")?.take(140) ?: "Photo folder")
             }
         )
     }

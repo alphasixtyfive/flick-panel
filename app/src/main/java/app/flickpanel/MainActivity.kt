@@ -17,7 +17,6 @@ import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -44,11 +43,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val state by model.ui.collectAsStateWithLifecycle()
-            SideEffect {
-                val wall = state.config.wallMode && state.configured
+            val wall = state.config.wallMode && state.configured
+            val hasPhotos = state.config.idleAlbum != null
+            LaunchedEffect(state.configured, state.clock, wall, hasPhotos) {
                 if (wall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                val brightness = if (wall && state.clock) .13f else -1f
+                val brightness = if (wall && state.clock) {
+                    if (hasPhotos) .22f else .13f
+                } else -1f
                 if (window.attributes.screenBrightness != brightness) {
                     window.attributes = window.attributes.apply { screenBrightness = brightness }
                 }
@@ -74,7 +76,7 @@ class MainActivity : ComponentActivity() {
                     camera != null -> {
                         val title = state.config.favourites.firstOrNull { it.entity == camera }?.let(state::label)
                         val features = state.entity(camera)?.attributes?.optLong("supported_features", -1L) ?: -1L
-                        CameraViewer(camera, title, canStream = features and 2L != 0L, model = model)
+                        CameraViewer(camera, title, canStream = features and 2L != 0L, openedAt = state.cameraOpenedAt, model = model)
                         BackHandler(onBack = model::closeCamera)
                     }
                     music != null -> MusicBrowser(music, state.entity(music)?.name, model)
@@ -85,7 +87,7 @@ class MainActivity : ComponentActivity() {
                                 when {
                                     state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                                     !state.configured -> ConnectionForm(state, model::connect)
-                                    state.clock -> AmbientClock(state.message, model::wake)
+                                    state.clock -> AmbientClock(state.message, state.config.idleAlbum?.id, model)
                                     else -> Dashboard(state, model)
                                 }
                             }

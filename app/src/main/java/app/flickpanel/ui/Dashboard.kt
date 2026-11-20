@@ -3,8 +3,10 @@ package app.flickpanel.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -59,6 +62,9 @@ import java.time.format.DateTimeFormatter
 
 internal const val tabletWidthDp = 840
 
+private val clockFormat = DateTimeFormatter.ofPattern("HH:mm")
+private val dateFormat = DateTimeFormatter.ofPattern("EEEE d MMMM")
+
 @Composable
 private fun clockTime(): ZonedDateTime {
     val now by produceState(ZonedDateTime.now()) {
@@ -72,19 +78,20 @@ private fun clockTime(): ZonedDateTime {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun AmbientClock(message: String?, wake: () -> Unit) {
+internal fun AmbientClock(message: String?, albumId: String?, model: PanelViewModel) {
     val now = clockTime()
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xff10151b))
-        .combinedClickable(onClickLabel = "Open home controls", onClick = wake)) {
+        .clickable(interactionSource = null, indication = null, onClickLabel = "Open home controls", onClick = model::wake)) {
+        IdlePhotos(albumId, model::browsePhotos, model::loadPhoto, Modifier.matchParentSize())
         if (message != null) {
             Text(message, color = Color(0xffc1d1e1), fontSize = 23.sp, textAlign = TextAlign.Center,
                 maxLines = 2, modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 34.dp, vertical = 34.dp))
         }
         val size = (maxWidth.value * .18f).coerceIn(68f, 160f).sp
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), fontSize = size, lineHeight = size,
+            Text(now.format(clockFormat), fontSize = size, lineHeight = size,
                 fontWeight = FontWeight.Medium, color = Color(0xffdce7f3))
-            Text(now.format(DateTimeFormatter.ofPattern("EEEE d MMMM")), style = MaterialTheme.typography.titleLarge,
+            Text(now.format(dateFormat), style = MaterialTheme.typography.titleLarge,
                 color = Color(0xffa9baca), modifier = Modifier.padding(top = 12.dp))
         }
     }
@@ -105,18 +112,25 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
             Row(Modifier.fillMaxWidth().padding(top = if (wide) 34.dp else 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
-                if (state.page == Page.ROOMS) RoomTitle(model, wide, Modifier.weight(1f, fill = false))
-                else Text("Home", style = if (wide) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displaySmall,
+                val title = if (state.page == Page.ROOMS) "Rooms" else "Home"
+                Text(title, style = if (wide) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.combinedClickable(onClick = {}, onLongClickLabel = "Unlock setup", onLongClick = model::showUnlock)
+                    modifier = Modifier.weight(1f, fill = false).combinedClickable(
+                        interactionSource = null, indication = null, onClick = {},
+                        onLongClickLabel = "Unlock setup", onLongClick = model::showUnlock,
+                    )
                         .heightIn(min = 48.dp).semantics { heading() })
                 Row(horizontalArrangement = Arrangement.spacedBy(if (wide) 34.dp else 15.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     if (weather != null) {
                         WeatherSummary(state.entity(weather.entity), compact = !wide, prominent = wide)
                     }
-                    Text(now.format(DateTimeFormatter.ofPattern("HH:mm")),
-                        style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge)
+                    Box(Modifier.heightIn(min = 48.dp).clickable(interactionSource = null, indication = null,
+                        onClickLabel = "Show idle screen", role = Role.Button, onClick = model::showIdleScreen),
+                        contentAlignment = Alignment.Center) {
+                        Text(now.format(clockFormat),
+                            style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge)
+                    }
                 }
             }
             state.message?.let { message ->
@@ -188,8 +202,10 @@ private fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, 
 
 @Composable
 private fun Favourites(state: PanelUi, model: PanelViewModel, wide: Boolean) {
-    val headerWeather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
-    val tiles = state.config.favourites.filter { it.showOnHome && it != headerWeather }
+    val tiles = remember(state.config.favourites) {
+        val headerWeather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
+        state.config.favourites.filter { it.showOnHome && it != headerWeather }
+    }
     if (tiles.isEmpty()) {
         EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.")
         return
@@ -199,7 +215,9 @@ private fun Favourites(state: PanelUi, model: PanelViewModel, wide: Boolean) {
 
 @Composable
 private fun CameraGallery(state: PanelUi, model: PanelViewModel, columns: Int, modifier: Modifier) {
-    val cameras = state.config.favourites.filter { it.kind == TileKind.CAMERA }.sortedByDescending { it.showOnHome }
+    val cameras = remember(state.config.favourites) {
+        state.config.favourites.filter { it.kind == TileKind.CAMERA }.sortedByDescending { it.showOnHome }
+    }
     if (cameras.isEmpty()) {
         Column(modifier) { EmptyState("No cameras pinned", "Add a camera in setup.") }
         return

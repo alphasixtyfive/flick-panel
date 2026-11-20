@@ -33,21 +33,21 @@ internal class ImageCache(byteLimit: Int, private val maxEdge: Int, private val 
         return requests.withPermit {
             fresh(key)?.let { return@withPermit it }
             val data = fetch() ?: return@withPermit null
-            val bitmap = withContext(Dispatchers.Default) { decode(data) } ?: return@withPermit null
+            val bitmap = decodePanelImage(data, maxEdge) ?: return@withPermit null
             images.put(key, CachedImage(bitmap, SystemClock.elapsedRealtime()))
             bitmap
         }
     }
+}
 
-    private fun decode(data: ByteArray): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
-        if (bounds.outWidth !in 1..12_000 || bounds.outHeight !in 1..12_000) return null
-        val edge = maxOf(bounds.outWidth, bounds.outHeight)
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = 1
-            while (edge / inSampleSize > maxEdge) inSampleSize *= 2
-        }
-        return BitmapFactory.decodeByteArray(data, 0, data.size, options)
+internal suspend fun decodePanelImage(data: ByteArray, maxEdge: Int): Bitmap? = withContext(Dispatchers.Default) {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+    if (bounds.outWidth !in 1..12_000 || bounds.outHeight !in 1..12_000) return@withContext null
+    val edge = maxOf(bounds.outWidth, bounds.outHeight)
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = 1
+        while (edge / inSampleSize > maxEdge) inSampleSize *= 2
     }
+    BitmapFactory.decodeByteArray(data, 0, data.size, options)
 }

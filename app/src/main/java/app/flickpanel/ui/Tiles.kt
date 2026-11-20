@@ -1,6 +1,9 @@
 package app.flickpanel.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +22,6 @@ import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,20 +30,30 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
@@ -59,55 +71,74 @@ import kotlin.math.roundToInt
 internal val panelCardShape = RoundedCornerShape(26.dp)
 internal val tileGap = 14.dp
 private val cellHeight = 132.dp
+private val compactCellHeight = 110.dp
 
 @Composable
-internal fun TileGrid(tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int) {
-    val rows = remember(tiles, columns) { packRows(tiles, columns) }
+internal fun TileGrid(tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean = false) {
+    val rows = remember(tiles, columns, compact) { packRows(tiles, columns, compact) }
     if (rows.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(tileGap)) {
-        for (row in rows) TileRow(row, state, model, columns)
+        for (row in rows) TileRow(row, state, model, columns, compact)
     }
 }
 
 @Composable
 internal fun FavouritesTileGrid(tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, wide: Boolean) {
-    val camera = tiles.firstOrNull { it.kind == TileKind.CAMERA }
-    val controls = tiles.filterNot { it == camera }
-    val rows = remember(controls) { packRows(controls, 2) }
-    if (wide && camera != null && rows.size >= 2) {
-        val featureRows = rows.take(if (rows.size > 3) 2 else 3)
-        Layout(modifier = Modifier.fillMaxWidth(), content = {
-            Column(verticalArrangement = Arrangement.spacedBy(tileGap)) {
-                for (row in featureRows) TileRow(row, state, model, 2)
-            }
-            CameraTile(camera, state, model, Modifier.fillMaxSize())
-        }) { children, constraints ->
-            val gap = tileGap.roundToPx()
-            val width = constraints.maxWidth
-            val controlsWidth = (width - gap) / 2
-            val grid = children[0].measure(Constraints.fixedWidth(controlsWidth))
-            val preview = children[1].measure(Constraints.fixed(width - controlsWidth - gap, grid.height))
-            layout(width, grid.height) {
-                grid.placeRelative(0, 0)
-                preview.placeRelative(controlsWidth + gap, 0)
-            }
+    if (!wide) {
+        TileGrid(tiles, state, model, columns = 2)
+        return
+    }
+
+    val (apps, devices) = remember(tiles) { tiles.partition { it.kind == TileKind.APP } }
+    val camera = devices.firstOrNull { it.kind == TileKind.CAMERA }
+    val rows = remember(devices, camera) {
+        packRows(devices.filterNot { it.kind == TileKind.CAMERA }, columns = 2, compact = true)
+    }
+    if (camera != null && rows.size >= 2) {
+        val featureRows = rows.take(3)
+        FeaturedCamera(camera, featureRows, state, model)
+        val remaining = remember(devices, camera, featureRows) {
+            val featured = featureRows.flatten().toSet() + camera
+            devices.filterNot { it in featured }
         }
-        TileGrid(rows.drop(featureRows.size).flatten(), state, model, 4)
+        TileGrid(remaining, state, model, columns = 4, compact = true)
     } else {
-        TileGrid(tiles, state, model, if (wide) 4 else 2)
+        TileGrid(devices, state, model, columns = 4, compact = true)
+    }
+    TileGrid(apps, state, model, columns = 3, compact = true)
+}
+
+@Composable
+private fun FeaturedCamera(camera: TileSpec, rows: List<List<TileSpec>>, state: PanelUi, model: PanelViewModel) {
+    Layout(modifier = Modifier.fillMaxWidth(), content = {
+        Column(verticalArrangement = Arrangement.spacedBy(tileGap)) {
+            for (row in rows) TileRow(row, state, model, columns = 2, compact = true)
+        }
+        CameraTile(camera, state, model, Modifier.fillMaxSize())
+    }) { children, constraints ->
+        val gap = tileGap.roundToPx()
+        val width = constraints.maxWidth
+        val controlsWidth = (width - gap) / 2
+        val grid = children[0].measure(Constraints.fixedWidth(controlsWidth))
+        val preview = children[1].measure(Constraints.fixed(width - controlsWidth - gap, grid.height))
+        layout(width, grid.height) {
+            grid.placeRelative(0, 0)
+            preview.placeRelative(controlsWidth + gap, 0)
+        }
     }
 }
 
-private fun span(tile: TileSpec) = when (tile.kind) {
-    TileKind.SLIDER, TileKind.CAMERA, TileKind.CLIMATE, TileKind.MEDIA -> 2
+private fun span(tile: TileSpec, compact: Boolean) = when (tile.kind) {
+    TileKind.CAMERA -> 2
+    TileKind.SLIDER, TileKind.CLIMATE, TileKind.MEDIA -> if (compact) 1 else 2
     else -> 1
 }
 
-private fun packRows(tiles: List<TileSpec>, columns: Int): List<List<TileSpec>> {
+private fun packRows(tiles: List<TileSpec>, columns: Int, compact: Boolean): List<List<TileSpec>> {
     val result = mutableListOf<MutableList<TileSpec>>()
     var used = columns
     for (tile in tiles) {
-        val width = span(tile)
+        val width = span(tile, compact)
         if (used + width > columns) { result.add(mutableListOf()); used = 0 }
         result.last().add(tile)
         used += width
@@ -116,17 +147,17 @@ private fun packRows(tiles: List<TileSpec>, columns: Int): List<List<TileSpec>> 
 }
 
 @Composable
-private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int) {
+private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean) {
     Layout(modifier = Modifier.fillMaxWidth(), content = {
         for (tile in row) key(tile.entity) {
             val minimum = when (tile.kind) {
-                TileKind.APP -> 76.dp
+                TileKind.APP -> if (compact) 64.dp else 76.dp
                 TileKind.CAMERA -> 226.dp
-                else -> cellHeight
+                else -> if (compact) compactCellHeight else cellHeight
             }
             val modifier = Modifier.heightIn(min = minimum)
             if (tile.kind == TileKind.CAMERA) CameraTile(tile, state, model, modifier)
-            else ControlTile(tile, state, model, modifier)
+            else ControlTile(tile, state, model, modifier, compact)
         }
     }) { children, constraints ->
         val width = constraints.maxWidth
@@ -135,7 +166,7 @@ private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, 
         var column = 0
         val slots = row.map { tile ->
             val start = cells * column / columns + gap * column
-            column += span(tile)
+            column += span(tile, compact)
             val end = cells * column / columns + gap * (column - 1)
             start to (end - start)
         }
@@ -148,7 +179,7 @@ private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, 
 }
 
 @Composable
-private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier) {
+private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, compact: Boolean) {
     val entity = state.entity(tile.entity)
     val label = state.label(tile)
     val pending = state.pending[tile.entity]
@@ -161,6 +192,11 @@ private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
             val action = tile.kind == TileKind.ACTION
             val running = tile.statusEntity?.let(state.entities::get)?.state == "active"
             val active = if (action) running else on
+            val background by animateColorAsState(
+                if (active) colors.primaryContainer else colors.surfaceContainer,
+                animationSpec = tween(durationMillis = 140),
+                label = "Tile state",
+            )
             val text = pending ?: when {
                 !ready -> "Unavailable"
                 running -> "Running"
@@ -172,7 +208,7 @@ private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
                 if (live != null) { if (action) model.action(live) else model.toggle(live, !on) }
             }, enabled = ready, modifier = modifier.semantics {
                 stateDescription = text
-            }, shape = panelCardShape, color = if (active) colors.primaryContainer else colors.surfaceContainer,
+            }, shape = panelCardShape, color = background,
                 contentColor = if (active) colors.onPrimaryContainer else colors.onSurface) {
                 Column(Modifier.fillMaxSize().padding(19.dp), verticalArrangement = Arrangement.SpaceBetween) {
                     Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -185,20 +221,8 @@ private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
                 }
             }
         }
-        TileKind.SLIDER -> {
-            Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
-                Column(Modifier.padding(horizontal = 19.dp, vertical = 17.dp)) {
-                    BrightnessControl(label, entity, live, pending, ready, model, Modifier.padding(top = 7.dp)) { level ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(if (entity?.available == true) "$level%" else "—", style = MaterialTheme.typography.titleMedium,
-                                color = colors.primary)
-                        }
-                    }
-                }
-            }
-        }
-        TileKind.CLIMATE -> Climate(tile, state, model, modifier, live, ready)
+        TileKind.SLIDER -> BrightnessTile(label, entity, live, pending, ready, model, modifier)
+        TileKind.CLIMATE -> Climate(tile, state, model, modifier, live, ready, compact)
         TileKind.MEDIA -> MusicTile(label, entity, ready, model, modifier)
         TileKind.WEATHER -> Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
             Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -235,25 +259,81 @@ private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
 }
 
 @Composable
-private fun BrightnessControl(
+private fun BrightnessTile(
     label: String,
     entity: Entity?,
     live: Entity?,
     pending: String?,
     enabled: Boolean,
     model: PanelViewModel,
-    modifier: Modifier = Modifier,
-    heading: @Composable (Int) -> Unit,
+    modifier: Modifier,
 ) {
-    var draggingLevel by remember { mutableStateOf<Float?>(null) }
-    val shown = draggingLevel?.roundToInt() ?: pending?.removeSuffix("%")?.toIntOrNull() ?: entity?.brightness ?: 0
-    heading(shown)
-    Slider(value = shown.toFloat(), valueRange = 0f..100f, enabled = enabled,
-        onValueChange = { draggingLevel = it },
-        onValueChangeFinished = {
-            draggingLevel?.let { if (live != null) model.dim(live, it.roundToInt()) }
-            draggingLevel = null
-        }, modifier = modifier.fillMaxWidth().semantics { contentDescription = "$label brightness" })
+    val colors = MaterialTheme.colorScheme
+    val direction = LocalLayoutDirection.current
+    val currentLive by rememberUpdatedState(live)
+    var draggingLevel by remember(entity?.id) { mutableStateOf<Int?>(null) }
+    val on = entity?.state == "on"
+    val level = draggingLevel ?: pending?.removeSuffix("%")?.toIntOrNull() ?: entity?.brightness
+    val status = when {
+        draggingLevel != null -> "$draggingLevel%"
+        pending != null -> pending
+        !enabled -> "Unavailable"
+        !on -> "Off"
+        level != null -> "$level%"
+        else -> "On"
+    }
+    Surface(
+        onClick = { live?.let { model.toggle(it, !on) } },
+        enabled = enabled,
+        modifier = modifier.pointerInput(enabled, direction) {
+            if (!enabled) return@pointerInput
+            fun levelAt(x: Float): Int {
+                val fraction = (x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
+                return ((if (direction == LayoutDirection.Ltr) fraction else 1f - fraction) * 100).roundToInt()
+            }
+            try {
+                detectHorizontalDragGestures(
+                    onDragStart = { draggingLevel = levelAt(it.x) },
+                    onHorizontalDrag = { change, _ -> draggingLevel = levelAt(change.position.x) },
+                    onDragEnd = {
+                        val target = draggingLevel
+                        draggingLevel = null
+                        if (target != null) currentLive?.let { model.dim(it, target) }
+                    },
+                    onDragCancel = { draggingLevel = null },
+                )
+            } finally {
+                draggingLevel = null
+            }
+        }.semantics {
+            stateDescription = status
+            progressBarRangeInfo = ProgressBarRangeInfo((level ?: 0).toFloat(), 0f..100f)
+            if (enabled && live != null) setProgress { requested ->
+                if (!requested.isFinite()) false else {
+                    model.dim(live, requested.roundToInt().coerceIn(0, 100))
+                    true
+                }
+            }
+        },
+        shape = panelCardShape,
+        color = colors.surfaceContainer,
+    ) {
+        Column(
+            Modifier.fillMaxSize().drawBehind {
+                val fillWidth = size.width * (level ?: 0).coerceIn(0, 100) / 100f
+                val left = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - fillWidth
+                drawRect(colors.primaryContainer, Offset(left, 0f), Size(fillWidth, size.height))
+            }.padding(19.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Icon(Icons.Rounded.Lightbulb, null, tint = colors.primary, modifier = Modifier.size(29.dp))
+            }
+            Text(status, style = MaterialTheme.typography.titleMedium)
+        }
+    }
 }
 
 private fun displayValue(entity: Entity?): String {
@@ -278,17 +358,37 @@ internal fun formatNumber(value: Double, precision: Int): String =
     }.format(value)
 
 @Composable
-private fun Climate(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, entity: Entity?, enabled: Boolean) {
+private fun Climate(
+    tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
+    entity: Entity?, enabled: Boolean, compact: Boolean,
+) {
     val info = entity ?: state.entity(tile.entity)
     val current = info?.attributes?.optDouble("current_temperature")?.takeIf(Double::isFinite)
+    val temperature = current?.let { formatNumber(it, 1) + "°" } ?: "—"
+    val label = state.label(tile)
+    val pending = state.pending[tile.entity]
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(Modifier.fillMaxWidth().padding(19.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(state.label(tile), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(current?.let { formatNumber(it, 1) + "°" } ?: "—", style = MaterialTheme.typography.headlineMedium)
+        if (compact) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 19.dp, vertical = 12.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 32.dp), horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                    Text(temperature, style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
+                TemperatureSetpoint(info, entity, pending, enabled, model, gap = 4.dp,
+                    modifier = Modifier.align(Alignment.CenterHorizontally), compact = true)
             }
-            TemperatureSetpoint(info, entity, state.pending[tile.entity], enabled, model, gap = 9.dp)
+        } else {
+            Row(Modifier.fillMaxWidth().padding(19.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(temperature, style = MaterialTheme.typography.headlineMedium)
+                }
+                TemperatureSetpoint(info, entity, pending, enabled, model, gap = 9.dp)
+            }
         }
     }
 }
@@ -301,16 +401,19 @@ private fun TemperatureSetpoint(
     enabled: Boolean,
     model: PanelViewModel,
     gap: Dp,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     val attrs = info?.attributes
     val target = attrs?.optDouble("temperature")?.takeIf(Double::isFinite)
     val step = attrs?.optDouble("target_temp_step", .5)?.takeIf { it > 0 } ?: .5
-    Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically) {
         FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target - step) },
             enabled = enabled && target != null) { Icon(Icons.Rounded.Remove, "Lower target") }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(pending ?: target?.let { "$it°" } ?: "—")
-            Text("Target", style = MaterialTheme.typography.labelSmall)
+        Column(if (compact) Modifier.weight(1f, fill = false) else Modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(pending ?: target?.let { "$it°" } ?: "—", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Target", style = MaterialTheme.typography.labelSmall, maxLines = 1)
         }
         FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target + step) },
             enabled = enabled && target != null) { Icon(Icons.Rounded.Add, "Raise target") }

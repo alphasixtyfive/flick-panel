@@ -61,6 +61,7 @@ internal data class PanelUi(
     val page: Page = Page.FAVOURITES,
     val clock: Boolean = false,
     val camera: String? = null,
+    val cameraOpenedAt: Long = 0,
     val musicBrowser: String? = null,
     val unlocking: Boolean = false,
     val editor: Boolean = false,

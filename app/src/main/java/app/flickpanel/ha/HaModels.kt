@@ -142,7 +142,8 @@ internal fun JSONObject.text(key: String): String? =
 internal fun reduceEntities(
     previous: Map<String, Entity>, event: JSONObject, selected: Set<String>, initial: Boolean
 ): Map<String, Entity> {
-    val updated = previous.filterKeys { it in selected && !initial }.toMutableMap()
+    val updated = mutableMapOf<String, Entity>()
+    if (!initial) previous.forEach { (id, entity) -> if (id in selected) updated[id] = entity }
     val add = event.optJSONObject("a") ?: JSONObject()
     for (id in add.keys()) {
         if (id !in selected || !validEntity(id)) continue
@@ -159,7 +160,8 @@ internal fun reduceEntities(
         val addedAttrs = positive.optJSONObject("a")
         val removedAttrs = change.optJSONObject("-")?.optJSONArray("a")
         val attributes = if (addedAttrs != null || removedAttrs != null) {
-            JSONObject(current.attributes.toString()).apply {
+            JSONObject().apply {
+                current.attributes.keys().forEach { key -> put(key, current.attributes.get(key)) }
                 addedAttrs?.let { for (key in it.keys()) put(key, it.get(key)) }
                 for (index in 0 until (removedAttrs?.length() ?: 0)) remove(removedAttrs?.optString(index))
             }

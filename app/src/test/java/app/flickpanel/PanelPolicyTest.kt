@@ -10,6 +10,7 @@ import app.flickpanel.ha.Area
 import app.flickpanel.ha.Catalogue
 import app.flickpanel.ha.Entry
 import app.flickpanel.ha.Entity
+import app.flickpanel.ha.PhotoFolder
 import app.flickpanel.ha.parseServer
 import app.flickpanel.ha.reduceEntities
 import app.flickpanel.ha.sameOrigin
@@ -32,7 +33,8 @@ class PanelPolicyTest {
             theme = PanelTheme.AMBER,
             messageEntity = "input_text.panel_notice",
             presenceEntity = "binary_sensor.near_panel",
-            idleSeconds = 120, wallMode = false
+            idleSeconds = 120, wallMode = false,
+            idleAlbum = PhotoFolder("media-source://synology_dsm/nas/album", "TV Gallery")
         )
         val json = PanelConfigCodec.encode(original)
         assertEquals(original, PanelConfigCodec.decode(json))

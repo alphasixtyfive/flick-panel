@@ -1,9 +1,11 @@
 package app.flickpanel.ui
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +45,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private data class LauncherApp(val packageName: String, val label: String)
+
+internal fun openHomeAppSettings(context: Context) {
+    try {
+        context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "Home app settings are unavailable", Toast.LENGTH_SHORT).show()
+    }
+}
 
 @Composable
 internal fun AppPicker(added: Set<String>, choose: (TileSpec) -> Unit) {

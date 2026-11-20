@@ -62,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.KeyboardType
@@ -175,6 +176,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     var tab by remember { mutableStateOf(0) }
     var picker by remember { mutableStateOf<Source?>(null) }
     var format by remember { mutableStateOf<Format?>(null) }
+    var choosingPhotos by remember { mutableStateOf(false) }
     val activePicker = picker
     val activeFormat = format
     val back: () -> Unit = {
@@ -270,13 +272,17 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                                 }
                             ) else if (tab == 1) RoomSetup(draft, state, { draft = it })
                             else if (tab == 2) CameraSetup(draft, state, { draft = it })
-                            else PanelOptions(draft, state, { draft = it }, { picker = it }, model::changeConnection)
+                            else PanelOptions(draft, state, { draft = it }, { picker = it }, { choosingPhotos = true }, model::changeConnection)
                         }
                     }
                 }
             }
         }
     }
+    if (choosingPhotos) PhotoAlbumPicker(draft.idleAlbum?.id, model::browsePhotos, { album ->
+        draft = draft.copy(idleAlbum = album)
+        choosingPhotos = false
+    }, { choosingPhotos = false })
 }
 
 @Composable
@@ -541,8 +547,9 @@ private fun FormatPanel(format: Format, state: PanelUi, apply: (TileSpec) -> Uni
 @Composable
 private fun PanelOptions(
     draft: PanelConfig, state: PanelUi, change: (PanelConfig) -> Unit,
-    pick: (Source) -> Unit, connection: () -> Unit
+    pick: (Source) -> Unit, choosePhotos: () -> Unit, connection: () -> Unit
 ) {
+    val context = LocalContext.current
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(17.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Colour scheme", style = MaterialTheme.typography.titleMedium)
@@ -555,31 +562,33 @@ private fun PanelOptions(
             choose = { pick(Source.MESSAGE) }, clear = { change(draft.copy(messageEntity = null)) })
         Option("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it },
             choose = { pick(Source.PRESENCE) }, clear = { change(draft.copy(presenceEntity = null)) })
+        Option("Idle photos", draft.idleAlbum?.title, choosePhotos, { change(draft.copy(idleAlbum = null)) }, empty = "Clock only")
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
                 Text("Wall display", style = MaterialTheme.typography.titleMedium)
-                Text("Keep a dim clock while Flick Panel is open", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Keep the display on and dim the idle screen", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = draft.wallMode, onCheckedChange = { change(draft.copy(wallMode = it)) })
         }
-        Text("Show clock after", style = MaterialTheme.typography.titleMedium)
+        Text("Show idle screen after", style = MaterialTheme.typography.titleMedium)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             for (seconds in listOf(30, 60, 120, 300)) FilterChip(selected = draft.idleSeconds == seconds,
                 onClick = { change(draft.copy(idleSeconds = seconds)) },
                 label = { Text(if (seconds < 60) "$seconds sec" else "${seconds / 60} min") })
         }
         TextButton(onClick = connection) { Text("Change Home Assistant connection") }
+        TextButton(onClick = { openHomeAppSettings(context) }) { Text("Android Home app") }
     }
 }
 
 @Composable
-private fun Option(title: String, value: String?, choose: () -> Unit, clear: () -> Unit) {
+private fun Option(title: String, value: String?, choose: () -> Unit, clear: () -> Unit, empty: String = "Choose entity") {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Surface(onClick = choose, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.surfaceContainer) {
             Column(Modifier.padding(vertical = 7.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(value ?: "Choose entity", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(value ?: empty, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (value != null) IconButton(onClick = clear) { Icon(Icons.Rounded.Close, "Clear $title") }

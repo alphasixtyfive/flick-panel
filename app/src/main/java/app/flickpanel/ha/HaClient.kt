@@ -206,6 +206,18 @@ internal class HaClient(
         return get(url, token, ::imageBody)
     }
 
+    suspend fun photoAlbum(id: String?): PhotoAlbum = browsePhotoAlbum(id, ::request)
+
+    suspend fun photo(id: String): ByteArray? {
+        val path = resolvePhoto(id, ::request) ?: return null
+        val server = credentials.server
+        val url = server.resolve(path) ?: return null
+        val pathPrefix = if (id.startsWith("media-source://synology_dsm/")) "synology_dsm/" else "media/"
+        if (!server.sameOrigin(url) || (!url.encodedPath.startsWith(server.encodedPath + pathPrefix) &&
+                !url.encodedPath.startsWith("/$pathPrefix"))) return null
+        return get(url, credentials.token) { imageBody(it, 12 * 1024 * 1024L) }
+    }
+
     suspend fun stream(entity: String): HttpUrl {
         require(validEntity(entity) && entity.startsWith("camera."))
         val response = request("camera/stream", JSONObject().put("entity_id", entity).put("format", "hls"))
@@ -216,11 +228,11 @@ internal class HaClient(
         return credentials.server.resolve(path.removePrefix("/"))!!
     }
 
-    fun videoClient() = http.newBuilder().readTimeout(15, TimeUnit.SECONDS).callTimeout(0, TimeUnit.MILLISECONDS)
+    val videoClient: OkHttpClient by lazy { http.newBuilder().readTimeout(15, TimeUnit.SECONDS).callTimeout(0, TimeUnit.MILLISECONDS)
         .addInterceptor { chain ->
             if (!credentials.server.sameOrigin(chain.request().url)) throw IOException("Unexpected media server")
             chain.proceed(chain.request())
-        }.build()
+        }.build() }
 
     private suspend fun request(type: String, data: JSONObject = JSONObject()): JSONObject =
         (socket.get() ?: throw HaProblem("Home Assistant is reconnecting")).request(type, data)
@@ -254,12 +266,14 @@ internal class HaClient(
         private fun indexed(list: JSONArray, key: String): Map<String, JSONObject> =
             objects(list).mapNotNull { row -> row.text(key)?.let { it to row } }.toMap()
 
-        private fun imageBody(response: Response): ByteArray? {
+        private fun imageBody(response: Response): ByteArray? = imageBody(response, 3_000_000)
+
+        private fun imageBody(response: Response, limit: Long): ByteArray? {
             val body = response.body ?: return null
             val contentType = body.contentType() ?: return null
             if (!response.isSuccessful || contentType.type != "image" || contentType.subtype == "svg+xml") return null
             val source = body.source()
-            if (source.request(3_000_001)) return null
+            if (source.request(limit + 1)) return null
             return source.readByteArray()
         }
 

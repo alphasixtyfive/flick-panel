@@ -54,6 +54,9 @@ class HaSessionTest {
                 assertEquals(listOf(801.0, 840.0), client.history("sensor.power").map { it.value })
                 assertEquals("/api/hls/abcdefgh123456/master_playlist.m3u8", client.stream("camera.front_door").encodedPath)
                 assertNotNull(client.snapshot("camera.front_door"))
+                val album = client.photoAlbum("media-source://synology_dsm/nas/album")
+                assertEquals("TV Gallery", album.folder?.title)
+                assertEquals("cover photo", client.photo(album.photos.single())?.decodeToString())
                 client.select(setOf("sensor.power"))
                 withTimeout(6_000) { client.entities.first { it.keys == setOf("sensor.power") } }
                 assertFalse(client.entities.value.containsKey("light.lamp"))
@@ -95,6 +98,8 @@ private class FakeHome : Dispatcher() {
         "/api/" -> authorized(request, MockResponse().setBody("""{"message":"API running."}"""))
         "/api/camera_proxy/camera.front_door", "/api/media_player_proxy/cover" -> authorized(request,
             MockResponse().setHeader("Content-Type", "image/jpeg").setBody("fixture image bytes"))
+        "/synology_dsm/nas/cover.jpg" -> authorized(request,
+            MockResponse().setHeader("Content-Type", "image/jpeg").setBody("cover photo"))
         "/api/websocket" -> MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
             private var subscription = 0
             private var lastId = 0
@@ -133,6 +138,12 @@ private class FakeHome : Dispatcher() {
                         {"media_content_id":"library://playlist/1","media_content_type":"playlist","title":"Radio favourites","media_class":"playlist","can_play":true,"thumbnail":"/api/media_player_proxy/cover"},
                         {"media_content_id":"camera.front_gate","media_content_type":"video","title":"Front gate","media_class":"video","can_play":true}
                     ]}""")
+                    "media_source/browse_media" -> result("""{
+                        "media_content_id":"media-source://synology_dsm/nas/album","title":"TV Gallery","children":[
+                        {"media_content_id":"media-source://synology_dsm/nas/album/photo","media_content_type":"image/jpeg","can_play":true},
+                        {"media_content_id":"media-source://synology_dsm/nas/album/video","media_content_type":"video/mp4","can_play":true}
+                    ]}""")
+                    "media_source/resolve_media" -> result("""{"url":"/synology_dsm/nas/cover.jpg","mime_type":"image/jpeg"}""")
                     "call_service" -> {
                         val target = message.getJSONObject("target").getString("entity_id")
                         val data = message.getJSONObject("service_data")

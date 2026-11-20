@@ -100,6 +100,13 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         selectPage(Page.FAVOURITES)
     }
 
+    fun showIdleScreen() {
+        val current = _ui.value
+        if (!current.configured || current.editor || current.unlocking || current.camera != null || current.musicBrowser != null) return
+        idleJob?.cancel()
+        _ui.update { it.copy(clock = true) }
+    }
+
     fun selectPage(page: Page) {
         _ui.update { it.copy(page = page) }
         if (page == Page.ROOMS && _ui.value.catalogue.entries.isEmpty()) loadCatalogue()
@@ -189,7 +196,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     fun openCamera(id: String) {
         if (_ui.value.config.favourites.any { it.entity == id && it.kind == TileKind.CAMERA }) {
             idleJob?.cancel()
-            _ui.update { it.copy(camera = id) }
+            _ui.update { it.copy(camera = id, cameraOpenedAt = SystemClock.elapsedRealtime()) }
         }
     }
     fun closeCamera() { _ui.update { it.copy(camera = null) }; touch() }
@@ -283,13 +290,18 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun cachedArtwork(reference: String): Bitmap? = images.artwork.fresh(reference)
 
+    suspend fun browsePhotos(id: String?) = client?.photoAlbum(id) ?: throw HaProblem("Home Assistant isn't connected")
+
+    suspend fun loadPhoto(id: String): Bitmap? = client?.photo(id)?.let { decodePanelImage(it, 2000) }
+
     suspend fun loadArtwork(reference: String): Bitmap? {
         val active = client ?: return null
         return images.artwork.load(reference) { active.artwork(reference) }
     }
 
     suspend fun stream(id: String): HttpUrl = client?.stream(id) ?: throw HaProblem("Home Assistant isn't connected")
-    fun videoTransport(): OkHttpClient = client?.videoClient() ?: throw HaProblem("Home Assistant isn't connected")
+
+    fun videoTransport(): OkHttpClient = client?.videoClient ?: throw HaProblem("Home Assistant isn't connected")
 
     fun loadGraph(id: String) {
         val active = client ?: return

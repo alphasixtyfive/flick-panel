@@ -10,9 +10,15 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+
+private const val RESPONSE_TIMEOUT_MS = 8_000L
+private const val MAX_MESSAGE_CHARS = 12_000_000
+private const val MAX_QUEUED_CHARS = 24_000_000L
 
 internal class HaSocket(client: OkHttpClient, private val credentials: HaCredentials) {
     private val inbox = Channel<String>(capacity = 64)
+    private val queuedChars = AtomicLong()
     private val requests = ConcurrentHashMap<Int, CompletableDeferred<JSONObject>>()
     private val sendLock = Any()
     private var nextId = 0
@@ -20,10 +26,12 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
         Request.Builder().url(credentials.server.resolve("api/websocket")!!).build(),
         object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
-                if (text.length > 12_000_000 || !inbox.trySend(text).isSuccess) {
-                    inbox.close(HaProblem("Home Assistant sent more data than the panel could read"))
-                    webSocket.cancel()
-                }
+                val length = text.length.toLong()
+                val total = queuedChars.addAndGet(length)
+                if (length <= MAX_MESSAGE_CHARS && total <= MAX_QUEUED_CHARS && inbox.trySend(text).isSuccess) return
+                queuedChars.addAndGet(-length)
+                inbox.close(HaProblem("Home Assistant sent more data than the panel could read"))
+                webSocket.cancel()
             }
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 response?.close()
@@ -37,8 +45,8 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
         }
     )
 
-    suspend fun authenticate(): Boolean {
-        return withTimeoutOrNull(8_000) {
+    suspend fun authenticate(): Boolean =
+        withTimeoutOrNull(RESPONSE_TIMEOUT_MS) {
             val first = receive()
             if (first.optString("type") != "auth_required") throw HaProblem("Invalid Home Assistant handshake")
             send(JSONObject().put("type", "auth").put("access_token", credentials.token))
@@ -48,11 +56,10 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
                 else -> throw HaProblem("Invalid Home Assistant handshake")
             }
         } ?: throw HaProblem("Home Assistant sign-in timed out")
-    }
 
     suspend fun pump(event: (JSONObject) -> Unit) {
         for (text in inbox) {
-            val msg = JSONObject(text)
+            val msg = parseReceived(text)
             when (msg.optString("type")) {
                 "result" -> requests.remove(msg.optInt("id"))?.complete(msg)
                 "event" -> event(msg)
@@ -63,21 +70,13 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
 
     suspend fun request(type: String, data: JSONObject = JSONObject(), onSend: (Int) -> Unit = {}): JSONObject {
         val reply = CompletableDeferred<JSONObject>()
-        // Home Assistant requires IDs to increase in wire order, including for concurrent calls.
-        val id = synchronized(sendLock) {
-            val requestId = ++nextId
-            requests[requestId] = reply
-            try {
-                onSend(requestId)
-                send(data.put("type", type).put("id", requestId))
-            } catch (error: Exception) {
-                requests.remove(requestId)
-                throw error
-            }
-            requestId
+        val message = JSONObject().apply {
+            data.keys().forEach { key -> put(key, data.get(key)) }
+            put("type", type)
         }
+        val id = sendRequest(message, reply, onSend)
         try {
-            val result = withTimeoutOrNull(8_000) { reply.await() }
+            val result = withTimeoutOrNull(RESPONSE_TIMEOUT_MS) { reply.await() }
                 ?: throw HaProblem("Home Assistant didn't reply")
             if (!result.optBoolean("success")) throw HaProblem(
                 when (result.optJSONObject("error")?.optString("code")) {
@@ -88,11 +87,28 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
                 }
             )
             return result
-        } finally { requests.remove(id) }
+        } finally {
+            requests.remove(id)
+        }
     }
 
-    fun close() {
-        inbox.close()
+    private fun sendRequest(message: JSONObject, reply: CompletableDeferred<JSONObject>, onSend: (Int) -> Unit): Int =
+        synchronized(sendLock) {
+            // Home Assistant requires IDs to increase in wire order, including for concurrent calls.
+            val id = ++nextId
+            requests[id] = reply
+            try {
+                onSend(id)
+                send(message.put("id", id))
+            } catch (error: Exception) {
+                requests.remove(id)
+                throw error
+            }
+            id
+        }
+
+    fun close() = synchronized(sendLock) {
+        inbox.cancel()
         socket.cancel()
         for (reply in requests.values) reply.completeExceptionally(HaProblem("Home Assistant disconnected"))
         requests.clear()
@@ -102,5 +118,10 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
         if (!socket.send(json.toString())) throw HaProblem("Home Assistant disconnected")
     }
 
-    private suspend fun receive() = JSONObject(inbox.receive())
+    private suspend fun receive() = parseReceived(inbox.receive())
+
+    private fun parseReceived(text: String): JSONObject {
+        queuedChars.addAndGet(-text.length.toLong())
+        return JSONObject(text)
+    }
 }

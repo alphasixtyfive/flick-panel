@@ -7,6 +7,9 @@ this tablet displays and their order. Cameras shows pinned previews and opens on
 full-screen live feed at a time.
 In setup, use **Cameras** to choose gallery feeds and star one for Home. Use **Add app** to
 pin a launcher shortcut to an app already installed on the tablet.
+On a dedicated tablet, **Setup → Panel → Android Home app** opens Android's default
+launcher settings. Choosing Flick Panel there makes the Android Home gesture return to it
+from other apps.
 
 ## First run
 
@@ -14,7 +17,9 @@ pin a launcher shortcut to an app already installed on the tablet.
    non-admin account.
 2. Open Flick Panel, enter the Home Assistant URL and token, and choose a setup PIN.
 3. Add favourites by searching for entities. For a numeric sensor choose **Value** or
-   **Small graph**. For a dimmable light choose **Slider** or **Switch**. **Done** saves the layout.
+   **Small graph**. For a dimmable light choose **Slider** or **Switch**. Swipe across a
+   brightness tile to set the level, or tap it to turn the light on or off. **Done** saves
+   the layout.
 4. Hold **Home** and use the PIN keypad to return to setup. Hold and drag a tile by its
    handle, or tap the handle to move it one place. The tile’s options menu lets you edit
    or remove it. Leaving the app or five minutes in setup closes the editor.
@@ -38,6 +43,9 @@ explicit private IPv4 addresses such as a local Home Assistant server at
   is on. Android and any existing device-management schedule handle physical wake and sleep.
 - **Wall display** keeps the foreground panel awake and dims the idle clock, including
   while a managed charger has paused charging.
+- **Idle photos** selects a Home Assistant media folder or Synology Photos album. The
+  idle screen shows its photos with the clock and any configured message. Tap the clock
+  on the dashboard to open it, and tap anywhere on the idle screen to return.
 - For the kitchen boost, pin the existing boost button and link its timer in the tile's
   settings. Home Assistant owns the boost and its countdown.
 
@@ -50,6 +58,11 @@ state and actions. The panel loads configured areas after connecting and subscri
 their controls alongside pinned entities. `PanelImages.kt` bounds image memory and decodes
 scaled copies off the UI thread. Camera previews refresh while visible. Music artwork and
 recent folders are reused when reopening the browser.
+
+Live video uses Home Assistant HLS and one Media3 player, as in Flick TV. The player
+is released when the viewer closes. For timings, `adb logcat -s FlickPanelCamera:I`
+reports `hls_url_ms` and `first_frame_ms` from the camera tap. The first-frame timer
+stops at Media3's `onRenderedFirstFrame` callback.
 
 ## Build
 

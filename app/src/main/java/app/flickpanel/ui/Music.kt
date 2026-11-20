@@ -107,30 +107,38 @@ internal fun MusicTile(label: String, entity: Entity?, ready: Boolean, model: Pa
         Modifier
     }
     Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
-        Row(
-            Modifier.fillMaxSize().then(browseAction).padding(19.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            Modifier.fillMaxSize().clip(panelCardShape).then(browseAction)
+                .padding(start = 19.dp, top = 12.dp, end = 19.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            if (cover != null) {
-                Image(cover, null, Modifier.size(42.dp).clip(RoundedCornerShape(9.dp)), contentScale = ContentScale.Crop)
-            } else {
-                Icon(Icons.Rounded.MusicNote, null, Modifier.size(30.dp), tint = colors.primary)
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (detail != null) {
-                    Text(detail, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                    if (cover != null) {
+                        Image(cover, null, Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop)
+                    } else {
+                        Icon(Icons.Rounded.MusicNote, null, Modifier.size(29.dp), tint = colors.primary)
+                    }
                 }
             }
-            if (showTransport) {
-                FilledTonalIconButton(onClick = { entity?.let { model.mediaTransport(it, transport) } },
-                    modifier = Modifier.size(48.dp), enabled = ready) {
-                    Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (playing) "Pause" else "Play")
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(detail.orEmpty(), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    if (showTransport) {
+                        FilledTonalIconButton(onClick = { entity?.let { model.mediaTransport(it, transport) } },
+                            modifier = Modifier.fillMaxSize(), enabled = ready) {
+                            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                if (playing) "Pause" else "Play")
+                        }
+                    } else if (canBrowse) {
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = colors.onSurfaceVariant)
+                    }
                 }
-            } else if (canBrowse) {
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = colors.onSurfaceVariant)
             }
         }
     }
