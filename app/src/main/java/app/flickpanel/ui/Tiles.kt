@@ -52,7 +52,6 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
@@ -72,6 +71,7 @@ internal val panelCardShape = RoundedCornerShape(26.dp)
 internal val tileGap = 14.dp
 private val cellHeight = 132.dp
 private val compactCellHeight = 110.dp
+private val shortcutHeight = 64.dp
 
 @Composable
 internal fun TileGrid(tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean = false) {
@@ -90,22 +90,35 @@ internal fun FavouritesTileGrid(tiles: List<TileSpec>, state: PanelUi, model: Pa
     }
 
     val (apps, devices) = remember(tiles) { tiles.partition { it.kind == TileKind.APP } }
-    val camera = devices.firstOrNull { it.kind == TileKind.CAMERA }
-    val rows = remember(devices, camera) {
-        packRows(devices.filterNot { it.kind == TileKind.CAMERA }, columns = 2, compact = true)
+    val summary = if (apps.size >= 3) devices.firstOrNull { it.kind == TileKind.TREND } else null
+    val controls = remember(devices, summary) { devices.filterNot { it == summary } }
+    val camera = controls.firstOrNull { it.kind == TileKind.CAMERA }
+    val rows = remember(controls, camera) {
+        packRows(controls.filterNot { it.kind == TileKind.CAMERA }, columns = 2, compact = true)
     }
     if (camera != null && rows.size >= 2) {
         val featureRows = rows.take(3)
         FeaturedCamera(camera, featureRows, state, model)
-        val remaining = remember(devices, camera, featureRows) {
+        val remaining = remember(controls, camera, featureRows) {
             val featured = featureRows.flatten().toSet() + camera
-            devices.filterNot { it in featured }
+            controls.filterNot { it in featured }
         }
         TileGrid(remaining, state, model, columns = 4, compact = true)
     } else {
-        TileGrid(devices, state, model, columns = 4, compact = true)
+        TileGrid(controls, state, model, columns = 4, compact = true)
     }
-    TileGrid(apps, state, model, columns = 3, compact = true)
+    if (summary != null) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
+            Column(Modifier.weight(1f)) {
+                TileGrid(apps.take(4), state, model, columns = 2, compact = true)
+            }
+            ControlTile(summary, state, model, Modifier.weight(1f).height(shortcutHeight * 2 + tileGap),
+                compact = true, wideGraph = true)
+        }
+        TileGrid(apps.drop(4), state, model, columns = 4, compact = true)
+    } else {
+        TileGrid(apps, state, model, columns = 4, compact = true)
+    }
 }
 
 @Composable
@@ -151,7 +164,7 @@ private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, 
     Layout(modifier = Modifier.fillMaxWidth(), content = {
         for (tile in row) key(tile.entity) {
             val minimum = when (tile.kind) {
-                TileKind.APP -> if (compact) 64.dp else 76.dp
+                TileKind.APP -> if (compact) shortcutHeight else 76.dp
                 TileKind.CAMERA -> 226.dp
                 else -> if (compact) compactCellHeight else cellHeight
             }
@@ -179,7 +192,10 @@ private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, 
 }
 
 @Composable
-private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, compact: Boolean) {
+private fun ControlTile(
+    tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, compact: Boolean,
+    wideGraph: Boolean = false,
+) {
     val entity = state.entity(tile.entity)
     val label = state.label(tile)
     val pending = state.pending[tile.entity]
@@ -244,7 +260,10 @@ private fun ControlTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
                     Text(displayValue(entity), style = MaterialTheme.typography.headlineMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (trend) {
                         val points = state.graphs[tile.entity].orEmpty()
-                        if (points.size > 1) Sparkline(points, Modifier.fillMaxWidth().height(21.dp))
+                        if (points.size > 1) {
+                            val chart = if (wideGraph) Modifier.weight(1f) else Modifier.height(21.dp)
+                            Sparkline(points, chart.fillMaxWidth())
+                        }
                         else Text(if (state.graphs.containsKey(tile.entity)) "No history" else "History", style = MaterialTheme.typography.labelSmall,
                             color = colors.onSurfaceVariant)
                     } else if (state.link == Link.OFFLINE && entity?.available == true) {
@@ -377,8 +396,7 @@ private fun Climate(
                     Text(temperature, style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
-                TemperatureSetpoint(info, entity, pending, enabled, model, gap = 4.dp,
-                    modifier = Modifier.align(Alignment.CenterHorizontally), compact = true)
+                TemperatureSetpoint(info, entity, pending, enabled, model, compact = true)
             }
         } else {
             Row(Modifier.fillMaxWidth().padding(19.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -387,7 +405,7 @@ private fun Climate(
                     Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(temperature, style = MaterialTheme.typography.headlineMedium)
                 }
-                TemperatureSetpoint(info, entity, pending, enabled, model, gap = 9.dp)
+                TemperatureSetpoint(info, entity, pending, enabled, model, compact = false)
             }
         }
     }
@@ -400,23 +418,26 @@ private fun TemperatureSetpoint(
     pending: String?,
     enabled: Boolean,
     model: PanelViewModel,
-    gap: Dp,
-    modifier: Modifier = Modifier,
-    compact: Boolean = false,
+    compact: Boolean,
 ) {
     val attrs = info?.attributes
     val target = attrs?.optDouble("temperature")?.takeIf(Double::isFinite)
     val step = attrs?.optDouble("target_temp_step", .5)?.takeIf { it > 0 } ?: .5
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically) {
-        FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target - step) },
-            enabled = enabled && target != null) { Icon(Icons.Rounded.Remove, "Lower target") }
-        Column(if (compact) Modifier.weight(1f, fill = false) else Modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(pending ?: target?.let { "$it°" } ?: "—", maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val adjustable = enabled && live != null && target != null
+    Row(
+        if (compact) Modifier.fillMaxWidth() else Modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(if (compact) Modifier.weight(1f) else Modifier.padding(end = 10.dp)) {
+            Text(pending ?: target?.let { formatNumber(it, 1) + "°" } ?: "—",
+                style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("Target", style = MaterialTheme.typography.labelSmall, maxLines = 1)
         }
+        FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target - step) },
+            enabled = adjustable, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Remove, "Lower target") }
         FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target + step) },
-            enabled = enabled && target != null) { Icon(Icons.Rounded.Add, "Raise target") }
+            enabled = adjustable, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Add, "Raise target") }
     }
 }
 

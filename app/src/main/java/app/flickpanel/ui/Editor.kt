@@ -4,11 +4,11 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
@@ -22,8 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Backspace
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragIndicator
@@ -37,20 +37,16 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,12 +61,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.PanelConfig
@@ -126,7 +122,7 @@ private fun PinField(value: String, change: (String) -> Unit, label: String) {
 @Composable
 internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -> Unit) {
     var pin by remember { mutableStateOf("") }
-    AlertDialog(onDismissRequest = cancel, title = { Text("Unlock setup") }, text = {
+    AlertDialog(modifier = Modifier.widthIn(max = 304.dp), onDismissRequest = cancel, title = { Text("Unlock setup") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(if (pin.isEmpty()) "Enter PIN" else "●".repeat(pin.length),
                 modifier = Modifier.padding(bottom = 7.dp).clearAndSetSemantics {
@@ -134,7 +130,7 @@ internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -
                 }, style = MaterialTheme.typography.titleLarge)
             ErrorText(state.error)
             for (digits in listOf("123", "456", "789", " 0⌫")) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.widthIn(max = 220.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (digit in digits) {
                         val key = Modifier.weight(1f).heightIn(min = 52.dp)
                         when (digit) {
@@ -169,112 +165,104 @@ private enum class Source(val title: String) {
 
 private data class Format(val entity: Entity, val current: TileSpec?, val kinds: List<TileKind>)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     var draft by remember(state.config) { mutableStateOf(state.config) }
-    var tab by remember { mutableStateOf(0) }
+    var section by remember { mutableStateOf(SetupSection.FAVOURITES) }
     var picker by remember { mutableStateOf<Source?>(null) }
     var format by remember { mutableStateOf<Format?>(null) }
     var choosingPhotos by remember { mutableStateOf(false) }
     val activePicker = picker
     val activeFormat = format
-    val back: () -> Unit = {
-        when {
-            activeFormat != null -> format = null
-            activePicker != null -> picker = null
-            state.connectionEditor -> model.relock()
-            else -> model.relock()
-        }
+    val detailTitle = when {
+        state.connectionEditor -> "Connection"
+        activeFormat != null -> if (activeFormat.current == null) "Add tile" else "Edit tile"
+        activePicker != null -> activePicker.title
+        else -> null
     }
-    Dialog(onDismissRequest = back, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        val panelTheme = draft.theme
-        PanelColors(panelTheme) {
-            Surface(Modifier.padding(15.dp).widthIn(max = 630.dp).fillMaxWidth().fillMaxHeight(.91f),
-                color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(29.dp)) {
-                Column(Modifier.fillMaxWidth().imePadding()) {
-                    val title = when {
-                        state.connectionEditor -> "Connection"
-                        activeFormat != null -> if (activeFormat.current == null) "Add tile" else "Edit tile"
-                        activePicker != null -> activePicker.title
-                        else -> "Setup"
-                    }
-                    Row(Modifier.fillMaxWidth().padding(start = 7.dp, end = 16.dp, top = 7.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        val nested = activeFormat != null || activePicker != null
-                        IconButton(onClick = back) {
-                            Icon(if (nested) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Close,
-                                if (nested) "Back" else "Cancel editing")
-                        }
-                        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-                        if (!nested && !state.connectionEditor) {
-                            Button(onClick = { model.save(draft) }, enabled = !state.busy) { Text("Done") }
-                        }
-                    }
-                    when {
-                        state.connectionEditor -> ConnectionForm(state, model::connect)
-                        activeFormat != null -> FormatPanel(activeFormat, state) { spec ->
-                            val current = activeFormat.current
-                            draft = draft.copy(favourites = if (current == null) draft.favourites + spec
-                                else draft.favourites.map { if (it.entity == current.entity) spec else it })
-                            format = null
+
+    SetupLayout(
+        theme = draft.theme,
+        section = section,
+        openSection = {
+            format = null
+            picker = null
+            model.cancelConnectionChange()
+            section = it
+        },
+        detailTitle = detailTitle,
+        busy = state.busy,
+        back = {
+            if (!state.busy) {
+                when {
+                    activeFormat != null -> format = null
+                    activePicker != null -> picker = null
+                    state.connectionEditor -> model.cancelConnectionChange()
+                    else -> model.relock()
+                }
+            }
+        },
+        close = model::relock,
+        save = { model.save(draft) },
+    ) {
+        when {
+            state.connectionEditor -> ConnectionForm(state, model::connect)
+            activeFormat != null -> FormatPanel(activeFormat, state) { spec ->
+                val current = activeFormat.current
+                val tiles = draft.favourites
+                draft = draft.copy(favourites = if (current == null) tiles + spec
+                    else tiles.map { if (it.entity == current.entity) spec else it })
+                format = null
+                picker = null
+            }
+            activePicker == Source.APP -> AppPicker(draft.favourites.mapNotNull { it.appPackage }.toSet()) { tile ->
+                draft = draft.copy(favourites = draft.favourites + tile)
+                picker = null
+            }
+            activePicker != null -> EntityPicker(activePicker, draft, state, model::loadCatalogue) { entity ->
+                when (activePicker) {
+                    Source.TILE -> {
+                        val kinds = entity.kinds()
+                        if (kinds.size == 1) {
+                            val kind = kinds.single()
+                            val featured = kind != TileKind.CAMERA || draft.favourites.none { it.kind == TileKind.CAMERA && it.showOnHome }
+                            draft = draft.copy(favourites = draft.favourites + TileSpec(entity.id, kind, showOnHome = featured))
                             picker = null
-                        }
-                        activePicker == Source.APP -> AppPicker(draft.favourites.mapNotNull { it.appPackage }.toSet()) { tile ->
-                            draft = draft.copy(favourites = draft.favourites + tile)
-                            picker = null
-                        }
-                        activePicker != null -> EntityPicker(activePicker, draft, state, model::loadCatalogue) { entity ->
-                            when (activePicker) {
-                                Source.TILE -> {
-                                    val kinds = entity.kinds()
-                                    if (kinds.size == 1) {
-                                        val kind = kinds.single()
-                                        val featured = kind != TileKind.CAMERA || draft.favourites.none { it.kind == TileKind.CAMERA && it.showOnHome }
-                                        draft = draft.copy(favourites = draft.favourites + TileSpec(entity.id, kind, showOnHome = featured))
-                                        picker = null
-                                    } else format = Format(entity, null, kinds)
-                                }
-                                Source.MESSAGE -> { draft = draft.copy(messageEntity = entity.id); picker = null }
-                                Source.PRESENCE -> { draft = draft.copy(presenceEntity = entity.id); picker = null }
-                                Source.APP -> Unit
-                            }
-                        }
-                        else -> {
-                            SecondaryTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Favourites") })
-                                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Rooms") })
-                                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Cameras") })
-                                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Panel") })
-                            }
-                            ErrorText(state.error, Modifier.padding(horizontal = 17.dp, vertical = 3.dp))
-                            if (tab == 0) FavouriteEditor(
-                                draft, state,
-                                add = { picker = Source.TILE },
-                                addApp = { picker = Source.APP },
-                                edit = { tile ->
-                                    val entity = state.entity(tile.entity) ?: Entity(tile.entity, "")
-                                    format = Format(entity, tile, (entity.kinds() + tile.kind).distinct())
-                                },
-                                remove = { tile -> draft = draft.copy(favourites = draft.favourites.filterNot { it == tile }) },
-                                move = { id, delta ->
-                                    val tiles = draft.favourites.toMutableList()
-                                    val onHome = tiles.indices.filter { tiles[it].showOnHome }
-                                    val position = onHome.indexOfFirst { tiles[it].entity == id }
-                                    if (position >= 0 && position + delta in onHome.indices) {
-                                        val from = onHome[position]
-                                        val to = onHome[position + delta]
-                                        val tile = tiles[from]
-                                        tiles[from] = tiles[to]
-                                        tiles[to] = tile
-                                        draft = draft.copy(favourites = tiles)
-                                    }
-                                }
-                            ) else if (tab == 1) RoomSetup(draft, state, { draft = it })
-                            else if (tab == 2) CameraSetup(draft, state, { draft = it })
-                            else PanelOptions(draft, state, { draft = it }, { picker = it }, { choosingPhotos = true }, model::changeConnection)
+                        } else {
+                            format = Format(entity, null, kinds)
                         }
                     }
+                    Source.MESSAGE -> { draft = draft.copy(messageEntity = entity.id); picker = null }
+                    Source.PRESENCE -> { draft = draft.copy(presenceEntity = entity.id); picker = null }
+                    Source.APP -> Unit
+                }
+            }
+            else -> Column(Modifier.fillMaxWidth()) {
+                ErrorText(state.error, Modifier.padding(horizontal = setupPadding))
+                when (section) {
+                    SetupSection.FAVOURITES -> FavouriteEditor(
+                        draft, state,
+                        add = { picker = Source.TILE },
+                        addApp = { picker = Source.APP },
+                        edit = { tile ->
+                            val entity = state.entity(tile.entity) ?: Entity(tile.entity, "")
+                            format = Format(entity, tile, (entity.kinds() + tile.kind).distinct())
+                        },
+                        remove = { tile -> draft = draft.copy(favourites = draft.favourites - tile) },
+                        move = { id, delta ->
+                            val tiles = draft.favourites.toMutableList()
+                            val onHome = tiles.indices.filter { tiles[it].showOnHome }
+                            val position = onHome.indexOfFirst { tiles[it].entity == id }
+                            if (position >= 0 && position + delta in onHome.indices) {
+                                java.util.Collections.swap(tiles, onHome[position], onHome[position + delta])
+                                draft = draft.copy(favourites = tiles)
+                            }
+                        },
+                    )
+                    SetupSection.ROOMS -> RoomSetup(draft, state) { draft = it }
+                    SetupSection.CAMERAS -> CameraSetup(draft, state) { draft = it }
+                    SetupSection.PANEL -> PanelOptions(draft, state, { draft = it }, { picker = it },
+                        { choosingPhotos = true }, model::changeConnection)
                 }
             }
         }
@@ -291,7 +279,7 @@ private fun FavouriteEditor(
     remove: (TileSpec) -> Unit, move: (String, Int) -> Unit
 ) {
     val homeTiles = draft.favourites.filter { it.showOnHome }
-    LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 15.dp),
+    LazyColumn(Modifier.fillMaxWidth().padding(horizontal = setupPadding),
         verticalArrangement = Arrangement.spacedBy(5.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 13.dp)) {
         item {
@@ -311,12 +299,14 @@ private fun FavouriteEditor(
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                     ReorderGrip(state.label(tile), before, after, { move(tile.entity, it) })
-                    Surface(onClick = { edit(tile) }, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                        Row(Modifier.padding(vertical = 14.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(state.label(tile), Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Surface(onClick = { edit(tile) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Column(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.Center) {
+                            Text(state.label(tile), style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(tile.kind.label,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                     TileOptions(state.label(tile), edit = { edit(tile) }, remove = { remove(tile) })
@@ -344,8 +334,12 @@ private fun RoomSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig) 
     var search by remember { mutableStateOf("") }
     val rooms = state.catalogue.rooms
     val chosen = draft.roomIds ?: rooms.map { it.id }
-    val visible = remember(rooms, search) { rooms.filter { it.name.contains(search.trim(), ignoreCase = true) } }
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val visible = remember(rooms, chosen, search) {
+        val byId = rooms.associateBy { it.id }
+        (chosen.mapNotNull(byId::get) + rooms.filterNot { it.id in chosen })
+            .filter { it.name.contains(search.trim(), ignoreCase = true) }
+    }
+    Column(Modifier.padding(horizontal = setupPadding, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Rooms on this panel", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             TextButton(onClick = { update(draft.copy(roomIds = null)) }, enabled = draft.roomIds != null) { Text("Show all") }
@@ -357,7 +351,8 @@ private fun RoomSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig) 
             OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Find a room") })
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(visible, key = { it.id }) { room ->
-                    val selected = room.id in chosen
+                    val position = chosen.indexOf(room.id)
+                    val selected = position >= 0
                     val toggle = {
                         val next = if (selected) chosen - room.id else chosen + room.id
                         update(draft.copy(roomIds = next))
@@ -367,7 +362,15 @@ private fun RoomSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig) 
                         Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 10.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(end = 10.dp))
-                            Text(room.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(room.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (selected) ReorderGrip(room.name, position > 0, position < chosen.lastIndex) { delta ->
+                                val next = chosen.toMutableList()
+                                if (position + delta in next.indices) {
+                                    java.util.Collections.swap(next, position, position + delta)
+                                    update(draft.copy(roomIds = next))
+                                }
+                            }
                         }
                     }
                 }
@@ -382,7 +385,7 @@ private fun CameraSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig
         state.catalogue.entries.filter { it.visible && it.entity.domain == "camera" }.map { it.entity }
     }
     val saved = draft.favourites.associateBy { it.entity }
-    Column(Modifier.padding(16.dp)) {
+    Column(Modifier.padding(horizontal = setupPadding, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Star a camera to show it on Home.", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = {
@@ -458,21 +461,24 @@ private fun ReorderGrip(label: String, before: Boolean, after: Boolean, reorder:
 private fun EntityPicker(source: Source, draft: PanelConfig, state: PanelUi, refresh: () -> Unit, onSelect: (Entity) -> Unit) {
     var query by remember(source) { mutableStateOf("") }
     val catalog = state.catalogue
+    val areas = remember(catalog.areas) { catalog.areas.associate { it.id to it.name } }
     val matches = remember(catalog, draft.favourites, source, query) {
         val present = draft.favourites.mapTo(hashSetOf()) { it.entity }
+        val term = query.trim()
         catalog.entries.filter { entry ->
             val entity = entry.entity
-            val area = catalog.areas.firstOrNull { it.id == entry.area }?.name.orEmpty()
-            val matchesName = query.isBlank() || listOf(entity.name, entity.id, area).any { it.contains(query.trim(), true) }
+            val area = areas[entry.area].orEmpty()
+            val matchesName = term.isEmpty() || entity.name.contains(term, true) ||
+                entity.id.contains(term, true) || area.contains(term, true)
             matchesName && entry.visible && when (source) {
-                Source.TILE -> entity.id !in present && (!entry.diagnostic || query.isNotBlank())
+                Source.TILE -> entity.id !in present && (!entry.diagnostic || term.isNotEmpty())
                 Source.APP -> false
                 Source.MESSAGE -> entity.domain in setOf("sensor", "input_text")
                 Source.PRESENCE -> entity.domain == "binary_sensor"
             }
         }
     }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = setupPadding)) {
         OutlinedTextField(query, { query = it }, label = { Text("Find a device or sensor") }, singleLine = true,
             leadingIcon = { Icon(Icons.Rounded.Search, null) }, modifier = Modifier.fillMaxWidth())
         if (state.loadingCatalogue) CircularProgressIndicator(Modifier.padding(15.dp))
@@ -481,17 +487,17 @@ private fun EntityPicker(source: Source, draft: PanelConfig, state: PanelUi, ref
                 Modifier.padding(vertical = 17.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (catalog.entries.isEmpty()) TextButton(onClick = refresh, enabled = state.link == Link.ONLINE) { Text("Refresh devices") }
         }
-        LazyColumn(Modifier.fillMaxWidth().padding(top = 9.dp)) {
+        LazyColumn(Modifier.fillMaxWidth().padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             items(matches, key = { it.entity.id }) { entry ->
                 val entity = entry.entity
-                Surface(onClick = { onSelect(entity) }, color = MaterialTheme.colorScheme.surfaceContainer) {
-                    ListItem(headlineContent = { Text(entity.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = {
-                            val room = catalog.areas.firstOrNull { it.id == entry.area }?.name
-                            Text(room ?: entity.id, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }, colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer))
+                Surface(onClick = { onSelect(entity) }, shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer) {
+                    ListItem(headlineContent = { Text(entity.name, style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        supportingContent = { Text(areas[entry.area] ?: entity.id, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer))
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }
@@ -505,7 +511,7 @@ private fun FormatPanel(format: Format, state: PanelUi, apply: (TileSpec) -> Uni
     var status by remember(format) { mutableStateOf(format.current?.statusEntity) }
     var showOnHome by remember(format) { mutableStateOf(format.current?.showOnHome ?: true) }
     var timersOpen by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(19.dp),
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(setupPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(format.entity.name, style = MaterialTheme.typography.titleLarge)
         OutlinedTextField(label, { label = it.take(72) }, modifier = Modifier.fillMaxWidth(),
@@ -547,51 +553,86 @@ private fun FormatPanel(format: Format, state: PanelUi, apply: (TileSpec) -> Uni
 @Composable
 private fun PanelOptions(
     draft: PanelConfig, state: PanelUi, change: (PanelConfig) -> Unit,
-    pick: (Source) -> Unit, choosePhotos: () -> Unit, connection: () -> Unit
+    pick: (Source) -> Unit, choosePhotos: () -> Unit, connection: () -> Unit,
 ) {
     val context = LocalContext.current
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(17.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Colour scheme", style = MaterialTheme.typography.titleMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            for (theme in PanelTheme.entries) FilterChip(selected = draft.theme == theme,
-                onClick = { change(draft.copy(theme = theme)) }, label = { Text(theme.label) })
-        }
-        HorizontalDivider()
-        Option("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it },
-            choose = { pick(Source.MESSAGE) }, clear = { change(draft.copy(messageEntity = null)) })
-        Option("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it },
-            choose = { pick(Source.PRESENCE) }, clear = { change(draft.copy(presenceEntity = null)) })
-        Option("Idle photos", draft.idleAlbum?.title, choosePhotos, { change(draft.copy(idleAlbum = null)) }, empty = "Clock only")
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween) {
-            Column(Modifier.weight(1f)) {
-                Text("Wall display", style = MaterialTheme.typography.titleMedium)
-                Text("Keep the display on and dim the idle screen", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val colors = MaterialTheme.colorScheme
+    Column(
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = setupPadding, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        SettingsGroup("Display") {
+            SettingLink("Idle photos", draft.idleAlbum?.title ?: "Clock only", choosePhotos,
+                if (draft.idleAlbum != null) ({ change(draft.copy(idleAlbum = null)) }) else null)
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                Text("Show idle screen after", style = MaterialTheme.typography.titleMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (seconds in listOf(30, 60, 120, 300)) {
+                        FilterChip(selected = draft.idleSeconds == seconds,
+                            onClick = { change(draft.copy(idleSeconds = seconds)) },
+                            label = { Text(if (seconds < 60) "$seconds sec" else "${seconds / 60} min") })
+                    }
+                }
             }
-            Switch(checked = draft.wallMode, onCheckedChange = { change(draft.copy(wallMode = it)) })
+            ListItem(
+                headlineContent = { Text("Wall display", style = MaterialTheme.typography.titleMedium) },
+                supportingContent = { Text("Keep the display on and dim the idle screen") },
+                trailingContent = { Switch(checked = draft.wallMode, onCheckedChange = { change(draft.copy(wallMode = it)) }) },
+                colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer),
+            )
         }
-        Text("Show idle screen after", style = MaterialTheme.typography.titleMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            for (seconds in listOf(30, 60, 120, 300)) FilterChip(selected = draft.idleSeconds == seconds,
-                onClick = { change(draft.copy(idleSeconds = seconds)) },
-                label = { Text(if (seconds < 60) "$seconds sec" else "${seconds / 60} min") })
+
+        SettingsGroup("Appearance") {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text("Colour scheme", style = MaterialTheme.typography.titleMedium)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (theme in PanelTheme.entries) {
+                        FilterChip(selected = draft.theme == theme, onClick = { change(draft.copy(theme = theme)) },
+                            label = { Text(theme.label) })
+                    }
+                }
+            }
         }
-        TextButton(onClick = connection) { Text("Change Home Assistant connection") }
-        TextButton(onClick = { openHomeAppSettings(context) }) { Text("Android Home app") }
+
+        SettingsGroup("Home Assistant") {
+            SettingLink("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity",
+                { pick(Source.MESSAGE) }, if (draft.messageEntity != null) ({ change(draft.copy(messageEntity = null)) }) else null)
+            SettingLink("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity",
+                { pick(Source.PRESENCE) }, if (draft.presenceEntity != null) ({ change(draft.copy(presenceEntity = null)) }) else null)
+            SettingLink("Change Home Assistant connection", null, connection)
+        }
+
+        SettingsGroup("Device") {
+            SettingLink("Android Home app", "Use the Home gesture to return from other apps",
+                { openHomeAppSettings(context) })
+        }
     }
 }
 
 @Composable
-private fun Option(title: String, value: String?, choose: () -> Unit, clear: () -> Unit, empty: String = "Choose entity") {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Surface(onClick = choose, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.surfaceContainer) {
-            Column(Modifier.padding(vertical = 7.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(value ?: empty, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
+        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 3.dp), content = content)
         }
-        if (value != null) IconButton(onClick = clear) { Icon(Icons.Rounded.Close, "Clear $title") }
+    }
+}
+
+@Composable
+private fun SettingLink(title: String, subtitle: String?, open: () -> Unit, clear: (() -> Unit)? = null) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Surface(onClick = open, modifier = Modifier.weight(1f), shape = RoundedCornerShape(18.dp),
+            color = colors.surfaceContainer) {
+            ListItem(
+                headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
+                supportingContent = subtitle?.let { { Text(it) } },
+                trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+                colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer),
+            )
+        }
+        if (clear != null) IconButton(onClick = clear) { Icon(Icons.Rounded.Close, "Clear $title") }
     }
 }
 

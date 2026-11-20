@@ -69,7 +69,7 @@ internal fun AppPicker(added: Set<String>, choose: (TileSpec) -> Unit) {
         }
     }
     var query by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 9.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = setupPadding, vertical = 9.dp)) {
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Search apps") })
         val available = apps
         if (available == null) {

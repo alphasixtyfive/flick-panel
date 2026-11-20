@@ -120,7 +120,7 @@ internal fun PhotoAlbumPicker(
         failed = album == null
     }
 
-    val choice = album?.takeIf { it.photos.isNotEmpty() }?.folder
+    val choice = current?.takeIf { album?.photos?.isNotEmpty() == true }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Choose photo folder") },

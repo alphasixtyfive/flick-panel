@@ -2,7 +2,7 @@
 
 Flick Panel is a native Android wall dashboard for Home Assistant. Favourites contains the
 tiles pinned on this tablet. Rooms uses Home Assistant areas to show lighting and thermostat
-controls in a single scrollable page. The **Rooms** tab in setup chooses which areas
+controls in a single scrollable page. The **Rooms** section in setup chooses which areas
 this tablet displays and their order. Cameras shows pinned previews and opens one
 full-screen live feed at a time.
 In setup, use **Cameras** to choose gallery feeds and star one for Home. Use **Add app** to
@@ -23,6 +23,9 @@ from other apps.
 4. Hold **Home** and use the PIN keypad to return to setup. Hold and drag a tile by its
    handle, or tap the handle to move it one place. The tile’s options menu lets you edit
    or remove it. Leaving the app or five minutes in setup closes the editor.
+
+On tablets, setup shows the section menu beside the current editor. **Done** saves the
+layout across all sections. On smaller displays, setup uses tabs.
 
 The token is encrypted with Android Keystore. Use HTTPS when available. The app also accepts
 explicit private IPv4 addresses such as a local Home Assistant server at

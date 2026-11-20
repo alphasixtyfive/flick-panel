@@ -55,7 +55,7 @@ class HaSessionTest {
                 assertEquals("/api/hls/abcdefgh123456/master_playlist.m3u8", client.stream("camera.front_door").encodedPath)
                 assertNotNull(client.snapshot("camera.front_door"))
                 val album = client.photoAlbum("media-source://synology_dsm/nas/album")
-                assertEquals("TV Gallery", album.folder?.title)
+                assertEquals(listOf("media-source://synology_dsm/nas/album/photo"), album.photos)
                 assertEquals("cover photo", client.photo(album.photos.single())?.decodeToString())
                 client.select(setOf("sensor.power"))
                 withTimeout(6_000) { client.entities.first { it.keys == setOf("sensor.power") } }
@@ -139,7 +139,7 @@ private class FakeHome : Dispatcher() {
                         {"media_content_id":"camera.front_gate","media_content_type":"video","title":"Front gate","media_class":"video","can_play":true}
                     ]}""")
                     "media_source/browse_media" -> result("""{
-                        "media_content_id":"media-source://synology_dsm/nas/album","title":"TV Gallery","children":[
+                        "media_content_id":"media-source://synology_dsm","title":"Synology Photos","children":[
                         {"media_content_id":"media-source://synology_dsm/nas/album/photo","media_content_type":"image/jpeg","can_play":true},
                         {"media_content_id":"media-source://synology_dsm/nas/album/video","media_content_type":"video/mp4","can_play":true}
                     ]}""")

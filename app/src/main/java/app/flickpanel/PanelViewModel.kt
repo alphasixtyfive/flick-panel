@@ -150,6 +150,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (_ui.value.editor) _ui.update { it.copy(connectionEditor = true, error = null) }
     }
 
+    fun cancelConnectionChange() {
+        _ui.update { if (it.connectionEditor) it.copy(connectionEditor = false, error = null) else it }
+    }
+
     fun connect(address: String, token: String, pin: String, confirmation: String) {
         val current = _ui.value
         if (current.busy || (current.configured && !current.editor)) return

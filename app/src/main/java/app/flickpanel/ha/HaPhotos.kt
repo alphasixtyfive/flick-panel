@@ -7,13 +7,12 @@ private val photoSources = listOf("media-source://media_source", "media-source:/
 internal data class PhotoFolder(val id: String, val title: String)
 
 internal data class PhotoAlbum(
-    val folder: PhotoFolder?,
     val folders: List<PhotoFolder>,
     val photos: List<String>,
 )
 
 internal fun isPhotoSourceId(id: String): Boolean = id.length <= 2048 && id.none(Char::isISOControl) &&
-    photoSources.any { source -> id == source || id == "$source/" || id.startsWith("$source/") }
+    photoSources.any { source -> id == source || id.startsWith("$source/") }
 
 internal suspend fun browsePhotoAlbum(
     id: String?,
@@ -33,7 +32,7 @@ internal suspend fun browsePhotoAlbum(
             item.text("media_content_id")?.takeIf(::isPhotoSourceId)?.let(photos::add)
         }
     }
-    return PhotoAlbum(result.photoFolder(), folders.distinctBy(PhotoFolder::id), photos.distinct())
+    return PhotoAlbum(folders.distinctBy(PhotoFolder::id), photos.distinct())
 }
 
 internal suspend fun resolvePhoto(
