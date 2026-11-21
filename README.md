@@ -72,9 +72,9 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Cover** shows the state and position reported by Home Assistant. It offers the
   Open, Close, and Stop actions advertised by the device. A gate uses the whole
   tile as a toggle and shows its current state.
-- **Person location** shows the Home Assistant zone and opens a map inside Panel
-  when the person has a reported position. The bundled geographic basemap works
-  without a map account or network tile requests.
+- **Person location** shows the person's Home Assistant picture and zone, with initials
+  when the picture is unavailable. Tap it to open the in-app map when Home Assistant
+  reports a position. The bundled basemap works without network tile requests.
 - **Content reader** opens a sensor or text helper in a full-screen reader. Select
   the entity state or a text attribute as the source. A longer recipe or note can
   live in a text attribute, with line breaks kept in the reader.

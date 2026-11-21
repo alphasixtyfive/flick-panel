@@ -492,6 +492,14 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         return images.artwork.load(reference) { active.artwork(reference) }
     }
 
+    fun cachedPersonAvatar(reference: String): Bitmap? = images.artwork.fresh("person:$reference")
+
+    suspend fun loadPersonAvatar(reference: String): Bitmap? {
+        if (!foreground) return null
+        val active = client ?: return null
+        return images.artwork.load("person:$reference", decodeEdge = 192) { active.personAvatar(reference) }
+    }
+
     suspend fun stream(id: String): HttpUrl = client?.stream(id) ?: throw HaProblem("Home Assistant isn't connected")
 
     fun videoTransport(): OkHttpClient = client?.videoClient ?: throw HaProblem("Home Assistant isn't connected")

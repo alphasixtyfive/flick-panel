@@ -287,6 +287,11 @@ internal class HaClient(
         return get(url, token, ::imageBody)
     }
 
+    suspend fun personAvatar(reference: String): ByteArray? {
+        val url = resolvePersonAvatar(credentials.server, reference) ?: return null
+        return get(url, credentials.token, ::imageBody)
+    }
+
     suspend fun photoAlbum(id: String?): PhotoAlbum = browsePhotoAlbum(id, ::request)
 
     suspend fun photo(id: String): ByteArray? {

@@ -77,6 +77,22 @@ class HaSessionTest {
         }
     }
 
+    @Test fun personAvatarUsesTheHomeAssistantImageEndpointAndRejectsRemoteReferences() = runBlocking {
+        MockWebServer().use { server ->
+            val address = parseServer(server.url("/").newBuilder().host("127.0.0.1").build().toString())
+            server.enqueue(MockResponse().setHeader("Content-Type", "image/jpeg").setBody("fixture avatar"))
+            val client = HaClient(HaCredentials(address, "test-fixture-token"), this)
+
+            val reference = "/api/image/serve/profile-id/512x512"
+            assertEquals("fixture avatar", client.personAvatar(reference)?.decodeToString())
+            val request = server.takeRequest()
+            assertEquals(reference, request.path)
+            assertEquals("Bearer test-fixture-token", request.getHeader("Authorization"))
+            assertNull(client.personAvatar("https://cdn.example.invalid$reference"))
+            assertEquals(1, server.requestCount)
+        }
+    }
+
     @Test fun rejectedTokenNeverBecomesOnline() = runBlocking {
         MockWebServer().use { server ->
             server.dispatcher = FakeHome()

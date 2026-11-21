@@ -2,14 +2,19 @@ package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowOutward
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -30,7 +35,12 @@ internal fun AgendaPreview(
     Surface(onClick = open, modifier = modifier.semantics { onClick(label = "Open $title", action = null) },
         color = colors.surfaceContainer, shape = panelCardShape) {
         Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PreviewTileTitle(title, if (kind == TileKind.TASKS) Icons.Rounded.Checklist else Icons.Rounded.CalendarMonth)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val icon = if (kind == TileKind.TASKS) Icons.Rounded.Checklist else Icons.Rounded.CalendarMonth
+                Icon(icon, null, Modifier.size(compactTileIconSize), tint = colors.primary)
+                TileTitle(title, Modifier.weight(1f).align(Alignment.Top))
+                Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(19.dp), tint = colors.onSurfaceVariant)
+            }
             when (val content = state.content) {
                 is AgendaContent.Tasks -> TasksPreview(content.items, dates, limit)
                 is AgendaContent.Calendar -> CalendarPreview(content.events, dates, limit)

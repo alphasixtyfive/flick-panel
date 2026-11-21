@@ -4,8 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowOutward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,6 +20,7 @@ import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.personPicture
 import app.flickpanel.ha.readContent
 
 internal val panelCardShape = RoundedCornerShape(26.dp)
@@ -59,8 +58,10 @@ internal fun PanelTile(
             model.controlCover(tile.entity, action)
         }
         TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, state, model, modifier)
-        TileKind.PERSON -> PersonTile(label, live, online, modifier) {
-            model.openContent(tile.entity)
+        TileKind.PERSON -> {
+            val photo = rememberPanelImage(live?.personPicture?.takeIf { online },
+                model::cachedPersonAvatar, model::loadPersonAvatar)
+            PersonTile(label, live, online, modifier, avatar = photo) { model.openContent(tile.entity) }
         }
         TileKind.READER -> ReaderTile(label, readContent(entity, tile.readerAttribute), modifier) {
             model.openContent(tile.entity)
@@ -79,16 +80,6 @@ internal fun ControlTileTitle(label: String, icon: ImageVector, tint: Color) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
         Icon(icon, null, tint = tint, modifier = Modifier.size(tileIconSize))
-    }
-}
-
-@Composable
-internal fun PreviewTileTitle(label: String, icon: ImageVector, canOpen: Boolean = true) {
-    val colors = MaterialTheme.colorScheme
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(compactTileIconSize), tint = colors.primary)
-        TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
-        if (canOpen) Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(19.dp), tint = colors.onSurfaceVariant)
     }
 }
 

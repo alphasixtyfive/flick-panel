@@ -60,8 +60,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -96,7 +94,8 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
     val preview = remember(entity?.id) { mutableStateOf<Int?>(null) }
     val adjusting = preview.value ?: pending?.removeSuffix("%")?.toIntOrNull()
     val showTransport = features.hasMediaFeature(transport.bit) && (hasCurrent || !canBrowse)
-    val cover = rememberMusicArtwork(entity?.attributes?.text("entity_picture")?.takeIf { ready && hasCurrent }, model)
+    val cover = rememberPanelImage(entity?.attributes?.text("entity_picture")?.takeIf { ready && hasCurrent },
+        model::cachedArtwork, model::loadArtwork)
     val detail = when {
         adjusting != null -> "Volume $adjusting%"
         pending != null -> pending
@@ -521,7 +520,7 @@ private fun MusicCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
-    val artwork = rememberMusicArtwork(item.artwork, model)
+    val artwork = rememberPanelImage(item.artwork, model::cachedArtwork, model::loadArtwork)
     val buttonContainer = if (artwork == null) colors.secondaryContainer else Color(0xde17191c)
     val buttonContent = if (artwork == null) colors.onSecondaryContainer else Color.White
     Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
@@ -587,22 +586,4 @@ private fun MusicCard(
             }
         }
     }
-}
-
-@Composable
-private fun rememberMusicArtwork(reference: String?, model: PanelViewModel): ImageBitmap? {
-    if (reference == null) return null
-    var bitmap by remember(model, reference) { mutableStateOf(model.cachedArtwork(reference)) }
-    LaunchedEffect(model, reference) {
-        if (bitmap == null) {
-            bitmap = try {
-                model.loadArtwork(reference)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
-    return remember(bitmap) { bitmap?.asImageBitmap() }
 }

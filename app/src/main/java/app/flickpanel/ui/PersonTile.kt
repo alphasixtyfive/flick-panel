@@ -1,15 +1,30 @@
 package app.flickpanel.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.ArrowOutward
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -18,7 +33,9 @@ import app.flickpanel.ha.PersonLocation
 import app.flickpanel.ha.personStatus
 
 @Composable
-internal fun PersonTile(label: String, live: Entity?, online: Boolean, modifier: Modifier, open: () -> Unit) {
+internal fun PersonTile(
+    label: String, live: Entity?, online: Boolean, modifier: Modifier, avatar: ImageBitmap? = null, open: () -> Unit,
+) {
     val person = live.takeIf { online }
     val location = person?.let { PersonLocation.from(it) }
     val colors = MaterialTheme.colorScheme
@@ -34,10 +51,48 @@ internal fun PersonTile(label: String, live: Entity?, online: Boolean, modifier:
             Modifier.fillMaxWidth().padding(tileContentPadding),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            PreviewTileTitle(label, Icons.Rounded.Star, canOpen = location != null)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PersonAvatar(label, avatar)
+                TileTitle(label, Modifier.weight(1f))
+                if (location != null) Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(19.dp), tint = colors.onSurfaceVariant)
+            }
             val status = person?.personStatus()
             if (status != null) TileValue(status, maxLines = 2)
             else TileStatus("Unavailable")
         }
+    }
+}
+
+@Composable
+private fun PersonAvatar(name: String, avatar: ImageBitmap?) {
+    val colors = MaterialTheme.colorScheme
+    Surface(Modifier.size(44.dp).clearAndSetSemantics {}, shape = CircleShape,
+        color = colors.secondaryContainer, contentColor = colors.onSecondaryContainer) {
+        if (avatar != null) {
+            Image(avatar, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        } else {
+            val initials = remember(name) { avatarInitials(name) }
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                if (initials.isEmpty()) {
+                    Icon(Icons.Rounded.Person, null, Modifier.size(compactTileIconSize))
+                } else {
+                    val type = MaterialTheme.typography.titleMedium
+                    val style = with(LocalDensity.current) { type.copy(fontSize = 19.dp.toSp(), lineHeight = 24.dp.toSp()) }
+                    Text(initials, style = style, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+private val nameSpacing = Regex("[\\p{Z}\\s]+")
+private val nameInitial = Regex("\\p{L}\\p{M}*|\\p{N}")
+
+internal fun avatarInitials(name: String): String {
+    val parts = name.splitToSequence(nameSpacing).mapNotNull { nameInitial.find(it)?.value }.toList()
+    return when (parts.size) {
+        0 -> ""
+        1 -> parts.first().uppercase()
+        else -> (parts.first() + parts.last()).uppercase()
     }
 }

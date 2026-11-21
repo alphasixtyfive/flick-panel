@@ -47,13 +47,13 @@ internal class ImageCache(
         ?.takeIf { SystemClock.elapsedRealtime() - it.fetchedAt < lifetimeMillis }
         ?.bitmap
 
-    suspend fun load(key: String, fetch: suspend () -> ByteArray?): Bitmap? {
+    suspend fun load(key: String, decodeEdge: Int = maxEdge, fetch: suspend () -> ByteArray?): Bitmap? {
         fresh(key)?.let { return it }
         return requests.load(key) {
             fetchSlots.withPermit {
                 fresh(key)?.let { return@withPermit it }
                 val data = fetch() ?: return@withPermit null
-                val bitmap = decodePanelImage(data, maxEdge) ?: return@withPermit null
+                val bitmap = decodePanelImage(data, minOf(maxEdge, decodeEdge)) ?: return@withPermit null
                 images.put(key, CachedImage(bitmap, SystemClock.elapsedRealtime()))
                 bitmap
             }
