@@ -95,7 +95,6 @@ internal data class Entity(
             val numeric = state.toDoubleOrNull()?.isFinite() == true
             add(TileKind.VALUE)
             if (numeric) add(TileKind.TREND)
-            if (glanceReading != null) add(TileKind.GLANCE)
             if (!numeric || hasReaderAttribute) add(TileKind.READER)
         }
         "input_number", "number" -> if (numberRange != null) listOf(TileKind.NUMBER, TileKind.VALUE) else listOf(TileKind.VALUE)

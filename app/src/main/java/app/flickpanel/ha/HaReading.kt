@@ -1,18 +1,5 @@
 package app.flickpanel.ha
 
-internal enum class GlanceReading { TEMPERATURE, HUMIDITY, POWER, BATTERY, CO2, LIGHT }
-
-internal val Entity.glanceReading: GlanceReading?
-    get() = when (attributes.text("device_class")) {
-        "temperature" -> GlanceReading.TEMPERATURE
-        "humidity" -> GlanceReading.HUMIDITY
-        "power" -> GlanceReading.POWER
-        "battery" -> GlanceReading.BATTERY
-        "carbon_dioxide" -> GlanceReading.CO2
-        "illuminance" -> GlanceReading.LIGHT
-        else -> GlanceReading.TEMPERATURE.takeIf { unit == "°C" || unit == "°F" }
-    }.takeIf { domain == "sensor" }
-
 private const val MaxReadingLength = 24_000
 private const val MaxPreviewLength = 280
 

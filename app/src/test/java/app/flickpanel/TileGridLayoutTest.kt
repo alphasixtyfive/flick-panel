@@ -12,19 +12,6 @@ import org.junit.Test
 
 class TileGridLayoutTest {
     @Test
-    fun compactReadingsHaveTheirOwnStripInSavedOrder() {
-        val temperature = TileSpec("sensor.temperature", TileKind.GLANCE)
-        val humidity = TileSpec("sensor.humidity", TileKind.GLANCE)
-        val lights = TileSpec("light.kitchen", TileKind.TOGGLE)
-        for (columns in listOf(1, 2, 4)) {
-            val groups = homeTileGroups(listOf(temperature, lights, humidity), columns, compact = columns == 4,
-                resizeTiles = true)
-            assertEquals(listOf(temperature, humidity), groups.readings)
-            assertEquals(listOf(listOf(lights)), groups.controls)
-        }
-    }
-
-    @Test
     fun columnsLeaveRoomForControlsAtDifferentWindowWidthsAndTextSizes() {
         assertEquals(1, dashboardTileColumns(320f, 1f))
         assertEquals(2, dashboardTileColumns(412f, 1f))

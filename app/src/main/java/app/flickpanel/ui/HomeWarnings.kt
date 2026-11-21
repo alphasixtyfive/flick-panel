@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -37,6 +38,7 @@ internal fun HomeWarnings(badges: List<ActiveHomeBadge>, modifier: Modifier = Mo
     val single = badges.singleOrNull()
     AssistChip(
         modifier = modifier,
+        shape = CircleShape,
         onClick = { open = single?.entity?.id ?: "" },
         label = { Text(single?.label ?: "${badges.size} alerts", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(Icons.Rounded.WarningAmber, null, Modifier.size(20.dp)) },

@@ -62,7 +62,6 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     val favourites = state.config.favourites
     val weather = remember(favourites) { favourites.firstOrNull { it.kind == TileKind.WEATHER } }
     val homeTiles = remember(favourites, weather) { favourites.filter { it.showOnHome && it != weather } }
-    val readings = remember(homeTiles) { homeTiles.filter { it.kind == TileKind.GLANCE } }
     val alerts = if (state.page == Page.FAVOURITES) state.activeHomeBadges() else emptyList()
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val wide = maxWidth >= tabletWidthDp.dp
@@ -74,8 +73,6 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
         val headerWidth = minOf(maxWidth, panelMaxWidth) - side * 2
         val alertsInNavigation = alerts.isNotEmpty() && headerWidth >= 640.dp * fontScale.coerceAtLeast(1f)
-        val readingsInHeader = state.page == Page.FAVOURITES && !short && tileColumns == 4 &&
-            readings.size in 1..2 && headerWidth >= 940.dp * fontScale.coerceAtLeast(1f)
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
                 "Home",
@@ -83,7 +80,6 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 wide = wide,
                 short = short,
                 stacked = compact && !short && fontScale >= 1.3f,
-                readings = { if (readingsInHeader) HomeGlanceReadings(readings, state) },
                 unlock = model::showUnlock,
                 idle = model::showIdleScreen,
             )
@@ -119,7 +115,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                     Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
                     Page.ROOMS -> Rooms(state, model, roomId, { roomId = it }, body)
                     Page.FAVOURITES -> Favourites(
-                        homeTiles, state, model, tileColumns, body, showReadings = !readingsInHeader,
+                        homeTiles, state, model, tileColumns, body,
                         alerts = if (alertsInNavigation) emptyList() else alerts,
                     )
                 }
@@ -132,7 +128,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
 @Composable
 private fun DashboardHeader(
     title: String, weather: Entity?, wide: Boolean, short: Boolean, stacked: Boolean,
-    readings: @Composable () -> Unit, unlock: () -> Unit, idle: () -> Unit,
+    unlock: () -> Unit, idle: () -> Unit,
 ) {
     val padding = if (short) 6.dp else if (wide) 22.dp else 18.dp
     val prominent = wide && !short
@@ -157,7 +153,6 @@ private fun DashboardHeader(
     val details: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.spacedBy(if (prominent) 34.dp else 11.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            readings()
             WeatherSummary(weather, compact = !prominent, prominent = prominent)
             HeaderClock(prominent, idle)
         }

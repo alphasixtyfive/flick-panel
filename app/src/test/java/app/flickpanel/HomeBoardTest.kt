@@ -32,7 +32,7 @@ class HomeBoardTest {
     fun landscapeTabletFitsTheKitchenLayoutOnOnePage() {
         val groups = homeTileGroups(tiles, 4, compact = true, resizeTiles = true)
         val gates = setOf("cover.front", "cover.back")
-        val page = homePages(homeBands(groups, 1f, 620.dp, showReadings = false, gateIds = gates), 620.dp).single()
+        val page = homePages(homeBands(groups, 1f, 620.dp, gateIds = gates), 620.dp).single()
         assertEquals(4, page.first().lanes.single().single().tiles.size)
         assertEquals(128.dp, page.first().height)
         assertEquals(2, page[1].lanes.size)
@@ -42,14 +42,14 @@ class HomeBoardTest {
         val shown = page.flatMap { it.lanes.flatten().flatMap { row -> row.tiles } }
         assertEquals(tiles.size, shown.size)
         assertEquals(tiles.toSet(), shown.toSet())
-        assertEquals(1, homePages(homeBands(groups, 1f, 573.dp, showReadings = false, gateIds = gates), 573.dp).size)
+        assertEquals(1, homePages(homeBands(groups, 1f, 573.dp, gateIds = gates), 573.dp).size)
     }
 
     @Test
     fun narrowWindowsReserveSpaceForPageButtonsAndKeepEveryTile() {
         val groups = homeTileGroups(tiles, 2, compact = false, resizeTiles = true)
         val height = 400.dp
-        val pages = homePages(homeBands(groups, 1.3f, height, showReadings = true), height)
+        val pages = homePages(homeBands(groups, 1.3f, height), height)
         assertTrue(pages.size > 1)
         for (page in pages) {
             val used = page.fold(tileGap * (page.size - 1)) { sum, band -> sum + band.height }

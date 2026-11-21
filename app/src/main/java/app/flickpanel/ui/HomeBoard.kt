@@ -20,7 +20,7 @@ internal data class HomeBand(val lanes: List<List<HomeTileRow>>) {
 }
 
 internal fun homeBands(
-    groups: HomeTileGroups, fontScale: Float, availableHeight: Dp, showReadings: Boolean, gateIds: Set<String> = emptySet(),
+    groups: HomeTileGroups, fontScale: Float, availableHeight: Dp, gateIds: Set<String> = emptySet(),
 ): List<HomeBand> {
     val scale = fontScale.coerceAtLeast(1f)
     val columns = groups.columns
@@ -53,9 +53,6 @@ internal fun homeBands(
     } * scale
 
     return buildList {
-        if (showReadings) {
-            for (row in groups.readings.chunked(columns)) add(HomeTileRow(row, columns, 54.dp * scale).band())
-        }
         for ((index, row) in controlRows.withIndex()) {
             val height = if (index == 0 && gatesBesideCameras) maxOf(128.dp * scale, controlHeight(row)) else controlHeight(row)
             add(HomeTileRow(row, columns, height).band())

@@ -36,7 +36,7 @@ import app.flickpanel.config.TileSpec
 
 @Composable
 internal fun Favourites(
-    tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, modifier: Modifier, showReadings: Boolean,
+    tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, modifier: Modifier,
     alerts: List<ActiveHomeBadge>,
 ) {
     Column(modifier.padding(bottom = 12.dp)) {
@@ -54,8 +54,8 @@ internal fun Favourites(
                 tiles.asSequence().filter { it.kind == TileKind.COVER && state.entity(it.entity)?.isGate == true }
                     .map(TileSpec::entity).toSet()
             } else emptySet()
-            val pages = remember(groups, showReadings, height, fontScale, gates) {
-                homePages(homeBands(groups, fontScale, height, showReadings, gates), height)
+            val pages = remember(groups, height, fontScale, gates) {
+                homePages(homeBands(groups, fontScale, height, gates), height)
             }
             if (pages.isEmpty()) return@BoxWithConstraints
             var requestedPage by rememberSaveable { mutableIntStateOf(0) }

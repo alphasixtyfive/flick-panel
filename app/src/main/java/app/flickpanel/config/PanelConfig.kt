@@ -10,10 +10,9 @@ enum class TileKind(val label: String) {
     TOGGLE("Switch"), VALUE("Value"), SLIDER("Slider"), TREND("Small graph"),
     ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"),
     APP("Android app"), IMAGE("Image"), TIMER("Countdown"), CHOICE("Selector"), NUMBER("Number control"),
-    TASKS("Tasks"), CALENDAR("Calendar"), COVER("Cover"), PERSON("Person location"), READER("Content reader"),
-    GLANCE("Indicator");
+    TASKS("Tasks"), CALENDAR("Calendar"), COVER("Cover"), PERSON("Person location"), READER("Content reader");
 
-    internal val resizable get() = this != CAMERA && this != WEATHER && this != APP && this != GLANCE
+    internal val resizable get() = this != CAMERA && this != WEATHER && this != APP
     internal val isAgenda get() = this == TASKS || this == CALENDAR
     internal val hasContentScreen get() = this == PERSON || this == READER
 }

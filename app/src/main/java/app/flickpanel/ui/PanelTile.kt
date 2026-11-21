@@ -99,7 +99,6 @@ private fun TileContent(
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, online && entity?.available == true, model, modifier)
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
         TileKind.TIMER -> TimerTile(label, entity, modifier)
-        TileKind.GLANCE -> GlanceTile(label, entity, available, modifier)
         TileKind.VALUE, TileKind.TREND -> ValueTile(tile, label, entity, link, history,
             model::loadGraph, modifier, compactHistory)
         TileKind.APP -> AppTile(tile, modifier)

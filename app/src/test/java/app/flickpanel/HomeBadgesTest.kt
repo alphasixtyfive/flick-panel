@@ -16,6 +16,24 @@ class HomeBadgesTest {
     private val pollen = HomeBadge("sensor.pollen", "High pollen", listOf("high", "very-high"))
     private val layout = RoomLayout(config = PanelConfig(homeBadges = listOf(maintenance, pollen)))
 
+    @Test fun legacyLayoutsDropCompactReadingsAndKeepAlerts() {
+        val config = PanelConfigCodec.decode("""
+            {
+              "version": 1,
+              "tiles": [
+                { "entity": "sensor.temperature", "kind": "GLANCE" },
+                { "entity": "sensor.power", "kind": "TREND" }
+              ],
+              "homeBadges": [
+                { "entity": "binary_sensor.maintenance", "label": "Needs attention", "states": ["on"] }
+              ]
+            }
+        """.trimIndent())
+
+        assertEquals(listOf("sensor.power"), config.favourites.map { it.entity })
+        assertEquals(listOf(maintenance), config.homeBadges)
+    }
+
     @Test fun showOnlyActiveLiveStates() {
         val ui = PanelUi(layout = layout, link = Link.ONLINE, entities = mapOf(
             maintenance.entity to Entity(maintenance.entity, "off"),
