@@ -86,7 +86,7 @@ private fun playbackTime(seconds: Double): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MediaSlider(value: Float, label: String, enabled: Boolean, change: (Float) -> Unit, finish: () -> Unit) {
+private fun MediaSlider(value: Float, label: String, enabled: Boolean, change: (Float) -> Unit, finish: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val dragging by interaction.collectIsDraggedAsState()
     val focused by interaction.collectIsFocusedAsState()

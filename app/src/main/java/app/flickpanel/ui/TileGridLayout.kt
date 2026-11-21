@@ -71,6 +71,10 @@ internal val TileKind.homeGroup: HomeGroup
     }
 
 internal data class HomeTileGroups(
+    val columns: Int,
+    val compact: Boolean,
+    val resizeTiles: Boolean,
+    val hasTiles: Boolean,
     val readings: List<TileSpec>,
     val controls: List<List<TileSpec>>,
     val cameras: List<List<TileSpec>>,
@@ -95,6 +99,10 @@ internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolea
         history.firstOrNull { !it.wideOnTablet }
     } else null
     return HomeTileGroups(
+        columns = columns,
+        compact = compact,
+        resizeTiles = resizeTiles,
+        hasTiles = tiles.isNotEmpty(),
         readings = groups[HomeGroup.READINGS].orEmpty(),
         controls = packTileRows(groups[HomeGroup.CONTROLS].orEmpty(), columns, compact, resizeTiles),
         cameras = cameras.chunked(if (columns > 1) 2 else 1),

@@ -1,57 +1,71 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Remove
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
+
+private const val speakerVolumeStep = 5
+
+internal data class SpeakerVolume(
+    val level: Int,
+    val expanded: Boolean,
+    val available: Boolean,
+    val ready: Boolean,
+    val toggle: () -> Unit,
+    val change: (Int) -> Unit,
+)
 
 @Composable
-internal fun PlayerVolumeButton(level: Int, selected: Boolean, enabled: Boolean, toggle: () -> Unit) {
+internal fun PlayerVolumeButton(volume: SpeakerVolume, enabled: Boolean = true) {
     FilledTonalIconToggleButton(
-        checked = selected,
-        onCheckedChange = { toggle() },
-        enabled = enabled,
-        modifier = Modifier.size(48.dp).semantics { stateDescription = "$level percent" },
+        checked = volume.expanded,
+        onCheckedChange = { volume.toggle() },
+        enabled = enabled && volume.available,
+        modifier = Modifier.size(48.dp).semantics {
+            contentDescription = if (volume.expanded) "Close volume" else "Adjust speaker volume"
+            stateDescription = "${volume.level} percent"
+        },
     ) {
-        val icon = if (level == 0) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp
-        Icon(icon, if (selected) "Close volume" else "Adjust speaker volume")
+        val icon = if (volume.level == 0) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp
+        Icon(icon, null)
     }
 }
 
 @Composable
-internal fun PlayerVolumeControl(level: Int, ready: Boolean, change: (Int) -> Unit, modifier: Modifier = Modifier) {
-    var drag by remember(ready) { mutableStateOf<Float?>(null) }
-    val position = drag ?: level / 100f
-    val shown = (position * 100).roundToInt()
-    val color = MaterialTheme.colorScheme.onSurfaceVariant
-    val style = MaterialTheme.typography.bodyMedium
-    Column(modifier) {
-        MediaSlider(position, "Speaker volume", ready, change = { drag = it }) {
-            val next = drag?.let { (it * 100).roundToInt() }
-            drag = null
-            if (next != null && next != level) change(next)
+internal fun PlayerVolumeControl(volume: SpeakerVolume, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val level = volume.level
+    val ready = enabled && volume.ready
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        FilledTonalIconButton(onClick = { volume.change((level - speakerVolumeStep).coerceAtLeast(0)) }, enabled = ready && level > 0,
+            modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Rounded.Remove, "Lower speaker volume")
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Speaker volume", style = style, color = color)
-            Text("$shown%", style = style.copy(fontFeatureSettings = "'tnum'"), color = color)
+        Text("$level%", Modifier.widthIn(min = 56.dp).semantics {
+            contentDescription = "Speaker volume"
+            stateDescription = "$level percent"
+        }, style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "'tnum'"), textAlign = TextAlign.Center)
+        FilledTonalIconButton(onClick = { volume.change((level + speakerVolumeStep).coerceAtMost(100)) }, enabled = ready && level < 100,
+            modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Rounded.Add, "Raise speaker volume")
         }
     }
 }

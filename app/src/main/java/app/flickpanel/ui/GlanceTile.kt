@@ -1,11 +1,13 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.BatteryStd
@@ -17,18 +19,46 @@ import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import app.flickpanel.PanelUi
+import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.GlanceReading
+import app.flickpanel.ha.Link
 import app.flickpanel.ha.glanceReading
 
 @Composable
 internal fun GlanceTile(label: String, entity: Entity?, available: Boolean, modifier: Modifier) {
+    Surface(modifier, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        GlanceValue(label, entity, available)
+    }
+}
+
+@Composable
+internal fun HomeGlanceReadings(
+    tiles: List<TileSpec>, state: PanelUi, modifier: Modifier = Modifier, alignEnd: Boolean = false,
+) {
+    Box(modifier, contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart) {
+        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp)) {
+                for (tile in tiles) key(tile.entity) {
+                    val available = state.link == Link.ONLINE && state.entities[tile.entity]?.available == true
+                    GlanceValue(state.label(tile), state.entity(tile.entity), available)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlanceValue(label: String, entity: Entity?, available: Boolean) {
     val colors = MaterialTheme.colorScheme
     val reading = entity?.glanceReading
     val icon = when (reading) {
@@ -41,15 +71,11 @@ internal fun GlanceTile(label: String, entity: Entity?, available: Boolean, modi
         null -> Icons.Rounded.Sensors
     }
     val value = entity?.takeIf { available }?.let { glanceValue(it, reading) }
-    Surface(modifier.widthIn(min = 98.dp, max = 164.dp).heightIn(min = 70.dp)
+    Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 6.dp)
         .clearAndSetSemantics { contentDescription = "$label, ${value ?: "Unavailable"}" },
-        shape = MaterialTheme.shapes.large, color = colors.surfaceContainer) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)) {
-            Icon(icon, null, Modifier.size(25.dp), tint = if (value == null) colors.onSurfaceVariant else colors.primary)
-            TileValue(value ?: "—")
-        }
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(icon, null, Modifier.size(23.dp), tint = if (value == null) colors.onSurfaceVariant else colors.primary)
+        Text(value ?: "—", style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "'tnum'"), maxLines = 1)
     }
 }
 

@@ -33,27 +33,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
-import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Link
-import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MediaTransport
-import app.flickpanel.ha.canBrowseMusic
-import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.text
-
-internal data class MusicPlayback(
-    val speaker: String, val entity: Entity?, val available: Boolean, val pending: Boolean,
-) {
-    val current = entity?.takeIf { available && (it.playingMedia || it.state == "paused") }
-    val features = entity?.mediaFeatures ?: 0L
-    val ready = available && !pending
-    val action = if (entity?.playingMedia == true) MediaTransport.PAUSE else MediaTransport.PLAY
-    val canPlayPause = features.hasMediaFeature(action.bit)
-    val canBrowse = features.canBrowseMusic()
-    val title = current?.attributes?.text("media_title") ?: if (available) "Nothing playing" else "Player unavailable"
-    val artist = current?.attributes?.let { it.text("media_artist") ?: it.text("media_album_name") }
-    val volume = entity?.volumePercent?.takeIf { features.hasMediaFeature(MEDIA_VOLUME_SET) }
-}
 
 @Composable
 internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel) {
@@ -64,10 +46,16 @@ internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel
         model::cachedArtwork, model::loadArtwork)
     val library = remember(id) { MusicLibraryState() }
     var browsing by rememberSaveable(id) { mutableStateOf(false) }
+    var volumeOpen by remember(id, browsing, playback.available, playback.volume == null) { mutableStateOf(false) }
     val transport: (MediaTransport) -> Unit = { model.mediaTransport(id, it) }
-    val volume: (Int) -> Unit = { level -> entity?.let { model.setVolume(it, level) } }
+    val volume = playback.volume?.let { level ->
+        SpeakerVolume(level, volumeOpen, playback.available, playback.ready,
+            toggle = { volumeOpen = !volumeOpen }, change = { entity?.let { speaker -> model.setVolume(speaker, it) } })
+    }
 
-    BackHandler(enabled = !browsing, onBack = model::closeMusic)
+    BackHandler(enabled = !browsing) {
+        if (volumeOpen) volumeOpen = false else model.closeMusic()
+    }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         if (browsing) {
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {

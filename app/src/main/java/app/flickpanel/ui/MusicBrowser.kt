@@ -61,7 +61,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun MusicBrowser(
     id: String, library: MusicLibraryState, model: PanelViewModel, wide: Boolean,
-    playback: MusicPlayback, artwork: ImageBitmap?, transport: (MediaTransport) -> Unit, volume: (Int) -> Unit,
+    playback: MusicPlayback, artwork: ImageBitmap?, transport: (MediaTransport) -> Unit, volume: SpeakerVolume?,
     showPlayer: () -> Unit, modifier: Modifier,
 ) {
     val root = library.content(null)
@@ -110,7 +110,9 @@ internal fun MusicBrowser(
         if (item.expandable) library.enter(item, fromRoot) else play(item)
     }
 
-    BackHandler(onBack = ::back)
+    BackHandler {
+        if (volume?.expanded == true) volume.toggle() else back()
+    }
     LaunchedEffect(id, retry) { library.load(null) { model.browseMusic(id, it) } }
     LaunchedEffect(id, folder, retry) {
         if (folder != null) library.load(folder) { model.browseMusic(id, it) }
