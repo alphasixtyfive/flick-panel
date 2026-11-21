@@ -22,8 +22,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import app.flickpanel.PanelUi
-import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
@@ -36,16 +34,15 @@ import kotlinx.coroutines.isActive
 
 @Composable
 internal fun ValueTile(
-    tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, wideGraph: Boolean,
+    tile: TileSpec, label: String, entity: Entity?, link: Link, history: List<GraphPoint>?,
+    loadHistory: suspend (String) -> Unit, modifier: Modifier, wideGraph: Boolean,
 ) {
-    val label = state.label(tile)
-    val entity = state.entity(tile.entity)
     val colors = MaterialTheme.colorScheme
     val trend = tile.kind == TileKind.TREND
-    val points = if (trend) state.graphs[tile.entity].orEmpty() else emptyList()
-    if (trend && state.link == Link.ONLINE) LaunchedEffect(tile.entity) {
+    val points = if (trend) history.orEmpty() else emptyList()
+    if (trend && link == Link.ONLINE) LaunchedEffect(tile.entity, loadHistory) {
         while (isActive) {
-            model.loadGraph(tile.entity)
+            loadHistory(tile.entity)
             delay(60_000)
         }
     }
@@ -69,15 +66,15 @@ internal fun ValueTile(
                 } else {
                     Text(
                         when {
-                            state.link != Link.ONLINE -> "History unavailable"
-                            state.graphs.containsKey(tile.entity) -> "No history"
+                            link != Link.ONLINE -> "History unavailable"
+                            history != null -> "No history"
                             else -> "Loading history…"
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.onSurfaceVariant,
                     )
                 }
-            } else if (state.link == Link.OFFLINE && entity?.available == true) {
+            } else if (link == Link.OFFLINE && entity?.available == true) {
                 TileStatus("Last reported")
             }
         }

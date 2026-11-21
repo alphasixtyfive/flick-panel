@@ -42,6 +42,8 @@ internal class PanelAgenda(private val scope: CoroutineScope) {
     private val requestedAt = mutableMapOf<String, Long>()
     private val reads = Semaphore(3)
 
+    fun cached(id: String): AgendaState? = statesById.value[id]
+
     fun refresh(client: HaClient, tile: TileSpec, force: Boolean) {
         val id = tile.entity
         val now = SystemClock.elapsedRealtime()

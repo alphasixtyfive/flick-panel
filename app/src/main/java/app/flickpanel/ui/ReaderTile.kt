@@ -15,7 +15,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.ArrowOutward
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,7 +54,8 @@ internal fun ReaderTile(label: String, content: ReadingContent?, modifier: Modif
             ) {
                 TileTitle(label, Modifier.weight(1f))
                 if (content != null) {
-                    Icon(Icons.Rounded.ArrowOutward, "Open full screen", Modifier.size(20.dp), tint = colors.onSurfaceVariant)
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Open full screen", Modifier.size(22.dp),
+                        tint = colors.onSurfaceVariant)
                 }
             }
             TileStatus(content?.preview ?: "Text unavailable")

@@ -327,7 +327,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     fun completeTask(id: String, uid: String, completed: Boolean) {
         val active = taskClient(id) ?: return
         if (_ui.value.entities[id]?.canUpdateTasks != true) return
-        val tasks = (agenda.states.value[id]?.content as? AgendaContent.Tasks)?.items ?: return
+        val tasks = (agenda.cached(id)?.content as? AgendaContent.Tasks)?.items ?: return
         if (tasks.none { it.uid == uid && it.completed != completed }) return
         agenda.changeTasks(active, id) { setTaskCompleted(id, uid, completed) }
     }

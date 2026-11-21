@@ -24,31 +24,25 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
-import app.flickpanel.PanelUi
-import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
-import app.flickpanel.ha.Link
 
 @Composable
 internal fun ToggleActionTile(
-    tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
-    live: Entity?, ready: Boolean,
+    tile: TileSpec, label: String, on: Boolean, timer: Entity?, pending: String?, available: Boolean,
+    reduceMotion: Boolean, modifier: Modifier, activate: () -> Unit,
 ) {
-    val label = state.label(tile)
-    val pending = state.pending[tile.entity]
+    val ready = available && pending == null
     val colors = MaterialTheme.colorScheme
-    val on = state.entity(tile.entity)?.state == "on"
     val action = tile.kind == TileKind.ACTION
     val confirming = remember(tile.entity) { mutableStateOf(false) }
-    val timer = tile.statusEntity?.let(state.entities::get)
     val running = timer?.state == "active" || timer?.state == "paused"
     val countdown = if (running) timerReadout(timer) else null
-    val active = state.link == Link.ONLINE && live?.available == true && (if (action) running else on)
+    val active = available && (if (action) running else on)
     val background by animateColorAsState(
         if (active) colors.primaryContainer else colors.surfaceContainer,
-        animationSpec = tween(durationMillis = if (state.config.reduceMotion) 0 else 140),
+        animationSpec = tween(durationMillis = if (reduceMotion) 0 else 140),
         label = "Tile state",
     )
     val text = pending ?: when {
@@ -59,13 +53,7 @@ internal fun ToggleActionTile(
         else -> "Off"
     }
     Surface(onClick = {
-        if (live != null) {
-            when {
-                action && tile.confirmAction -> confirming.value = true
-                action -> model.action(live)
-                else -> model.toggle(live, !on)
-            }
-        }
+        if (action && tile.confirmAction) confirming.value = true else activate()
     }, enabled = ready, modifier = modifier.semantics {
         if (text != null) stateDescription = text
         if (action) {
@@ -82,7 +70,7 @@ internal fun ToggleActionTile(
                 label,
                 when {
                     action -> Icons.Rounded.PlayArrow
-                    live?.domain == "light" || tile.entity.startsWith("light.") -> Icons.Rounded.Lightbulb
+                    tile.entity.startsWith("light.") -> Icons.Rounded.Lightbulb
                     else -> Icons.Rounded.PowerSettingsNew
                 },
                 if (active) colors.onPrimaryContainer else colors.primary,
@@ -93,10 +81,10 @@ internal fun ToggleActionTile(
             }
         }
     }
-    if (confirming.value && live != null) {
+    if (confirming.value) {
         ConfirmTileAction(label, ready, dismiss = { confirming.value = false }) {
             confirming.value = false
-            model.action(live)
+            activate()
         }
     }
 }

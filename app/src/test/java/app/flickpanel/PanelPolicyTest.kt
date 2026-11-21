@@ -22,6 +22,7 @@ import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -245,5 +246,19 @@ class PanelPolicyTest {
         assertEquals("Lounge lamp", current.getValue("light.lamp").name)
         assertFalse(current.getValue("light.lamp").attributes.has("brightness"))
         assertTrue(reduceEntities(current, JSONObject("""{"a":{}}"""), ids, true).isEmpty())
+    }
+
+    @Test fun compactEventsWithOnlyTimestampsOrRepeatedValuesReuseTheSnapshot() {
+        val lamp = Entity("light.kitchen", "on", JSONObject().put("brightness", 128))
+        val power = Entity("sensor.power", "380")
+        val current = mapOf(lamp.id to lamp, power.id to power)
+        val noChange = JSONObject("""{"c":{"light.kitchen":{"+":{"s":"on","a":{"brightness":128},"t":10},
+            "-":{"a":["already_missing"]}},"sensor.power":{"+":{"t":10}}}}""")
+        assertSame(current, reduceEntities(current, noChange, current.keys, initial = false))
+
+        val pruned = reduceEntities(current, noChange, setOf(lamp.id), initial = false)
+        assertEquals(setOf(lamp.id), pruned.keys)
+        assertSame(lamp, pruned[lamp.id])
+        assertEquals(setOf(lamp.id, power.id), current.keys)
     }
 }

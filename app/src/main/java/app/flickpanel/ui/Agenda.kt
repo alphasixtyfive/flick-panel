@@ -3,6 +3,7 @@ package app.flickpanel.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.flickpanel.AgendaState
@@ -13,12 +14,13 @@ import app.flickpanel.ha.Link
 import app.flickpanel.ha.canAddTasks
 import app.flickpanel.ha.canUpdateTasks
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 @Composable
-internal fun AgendaTile(tile: TileSpec, panel: PanelUi, model: PanelViewModel, modifier: Modifier) {
-    val online = panel.link == Link.ONLINE && panel.entities[tile.entity]?.available == true
+internal fun AgendaTile(tile: TileSpec, label: String, online: Boolean, model: PanelViewModel, modifier: Modifier) {
     val state = agendaState(tile.entity, online, model)
-    AgendaPreview(panel.label(tile), tile.kind, state, online, modifier,
+    AgendaPreview(label, tile.kind, state, online, modifier,
         limit = if (tile.wideOnTablet) 2 else 1) { model.openAgenda(tile.entity) }
 }
 
@@ -34,7 +36,8 @@ internal fun OpenAgenda(tile: TileSpec, panel: PanelUi, model: PanelViewModel) {
 
 @Composable
 private fun agendaState(id: String, online: Boolean, model: PanelViewModel): AgendaState {
-    val states by model.agenda.states.collectAsStateWithLifecycle()
+    val updates = remember(model, id) { model.agenda.states.map { it[id] }.distinctUntilChanged() }
+    val state by updates.collectAsStateWithLifecycle(initialValue = model.agenda.cached(id))
     LaunchedEffect(id, online) {
         if (!online) return@LaunchedEffect
         while (true) {
@@ -42,5 +45,5 @@ private fun agendaState(id: String, online: Boolean, model: PanelViewModel): Age
             delay(60_000)
         }
     }
-    return states[id] ?: AgendaState()
+    return state ?: AgendaState()
 }

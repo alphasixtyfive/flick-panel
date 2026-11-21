@@ -31,6 +31,8 @@ import app.flickpanel.ha.coverPosition
 import app.flickpanel.ha.gateToggleAction
 import app.flickpanel.ha.supportsCoverAction
 
+private val coverDirections = listOf(CoverAction.OPEN, CoverAction.CLOSE)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CoverTile(
@@ -43,6 +45,8 @@ internal fun CoverTile(
         GateToggleTile(label, status, online && live?.state == "open", action, modifier, move)
         return
     }
+    val showStop = online && (pending == CoverAction.STOP.progress || live?.canMoveCover(CoverAction.STOP, pending) == true)
+    val actions = if (showStop) listOf(CoverAction.STOP) else coverDirections
 
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(
@@ -52,7 +56,7 @@ internal fun CoverTile(
             TileTitle(label)
             TileStatus(status)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (action in CoverAction.entries) {
+                for (action in actions) {
                     if (entity?.supportsCoverAction(action) != true) continue
                     FilledTonalButton(
                         onClick = { move(action) },

@@ -30,7 +30,7 @@ private val compactCellHeight = 110.dp
 private val shortcutHeight = 64.dp
 
 @Composable
-internal fun TileGrid(
+private fun TileGrid(
     tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int,
     compact: Boolean = false, resizeTiles: Boolean = compact,
 ) {
@@ -89,7 +89,7 @@ internal fun FavouritesTileGrid(
                         TileGrid(apps.take(4), state, model, columns = 2, compact = true)
                     }
                     PanelTile(summary, state, model, Modifier.weight(1f).height(shortcutHeight * 2 + tileGap),
-                        compact = true, wideGraph = true)
+                        wideGraph = true)
                 }
             }
         }
@@ -97,11 +97,11 @@ internal fun FavouritesTileGrid(
     }
 }
 
-private fun LazyListScope.tileRows(
+internal fun LazyListScope.tileRows(
     rows: List<List<TileSpec>>, state: PanelUi, model: PanelViewModel,
-    columns: Int, compact: Boolean, resizeTiles: Boolean,
+    columns: Int, compact: Boolean, resizeTiles: Boolean, keyPrefix: String = "tile:",
 ) {
-    items(rows, key = { it.first().entity }, contentType = { "tiles" }) { row ->
+    items(rows, key = { keyPrefix + it.first().entity }, contentType = { "tiles" }) { row ->
         TileRow(row, state, model, columns, compact, resizeTiles)
     }
 }
@@ -140,7 +140,7 @@ private fun TileRow(
                 else -> if (compact) compactCellHeight else cellHeight
             }
             val modifier = Modifier.heightIn(min = minimum)
-            PanelTile(tile, state, model, modifier, compact)
+            PanelTile(tile, state, model, modifier)
         }
     }) { children, constraints ->
         val width = constraints.maxWidth

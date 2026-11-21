@@ -12,13 +12,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowOutward
@@ -45,6 +47,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -106,22 +111,29 @@ private fun CameraStill(
 
 @Composable
 internal fun CameraTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, widescreen: Boolean = false) {
-    val preview = if (widescreen) modifier.aspectRatio(16f / 9f) else modifier
     val online = state.link == Link.ONLINE && state.entity(tile.entity)?.available != false
-    Surface(onClick = { model.openCamera(tile.entity) }, enabled = online, modifier = preview, shape = panelCardShape,
-        color = MaterialTheme.colorScheme.surfaceContainer) {
+    CameraCard(tile.entity, state.label(tile), online, online && state.camera == null, model, modifier, widescreen)
+}
+
+@Composable
+private fun CameraCard(
+    id: String, label: String, online: Boolean, previewActive: Boolean, model: PanelViewModel,
+    modifier: Modifier, widescreen: Boolean,
+) {
+    val preview = if (widescreen) modifier.aspectRatio(16f / 9f) else modifier
+    Surface(onClick = { model.openCamera(id) }, enabled = online,
+        modifier = preview.semantics { if (online) onClick(label = "Open live camera", action = null) },
+        shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
         Box(Modifier.fillMaxSize()) {
-            CameraStill(tile.entity, model, online && state.camera == null, Modifier.matchParentSize(),
+            CameraStill(id, model, previewActive, Modifier.matchParentSize(),
                 placeholder = if (online) "Camera preview" else "Camera offline")
-            if (!widescreen) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(12.dp)
-                .background(Brush.verticalGradient(listOf(Color(0xff101317), Color.Transparent))))
-            TileTitle(state.label(tile), modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
+            TileTitle(label, modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xdc101317))))
                 .padding(start = tileContentPadding, top = 24.dp, end = tileContentPadding, bottom = 14.dp),
                 color = Color.White)
             Box(Modifier.align(Alignment.TopEnd).padding(12.dp).size(44.dp)
                 .background(Color(0xc0171a1d), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.ArrowOutward, "Open live camera", Modifier.size(compactTileIconSize), tint = Color.White)
+                Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(compactTileIconSize), tint = Color.White)
             }
         }
     }
@@ -211,29 +223,29 @@ internal fun CameraViewer(
                 modifier = Modifier.matchParentSize())
         }
         if (!firstFrame) CameraStill(id, model, true, Modifier.matchParentSize(), blurred = status == "Connecting…")
-        FilledIconButton(onClick = model::closeCamera,
-            modifier = Modifier.align(Alignment.TopEnd).padding(24.dp).size(56.dp), shape = CircleShape,
-            colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xdd1b1e21), contentColor = Color.White)) {
-            Icon(Icons.Rounded.Close, "Close camera")
-        }
-        Surface(Modifier.align(Alignment.BottomStart).padding(24.dp).widthIn(max = 420.dp),
-            color = Color(0xdd171a1d), contentColor = Color.White, shape = panelCardShape) {
-            Column(Modifier.padding(horizontal = 19.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(label ?: "Camera", style = MaterialTheme.typography.titleLarge, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (status == "Live") Box(Modifier.size(8.dp).background(Color(0xff7fe6a8), CircleShape))
-                    Text(status, color = Color(0xffe1e7ed), style = MaterialTheme.typography.bodyMedium)
+        val compactControls = maxWidth < 600.dp || LocalDensity.current.fontScale >= 1.3f
+        Box(Modifier.matchParentSize().windowInsetsPadding(WindowInsets.displayCutout)) {
+            FilledIconButton(onClick = model::closeCamera,
+                modifier = Modifier.align(Alignment.TopEnd).padding(24.dp).size(56.dp), shape = CircleShape,
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xdd1b1e21), contentColor = Color.White)) {
+                Icon(Icons.Rounded.Close, "Close camera")
+            }
+            Surface(Modifier.align(Alignment.BottomStart).padding(24.dp).widthIn(max = 420.dp),
+                color = Color(0xdd171a1d), contentColor = Color.White, shape = panelCardShape) {
+                Column(Modifier.padding(horizontal = 19.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(label ?: "Camera", style = MaterialTheme.typography.titleLarge, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (status == "Live") Box(Modifier.size(8.dp).background(Color(0xff7fe6a8), CircleShape))
+                        Text(status, color = Color(0xffe1e7ed), style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
-        }
-        if (gateId != null) {
-            val gatePosition = if (maxWidth < 600.dp) {
-                Modifier.align(Alignment.TopEnd).padding(top = 96.dp, end = 24.dp)
-            } else {
-                Modifier.align(Alignment.BottomEnd).padding(24.dp)
+            if (gateId != null) {
+                val gatePosition = if (compactControls) Modifier.align(Alignment.TopEnd).padding(top = 96.dp, end = 24.dp)
+                else Modifier.align(Alignment.BottomEnd).padding(24.dp)
+                GateControl(state, gateId, { model.openCameraGate(id) }, gatePosition)
             }
-            GateControl(state, gateId, { model.openCameraGate(id) }, gatePosition)
         }
     }
 }

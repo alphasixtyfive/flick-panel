@@ -4,6 +4,8 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -41,6 +44,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
@@ -48,6 +52,7 @@ import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun FavouriteEditor(
     draft: PanelConfig, state: PanelUi, add: () -> Unit, edit: (TileSpec) -> Unit,
@@ -55,8 +60,7 @@ internal fun FavouriteEditor(
 ) {
     val homeTiles = remember(draft.favourites) { draft.favourites.filter { it.showOnHome } }
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding)) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             FilledTonalButton(onClick = add, enabled = draft.favourites.size < 48, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(Icons.Rounded.Add, null, Modifier.padding(end = 7.dp))
                 Text("Add tile")
@@ -113,6 +117,7 @@ private fun TileOptions(label: String, tile: TileSpec, edit: () -> Unit, resize:
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RoomSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig) -> Unit) {
     var search by remember { mutableStateOf("") }
@@ -124,8 +129,8 @@ internal fun RoomSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig)
             .filter { it.name.contains(search.trim(), ignoreCase = true) }
     }
     Column(Modifier.padding(horizontal = setupPadding, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Rooms on this panel", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Text("Rooms on this panel", style = MaterialTheme.typography.titleMedium)
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = { update(draft.copy(roomIds = null)) }, enabled = draft.roomIds != null) { Text("Show all") }
             TextButton(onClick = { update(draft.copy(roomIds = emptyList())) }, enabled = chosen.isNotEmpty()) { Text("Clear selection") }
         }
@@ -194,11 +199,14 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
                 Surface(shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(horizontal = 5.dp),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = tile != null, onCheckedChange = { inGallery() }, enabled = tile != null || canAdd)
-                        Surface(onClick = inGallery, enabled = tile != null || canAdd,
-                            modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                            Text(name, Modifier.padding(vertical = 15.dp, horizontal = 5.dp),
-                                style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(Modifier.weight(1f).heightIn(min = 58.dp)
+                            .toggleable(tile != null, enabled = tile != null || canAdd, role = Role.Checkbox,
+                                onValueChange = { inGallery() })
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = tile != null, onCheckedChange = null, enabled = tile != null || canAdd)
+                            Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         IconButton(onClick = {
                             val next = draft.favourites.map {

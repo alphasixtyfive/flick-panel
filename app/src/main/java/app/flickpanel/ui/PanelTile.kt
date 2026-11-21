@@ -31,7 +31,7 @@ internal val tileArtworkSize = 36.dp
 
 @Composable
 internal fun PanelTile(
-    tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, compact: Boolean,
+    tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
     wideGraph: Boolean = false,
 ) {
     val label = state.label(tile)
@@ -39,10 +39,16 @@ internal fun PanelTile(
     val live = state.entities[tile.entity]
     val pending = state.pending[tile.entity]
     val online = state.link == Link.ONLINE
-    val ready = online && live?.available == true && pending == null
+    val available = online && live?.available == true
+    val ready = available && pending == null
     when (tile.kind) {
-        TileKind.TOGGLE, TileKind.ACTION ->
-            ToggleActionTile(tile, state, model, modifier, live, ready)
+        TileKind.TOGGLE, TileKind.ACTION -> {
+            val on = entity?.state == "on"
+            ToggleActionTile(tile, label, on, tile.statusEntity?.let(state.entities::get), pending, available,
+                state.config.reduceMotion, modifier) {
+                live?.let { if (tile.kind == TileKind.ACTION) model.action(it) else model.toggle(it, !on) }
+            }
+        }
         TileKind.SLIDER -> BrightnessTile(label, entity, live, pending.takeIf { online }, ready, model, modifier)
         TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier) { increase ->
             model.stepTemperature(tile.entity, increase)
@@ -57,7 +63,7 @@ internal fun PanelTile(
         TileKind.COVER -> CoverTile(label, entity, live, online, pending, modifier) { action ->
             model.controlCover(tile.entity, action)
         }
-        TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, state, model, modifier)
+        TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, label, available, model, modifier)
         TileKind.PERSON -> {
             val photo = rememberPanelImage(live?.personPicture?.takeIf { online },
                 model::cachedPersonAvatar, model::loadPersonAvatar)
@@ -69,7 +75,8 @@ internal fun PanelTile(
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, online && entity?.available == true, model, modifier)
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
         TileKind.TIMER -> TimerTile(label, entity, modifier)
-        TileKind.VALUE, TileKind.TREND -> ValueTile(tile, state, model, modifier, wideGraph)
+        TileKind.VALUE, TileKind.TREND -> ValueTile(tile, label, entity, state.link, state.graphs[tile.entity],
+            model::loadGraph, modifier, wideGraph)
         TileKind.APP -> AppTile(tile, modifier)
         TileKind.CAMERA -> CameraTile(tile, state, model, modifier)
     }

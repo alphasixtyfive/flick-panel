@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowOutward
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,18 +46,18 @@ internal fun PersonTile(
         shape = panelCardShape,
         color = colors.surfaceContainer,
     ) {
-        Column(
+        Row(
             Modifier.fillMaxWidth().padding(tileContentPadding),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PersonAvatar(label, avatar)
-                TileTitle(label, Modifier.weight(1f))
-                if (location != null) Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(19.dp), tint = colors.onSurfaceVariant)
+            PersonAvatar(label, avatar)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                TileTitle(label)
+                val status = person?.personStatus()
+                if (status != null) TileValue(status, maxLines = 2)
+                else TileStatus("Unavailable")
             }
-            val status = person?.personStatus()
-            if (status != null) TileValue(status, maxLines = 2)
-            else TileStatus("Unavailable")
         }
     }
 }
@@ -66,7 +65,7 @@ internal fun PersonTile(
 @Composable
 private fun PersonAvatar(name: String, avatar: ImageBitmap?) {
     val colors = MaterialTheme.colorScheme
-    Surface(Modifier.size(44.dp).clearAndSetSemantics {}, shape = CircleShape,
+    Surface(Modifier.size(56.dp).clearAndSetSemantics {}, shape = CircleShape,
         color = colors.secondaryContainer, contentColor = colors.onSecondaryContainer) {
         if (avatar != null) {
             Image(avatar, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -77,7 +76,7 @@ private fun PersonAvatar(name: String, avatar: ImageBitmap?) {
                     Icon(Icons.Rounded.Person, null, Modifier.size(compactTileIconSize))
                 } else {
                     val type = MaterialTheme.typography.titleMedium
-                    val style = with(LocalDensity.current) { type.copy(fontSize = 19.dp.toSp(), lineHeight = 24.dp.toSp()) }
+                    val style = with(LocalDensity.current) { type.copy(fontSize = 22.dp.toSp(), lineHeight = 28.dp.toSp()) }
                     Text(initials, style = style, maxLines = 1)
                 }
             }
