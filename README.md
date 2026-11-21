@@ -50,16 +50,13 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Appearance** previews Graphite, Charcoal amber, Porcelain, and Android colours.
   Choose **Higher contrast** or **Reduce motion** there.
 - Add a **Weather** entity to put current conditions and temperature next to the clock.
-- Add a **Music player** tile for playback controls. **Browse music** opens the selected
-  player's Home Assistant media library when the player supports browsing and playback.
-  On players that support volume control, swipe across the tile to set volume.
-  Music Assistant playlists and radio stations get their own shelves, with cover art
-  and station logos when available.
 - **Home message** takes a sensor or text helper whose state is the rendered message. Use a
   text source controlled by the existing Home Assistant logic.
-- **Wake on approach** takes an existing binary occupancy sensor. Select a tested radar zone
-  near the tablet. The sensor opens the dashboard from the app's idle clock when the display
-  is on. Android and any existing device-management schedule handle physical wake and sleep.
+- Under **Panel → Home Assistant → Wake on approach**, select an existing binary
+  occupancy sensor for the area in front of the tablet. A new detection takes the idle
+  clock or blank display straight to Favourites. **Wall display** keeps Panel available
+  while idle. This feature wakes Flick Panel's display while the app is in the foreground.
+  For a discrete hand-wave sensor, trigger the `wake` command below from its Home Assistant automation.
 - **Wall display** keeps the foreground panel awake and dims the idle clock, including
   while a managed charger has paused charging. Set the idle timeout to **Never
   automatically** to open the clock only from the dashboard clock.
@@ -78,9 +75,10 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Calendar** previews the next event and opens a seven-day agenda grouped by date.
   It includes all-day and ongoing events. **Wide** lets either tile preview two items.
 - **Music player** shows the current track on the tile. Tap it for artwork,
-  playback, position and volume, with controls based on the player's Home Assistant
-  capabilities. **Browse** opens that player's library and returns to Now Playing
-  when you start something.
+  playback and a track position bar. The speaker button opens volume control.
+  **Browse** opens the selected player's library and returns to Now Playing when
+  you start something. Controls follow the player's Home Assistant capabilities.
+  Music Assistant playlists and radio stations appear with cover art and station logos when available.
 - **Cover** shows the state and position reported by Home Assistant. It offers the
   Open, Close, and Stop actions advertised by the device. A gate uses the whole
   tile as a toggle and shows its current state.

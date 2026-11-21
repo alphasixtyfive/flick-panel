@@ -76,7 +76,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private val musicPages = LruCache<MusicFolder, MusicPage>(16)
     private var foreground = false
     private var securityEpoch = 0
-    private var presence: Boolean? = null
+    private var presence = false
 
     init {
         viewModelScope.launch {
@@ -106,7 +106,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             cancelCommands()
             client?.stop()
             agenda.pause()
-            presence = null
+            presence = false
             relock()
             _ui.update { it.copy(camera = null, musicOpen = null, agendaOpen = null, contentOpen = null,
                 screenBlank = false, pending = emptyMap()) }
@@ -121,13 +121,20 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             delay(_ui.value.config.idleSeconds * 1000L)
             val current = _ui.value
             if (foreground && !current.editor && !current.unlocking && !current.hasViewer &&
-                presence != true) _ui.update { it.copy(clock = true) }
+                !presence) _ui.update { it.copy(clock = true) }
         }
     }
 
     fun wake() {
-        _ui.update { it.copy(clock = false, screenBlank = false) }
-        selectPage(Page.FAVOURITES)
+        showAwakeDisplay(_ui.value.wakeDisplay())
+    }
+
+    private fun showAwakeDisplay(next: PanelUi) {
+        if (next === _ui.value) return
+        approachJob?.cancel()
+        _ui.value = next
+        updateSelection()
+        touch()
     }
 
     fun showIdleScreen() {
@@ -256,7 +263,12 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             _ui.update { it.copy(busy = true, error = null) }
             safely {
                 withContext(Dispatchers.IO) { store.save(config) }
+                if (_ui.value.config.presenceEntity != config.presenceEntity) {
+                    approachJob?.cancel()
+                    presence = false
+                }
                 _ui.update { it.copy(layout = it.layout.copy(config = config)) }
+                updatePresence(_ui.value.entities)
                 updateSelection()
                 relock()
             }
@@ -579,7 +591,8 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         images.close()
         images = PanelImages(viewModelScope, lowImageMemory)
         musicPages.evictAll()
-        presence = null
+        approachJob?.cancel()
+        presence = false
         _ui.update { it.copy(
             entities = emptyMap(), layout = RoomLayout(it.config), graphs = emptyMap(),
             pending = emptyMap(), link = Link.CONNECTING, serverAddress = credentials.server.toString(),
@@ -593,10 +606,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         linkJob = viewModelScope.launch {
             active.link.collect { state ->
                 _ui.update { it.copy(link = state) }
-                if (state == Link.OFFLINE || state == Link.AUTH_REJECTED) {
-                    approachJob?.cancel()
-                    if (presence == true) { presence = null; touch() }
-                }
+                updatePresence(active.entities.value)
                 val current = _ui.value
                 if (state == Link.ONLINE && current.catalogue.entries.isEmpty() &&
                     (current.editor || current.page == Page.ROOMS || current.config.roomIds?.isNotEmpty() == true)
@@ -605,20 +615,8 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
         stateJob = viewModelScope.launch {
             active.entities.collect { states ->
-                val current = _ui.value
-                val nextPresence = current.config.presenceEntity?.let(states::get)
-                    ?.takeIf(Entity::available)?.state?.let { it == "on" }
                 _ui.update { it.copy(entities = states) }
-                val before = presence
-                presence = nextPresence
-                if (foreground && nextPresence == true && before != true && current.clock) {
-                    approachJob?.cancel()
-                    approachJob = viewModelScope.launch {
-                        delay(700)
-                        if (foreground && presence == true && _ui.value.clock && _ui.value.link == Link.ONLINE) wake()
-                    }
-                }
-                if (before == true && nextPresence != true) touch()
+                updatePresence(states)
             }
         }
         remoteJob = viewModelScope.launch {
@@ -634,17 +632,36 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (foreground) active.start()
     }
 
+    private fun updatePresence(entities: Map<String, Entity>) {
+        val current = _ui.value
+        val sensor = current.config.presenceEntity
+        val before = presence
+        presence = current.link == Link.ONLINE && sensor != null && entities[sensor]?.state == "on"
+        if (!presence) {
+            approachJob?.cancel()
+            if (before) touch()
+            return
+        }
+        if (sensor == null || before || !foreground || !current.canWakeFromIdle) return
+        approachJob = viewModelScope.launch {
+            delay(400)
+            approachJob = null
+            if (foreground) showAwakeDisplay(_ui.value.approachWake(sensor))
+        }
+    }
+
     private fun applyRemoteCommand(command: PanelCommand) {
         if (!foreground) return
         val current = _ui.value
         val next = current.remoteCommand(command, SystemClock.elapsedRealtime())
         if (next === current) return
+        if (command == PanelCommand.Wake) {
+            showAwakeDisplay(next)
+            return
+        }
+        approachJob?.cancel()
         idleJob?.cancel()
         _ui.value = next
-        if (command == PanelCommand.Wake) {
-            updateSelection()
-            touch()
-        }
     }
 
     private fun updateSelection() {

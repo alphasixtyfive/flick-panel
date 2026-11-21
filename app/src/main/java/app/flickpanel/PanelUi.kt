@@ -42,9 +42,18 @@ internal data class PanelUi(
     val catalogue get() = layout.catalogue
     val roomSections get() = layout.sections
     val hasViewer get() = camera != null || musicOpen != null || agendaOpen != null || contentOpen != null
+    val canWakeFromIdle get() = configured && (clock || screenBlank) && !editor && !unlocking && !hasViewer
 
     fun entity(id: String) = entities[id] ?: catalogue.entity(id)
     fun label(spec: TileSpec) = spec.label ?: entity(spec.entity)?.name ?: spec.entity.substringAfter('.').replace('_', ' ')
+
+    fun wakeDisplay(): PanelUi =
+        if (canWakeFromIdle) copy(clock = false, screenBlank = false, page = Page.FAVOURITES) else this
+
+    fun approachWake(sensorId: String): PanelUi {
+        if (link != Link.ONLINE || config.presenceEntity != sensorId || entities[sensorId]?.state != "on") return this
+        return wakeDisplay()
+    }
 
     fun showCamera(id: String, openedAt: Long): PanelUi {
         if (camera == id || config.favourites.none { it.entity == id && it.kind == TileKind.CAMERA }) return this
@@ -55,7 +64,7 @@ internal data class PanelUi(
     fun remoteCommand(command: PanelCommand, openedAt: Long): PanelUi {
         if (!configured || link != Link.ONLINE || remoteName == null || editor || unlocking) return this
         return when (command) {
-            PanelCommand.Wake -> if (screenBlank || clock) copy(screenBlank = false, clock = false, page = Page.FAVOURITES) else this
+            PanelCommand.Wake -> wakeDisplay()
             PanelCommand.Sleep -> if (screenBlank) this else copy(
                 screenBlank = true, clock = false, camera = null, musicOpen = null, agendaOpen = null, contentOpen = null,
             )

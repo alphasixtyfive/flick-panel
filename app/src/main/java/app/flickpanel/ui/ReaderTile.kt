@@ -15,7 +15,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,7 +41,9 @@ internal fun ReaderTile(label: String, content: ReadingContent?, modifier: Modif
     Surface(
         onClick = open,
         enabled = content != null,
-        modifier = modifier.heightIn(min = 48.dp),
+        modifier = modifier.heightIn(min = 48.dp).semantics {
+            if (content != null) onClick(label = "Read $label", action = null)
+        },
         shape = panelCardShape,
         color = colors.surfaceContainer,
     ) {
@@ -52,11 +55,8 @@ internal fun ReaderTile(label: String, content: ReadingContent?, modifier: Modif
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                Icon(Icons.AutoMirrored.Rounded.Article, null, Modifier.size(compactTileIconSize), tint = colors.primary)
                 TileTitle(label, Modifier.weight(1f))
-                if (content != null) {
-                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, "Open full screen", Modifier.size(22.dp),
-                        tint = colors.onSurfaceVariant)
-                }
             }
             TileStatus(content?.preview ?: "Text unavailable")
         }
