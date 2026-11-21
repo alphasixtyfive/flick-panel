@@ -155,7 +155,8 @@ Assistant action to operate devices such as lights and gates.
 A linked tablet publishes battery level, charging status, charger connection,
 battery temperature, display mode, and ambient light when the tablet has a light
 sensor. The charger sensor reports the power source. The display sensor reports
-the selected tab, brightness override and effective Wall display setting. Android
+the selected tab, brightness override and effective Wall display setting. The battery
+level sensor includes Android's battery health status and voltage when available. Android
 collects these readings while the linked panel is active. Home Assistant can disable
 individual sensors.
 

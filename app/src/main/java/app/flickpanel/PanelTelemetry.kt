@@ -123,7 +123,7 @@ private fun Intent.batterySensors(): List<PanelSensorReading> = buildList {
     val level = getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
     val scale = getIntExtra(BatteryManager.EXTRA_SCALE, 0)
     if (scale > 0 && level in 0..scale) {
-        add(PanelSensorReading(PanelSensor.BATTERY, (level * 100f / scale).roundToInt()))
+        add(PanelSensorReading(PanelSensor.BATTERY, (level * 100f / scale).roundToInt(), batteryDetails()))
     }
     val status = getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
     if (status != BatteryManager.BATTERY_STATUS_UNKNOWN) {
@@ -143,4 +143,19 @@ private fun Intent.batterySensors(): List<PanelSensorReading> = buildList {
     }
     val temperature = getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
     if (temperature in -400..1000) add(PanelSensorReading(PanelSensor.TEMPERATURE, temperature / 10.0))
+}
+
+private fun Intent.batteryDetails(): Map<String, Any> = buildMap {
+    val health = when (getIntExtra(BatteryManager.EXTRA_HEALTH, BatteryManager.BATTERY_HEALTH_UNKNOWN)) {
+        BatteryManager.BATTERY_HEALTH_GOOD -> "good"
+        BatteryManager.BATTERY_HEALTH_OVERHEAT -> "overheat"
+        BatteryManager.BATTERY_HEALTH_DEAD -> "dead"
+        BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "over_voltage"
+        BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE -> "failure"
+        BatteryManager.BATTERY_HEALTH_COLD -> "cold"
+        else -> null
+    }
+    if (health != null) put("health", health)
+    val millivolts = getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0)
+    if (millivolts > 0) put("voltage_v", (millivolts / 100f).roundToInt() / 10.0)
 }
