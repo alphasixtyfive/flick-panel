@@ -3,7 +3,6 @@ package app.flickpanel
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
-import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.PanelCommand
 import org.junit.Assert.assertEquals
@@ -85,14 +84,10 @@ class PanelRemotePolicyTest {
     }
 
     @Test
-    fun approachWakesEitherIdleDisplayToFavouritesWithoutRemoteLink() {
-        val sensor = "binary_sensor.near_panel"
-        val panel = linked.copy(
-            remoteName = null, page = Page.ROOMS, layout = RoomLayout(PanelConfig(presenceEntity = sensor)),
-            entities = mapOf(sensor to Entity(sensor, "on")),
-        )
+    fun localWakeReturnsEitherIdleDisplayToFavouritesWhileOffline() {
+        val panel = linked.copy(remoteName = null, link = Link.OFFLINE, page = Page.ROOMS)
         for (idle in listOf(panel.copy(clock = true), panel.copy(screenBlank = true))) {
-            val awake = idle.approachWake(sensor)
+            val awake = idle.wakeDisplay()
             assertFalse(awake.clock)
             assertFalse(awake.screenBlank)
             assertEquals(Page.FAVOURITES, awake.page)
@@ -100,19 +95,11 @@ class PanelRemotePolicyTest {
     }
 
     @Test
-    fun approachRequiresActiveConfiguredSensorAndAnIdleDashboard() {
-        val sensor = "binary_sensor.near_panel"
-        val panel = linked.copy(
-            page = Page.ROOMS, layout = RoomLayout(PanelConfig(presenceEntity = sensor)),
-            entities = mapOf(sensor to Entity(sensor, "on")),
-        )
-        val idle = panel.copy(clock = true)
-        assertSame(idle, idle.approachWake("binary_sensor.other_zone"))
-        for (state in listOf(panel, idle.copy(editor = true), idle.copy(unlocking = true),
-            idle.copy(link = Link.OFFLINE), idle.copy(entities = mapOf(sensor to Entity(sensor, "off"))),
-            idle.copy(entities = mapOf(sensor to Entity(sensor, "unavailable"))),
-        )) {
-            assertSame(state, state.approachWake(sensor))
-        }
+    fun automationCanWakeTheClockToFavourites() {
+        val clock = linked.copy(page = Page.ROOMS, clock = true)
+        val awake = clock.remoteCommand(PanelCommand.Wake, openedAt = 100)
+
+        assertFalse(awake.clock)
+        assertEquals(Page.FAVOURITES, awake.page)
     }
 }

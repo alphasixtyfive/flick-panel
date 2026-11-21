@@ -136,13 +136,12 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                         }
                     }
                 }
-                SetupPicker.MESSAGE, SetupPicker.PRESENCE, SetupPicker.BADGE -> EntityPicker(
+                SetupPicker.MESSAGE, SetupPicker.BADGE -> EntityPicker(
                     source, draft, state, search, { search = it }, model::loadCatalogue,
                 ) { entity ->
                     backToPrevious()
                     when (source) {
                         SetupPicker.MESSAGE -> draft = draft.copy(messageEntity = entity.id)
-                        SetupPicker.PRESENCE -> draft = draft.copy(presenceEntity = entity.id)
                         else -> {
                             val states = if (entity.domain == "sensor") emptyList() else listOf("on")
                             navigateTo(SetupDestination.Badge(HomeBadge(entity.id, null, states)))
@@ -225,7 +224,6 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                             change = { draft = it },
                             choosePhotos = { choosingPhotos = true },
                             chooseMessage = { choose(SetupPicker.MESSAGE) },
-                            choosePresence = { choose(SetupPicker.PRESENCE) },
                             chooseBadge = { choose(SetupPicker.BADGE) },
                             editBadge = { navigateTo(SetupDestination.Badge(it)) },
                             changeConnection = model::changeConnection,

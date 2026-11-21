@@ -46,7 +46,6 @@ class PanelPolicyTest {
             ),
             theme = PanelTheme.AMBER,
             messageEntity = "input_text.panel_notice",
-            presenceEntity = "binary_sensor.near_panel",
             idleSeconds = 120, wallMode = false,
             idleAlbum = PhotoFolder("media-source://synology_dsm/nas/album", "TV Gallery")
         )
@@ -62,11 +61,20 @@ class PanelPolicyTest {
           {"entity":"sensor.temperature","kind":"TREND"},
           {"entity":"../x","kind":"VALUE"},
           {"entity":"light.lamp","kind":"unknown"}],
-          "presence":"switch.lights","theme":"unsupported"}""")
+          "theme":"unsupported"}""")
         assertEquals(listOf(TileSpec("sensor.temperature", TileKind.VALUE)), parsed.favourites)
         assertEquals(900, parsed.idleSeconds)
         assertEquals(PanelTheme.SLATE, parsed.theme)
-        assertNull(parsed.presenceEntity)
+    }
+
+    @Test fun configurationIgnoresTheRetiredWakeSetting() {
+        val config = PanelConfig(messageEntity = "input_text.panel_notice")
+        val saved = JSONObject(PanelConfigCodec.encode(config))
+            .put("presence", "binary_sensor.near_panel").toString()
+        val restored = PanelConfigCodec.decode(saved)
+
+        assertEquals(config, restored)
+        assertFalse(JSONObject(PanelConfigCodec.encode(restored)).has("presence"))
     }
 
     @Test fun configurationKeepsEverySavedCameraAndRoom() {

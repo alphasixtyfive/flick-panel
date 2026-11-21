@@ -43,7 +43,6 @@ internal data class PanelConfig(
     val favourites: List<TileSpec> = emptyList(),
     val theme: PanelTheme = PanelTheme.SLATE,
     val messageEntity: String? = null,
-    val presenceEntity: String? = null,
     val idleSeconds: Int = 60,
     val wallMode: Boolean = true,
     val roomIds: List<String>? = null,

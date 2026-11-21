@@ -83,7 +83,7 @@ import app.flickpanel.ha.Link
 import app.flickpanel.ha.readerAttributes
 
 internal enum class SetupPicker(val title: String) {
-    TILE("Add tile"), APP("Add tile"), MESSAGE("Choose a message"), PRESENCE("Choose a presence sensor"),
+    TILE("Add tile"), APP("Add tile"), MESSAGE("Choose a message"),
     BADGE("Choose a warning sensor"),
 }
 
@@ -119,7 +119,6 @@ internal fun EntityPicker(
                 (entry.visible || entry.entity.available && entry.entity.domain in setOf("todo", "calendar"))
             SetupPicker.APP -> false
             SetupPicker.MESSAGE -> entry.visible && entry.entity.domain in setOf("sensor", "input_text")
-            SetupPicker.PRESENCE -> entry.visible && entry.entity.domain == "binary_sensor"
             SetupPicker.BADGE -> entry.entity.id !in badges && validBadgeSource(entry.entity.id)
         } }.map { entry ->
             val entity = entry.entity

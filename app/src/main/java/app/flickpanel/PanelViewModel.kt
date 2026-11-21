@@ -69,7 +69,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var idleJob: Job? = null
     private var idleDeadline = 0L
     private var editorTimer: Job? = null
-    private var approachJob: Job? = null
     private val commands = DeviceCommandQueue(viewModelScope, _ui, { client.takeIf { foreground } }, ::reportFailure)
     private val graphTimes = mutableMapOf<String, Long>()
     private val graphRequests = mutableSetOf<String>()
@@ -82,7 +81,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var foreground = false
     private var roomControlsRequested = false
     private var securityEpoch = 0
-    private var presence = false
     private var pendingBackup: Pair<PanelBackupAction, PanelConfig>? = null
 
     init {
@@ -111,11 +109,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         } else {
             cancelIdle()
             cancelCatalogueLoad()
-            approachJob?.cancel()
             commands.cancel()
             client?.stop()
             agenda.pause()
-            presence = false
             relock()
             _ui.update { it.copy(viewer = null, screenBlank = false) }
         }
@@ -123,7 +119,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun touch() {
         val current = _ui.value
-        if (!foreground || !current.showingDashboard || presence || current.config.idleSeconds == 0) return
+        if (!foreground || !current.showingDashboard || current.config.idleSeconds == 0) return
         idleDeadline = SystemClock.elapsedRealtime() + current.config.idleSeconds * 1_000L
         if (idleJob?.isActive == true) return
         idleJob = viewModelScope.launch {
@@ -133,7 +129,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
                 delay(remaining)
             }
             idleJob = null
-            if (foreground && _ui.value.showingDashboard && !presence) {
+            if (foreground && _ui.value.showingDashboard) {
                 _ui.update { it.copy(clock = true) }
             }
         }
@@ -145,12 +141,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun wake() {
-        showAwakeDisplay(_ui.value.wakeDisplay())
-    }
-
-    private fun showAwakeDisplay(next: PanelUi) {
-        if (next === _ui.value) return
-        approachJob?.cancel()
+        val current = _ui.value
+        val next = current.wakeDisplay()
+        if (next === current) return
         _ui.value = next
         touch()
     }
@@ -314,12 +307,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     private suspend fun saveLayout(config: PanelConfig) {
         withContext(Dispatchers.IO) { store.save(config) }
-        if (_ui.value.config.presenceEntity != config.presenceEntity) {
-            approachJob?.cancel()
-            presence = false
-        }
         _ui.update { it.copy(layout = it.layout.copy(config = config)) }
-        updatePresence(_ui.value.entities)
         updateSelection()
     }
 
@@ -649,8 +637,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         images.close()
         images = PanelImages(viewModelScope, lowImageMemory)
         musicPages.evictAll()
-        approachJob?.cancel()
-        presence = false
         roomControlsRequested = _ui.value.page == Page.ROOMS
         _ui.update { it.copy(
             entities = emptyMap(), layout = RoomLayout(it.config), graphs = emptyMap(),
@@ -667,7 +653,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         linkJob = viewModelScope.launch {
             active.link.collect { state ->
                 _ui.update { it.copy(link = state) }
-                updatePresence(active.entities.value)
                 val current = _ui.value
                 if (state == Link.ONLINE && current.catalogue.entries.isEmpty() &&
                     (current.editor || current.page == Page.ROOMS || current.config.roomIds?.isNotEmpty() == true)
@@ -678,7 +663,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             active.entities.collect { states ->
                 val current = _ui.value
                 _ui.update { it.copy(entities = states) }
-                updatePresence(states)
                 val list = current.agendaOpen?.takeIf { it.startsWith("todo.") }
                 if (list != null && current.entities[list]?.state != states[list]?.state) loadAgenda(list, force = true)
             }
@@ -706,26 +690,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    private fun updatePresence(entities: Map<String, Entity>) {
-        val current = _ui.value
-        val sensor = current.config.presenceEntity
-        val before = presence
-        presence = current.link == Link.ONLINE && sensor != null && entities[sensor]?.state == "on"
-        if (!presence) {
-            approachJob?.cancel()
-            if (before) touch()
-            return
-        }
-        if (before) return
-        cancelIdle()
-        if (sensor == null || !foreground || !current.canWakeFromIdle) return
-        approachJob = viewModelScope.launch {
-            delay(400)
-            approachJob = null
-            if (foreground) showAwakeDisplay(_ui.value.approachWake(sensor))
-        }
-    }
-
     private fun applyRemoteCommand(command: PanelCommand) {
         if (!foreground) return
         val current = _ui.value
@@ -740,7 +704,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (next == current) return
         _ui.value = next
         if (command is PanelCommand.SetBrightness || command is PanelCommand.KeepAwake) return
-        approachJob?.cancel()
         if (next.page == Page.ROOMS && !next.hasViewer && !next.clock && !next.screenBlank) showRoomControls()
         if (next.showingDashboard) touch() else cancelIdle()
     }
@@ -766,7 +729,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (current.config.roomIds?.isNotEmpty() == true || roomControlsRequested) {
             current.roomSections.forEach { section -> section.tiles.mapTo(ids) { it.entity } }
         }
-        current.config.presenceEntity?.let(ids::add)
         current.config.messageEntity?.let(ids::add)
         current.config.homeBadges.mapTo(ids) { it.entity }
         client?.select(ids)

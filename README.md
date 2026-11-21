@@ -55,11 +55,6 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - Add a **Weather** entity to put current conditions and temperature next to the clock.
 - **Home message** takes a sensor or text helper whose state is the rendered message. Use a
   text source controlled by the existing Home Assistant logic.
-- Under **Panel → Home Assistant → Wake on approach**, select an existing binary
-  occupancy sensor for the area in front of the tablet. A new detection takes the idle
-  clock or blank display straight to Favourites. **Wall display** keeps Panel available
-  while idle. This feature wakes Flick Panel's display while the app is in the foreground.
-  For a discrete hand-wave sensor, trigger the `wake` command below from its Home Assistant automation.
 - **Wall display** keeps the foreground panel awake and dims the idle clock, including
   while a managed charger has paused charging. Set the idle timeout to **Never
   automatically** to open the clock only from the dashboard clock.
@@ -138,6 +133,8 @@ Select the tablet to wake or blank its display, start or stop its screensaver,
 set brightness, open a dashboard tab, open a saved camera or tile, close the
 current viewer, or launch an app. Leave the brightness field empty to clear the
 override.
+To wake the panel from a sensor, use **Flick Panel: Wake display** in a Home
+Assistant automation.
 Camera and tile actions use entities saved in Favourites. Existing automations
 can also use the Mobile App notify service with the commands below.
 

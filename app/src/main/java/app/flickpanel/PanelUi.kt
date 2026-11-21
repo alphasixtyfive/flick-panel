@@ -59,17 +59,13 @@ internal data class PanelUi(
     val contentOpen get() = (viewer as? PanelViewer.Content)?.id
     val hasViewer get() = viewer != null
     val showingDashboard get() = configured && !clock && !screenBlank && !editor && !unlocking && !hasViewer
-    val canWakeFromIdle get() = configured && (clock || screenBlank) && !editor && !unlocking && !hasViewer
 
     fun entity(id: String) = entities[id] ?: catalogue.entity(id)
     fun label(spec: TileSpec) = spec.label ?: entity(spec.entity)?.name ?: spec.entity.substringAfter('.').replace('_', ' ')
 
-    fun wakeDisplay(): PanelUi =
-        if (canWakeFromIdle) copy(clock = false, screenBlank = false, page = Page.FAVOURITES) else this
-
-    fun approachWake(sensorId: String): PanelUi {
-        if (link != Link.ONLINE || config.presenceEntity != sensorId || entities[sensorId]?.state != "on") return this
-        return wakeDisplay()
+    fun wakeDisplay(): PanelUi {
+        if (!configured || (!clock && !screenBlank) || editor || unlocking || hasViewer) return this
+        return copy(clock = false, screenBlank = false, page = Page.FAVOURITES)
     }
 
     fun showCamera(id: String, openedAt: Long): PanelUi {

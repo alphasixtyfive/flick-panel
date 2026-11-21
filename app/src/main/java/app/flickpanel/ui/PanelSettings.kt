@@ -73,7 +73,7 @@ internal enum class PanelPage(val label: String, val readOnly: Boolean = false) 
 @Composable
 internal fun PanelSettings(
     page: PanelPage?, draft: PanelConfig, state: PanelUi, open: (PanelPage) -> Unit, change: (PanelConfig) -> Unit,
-    choosePhotos: () -> Unit, chooseMessage: () -> Unit, choosePresence: () -> Unit, changeConnection: () -> Unit,
+    choosePhotos: () -> Unit, chooseMessage: () -> Unit, changeConnection: () -> Unit,
     linkPanel: (String) -> Unit, unlinkPanel: () -> Unit,
     chooseBadge: () -> Unit, editBadge: (HomeBadge) -> Unit,
     backup: (PanelBackupAction) -> Unit,
@@ -148,8 +148,6 @@ internal fun PanelSettings(
                         clear = draft.messageEntity?.let { { change(draft.copy(messageEntity = null)) } })
                     SettingLink(PanelPage.HOME_BADGES.label, if (draft.homeBadges.isEmpty()) "Show active alerts on Home" else null,
                         { open(PanelPage.HOME_BADGES) })
-                    SettingLink("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", choosePresence,
-                        clear = draft.presenceEntity?.let { { change(draft.copy(presenceEntity = null)) } })
                 }
             }
             PanelPage.REMOTE_CONTROL -> PanelLinkSettings(state, linkPanel, unlinkPanel)

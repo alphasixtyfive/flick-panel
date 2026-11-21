@@ -30,7 +30,6 @@ internal object PanelConfigCodec {
                     .put("states", JSONArray(badge.activeStates))
             })
         })
-        .put("presence", config.presenceEntity)
         .put("idle", config.idleSeconds)
         .put("wall", config.wallMode)
         .put("highContrast", config.highContrast)
@@ -83,7 +82,6 @@ internal object PanelConfigCodec {
             theme = PanelTheme.entries.firstOrNull { it.name == obj.optString("theme") } ?: PanelTheme.SLATE,
             messageEntity = obj.text("message")?.takeIf(::validEntity),
             homeBadges = decodeBadges(obj.optJSONArray("homeBadges")),
-            presenceEntity = obj.text("presence")?.takeIf { validEntity(it) && it.startsWith("binary_sensor.") },
             idleSeconds = obj.optInt("idle", 60).let { if (it == 0) 0 else it.coerceIn(15, 900) },
             wallMode = obj.optBoolean("wall", true),
             highContrast = obj.optBoolean("highContrast"),
