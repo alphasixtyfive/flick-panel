@@ -23,6 +23,8 @@ internal data class PanelUi(
     val page: Page = Page.FAVOURITES,
     val clock: Boolean = false,
     val screenBlank: Boolean = false,
+    val brightnessPercent: Int? = null,
+    val keepAwakeOverride: Boolean? = null,
     val camera: String? = null,
     val cameraOpenedAt: Long = 0,
     val musicOpen: String? = null,
@@ -41,6 +43,7 @@ internal data class PanelUi(
     val config get() = layout.config
     val catalogue get() = layout.catalogue
     val roomSections get() = layout.sections
+    val keepsDisplayAwake get() = keepAwakeOverride ?: config.wallMode
     val hasViewer get() = camera != null || musicOpen != null || agendaOpen != null || contentOpen != null
     val canWakeFromIdle get() = configured && (clock || screenBlank) && !editor && !unlocking && !hasViewer
 
@@ -57,18 +60,36 @@ internal data class PanelUi(
 
     fun showCamera(id: String, openedAt: Long): PanelUi {
         if (camera == id || config.favourites.none { it.entity == id && it.kind == TileKind.CAMERA }) return this
-        return copy(camera = id, cameraOpenedAt = openedAt, screenBlank = false, clock = false, musicOpen = null,
-            agendaOpen = null, contentOpen = null)
+        return closeViewer().copy(camera = id, cameraOpenedAt = openedAt, screenBlank = false, clock = false)
+    }
+
+    private fun closeViewer(): PanelUi = if (hasViewer) {
+        copy(camera = null, cameraOpenedAt = 0L, musicOpen = null, agendaOpen = null, contentOpen = null)
+    } else this
+
+    private fun openTile(id: String, openedAt: Long): PanelUi {
+        val kind = config.favourites.firstOrNull { it.entity == id }?.kind ?: return this
+        return when {
+            kind == TileKind.CAMERA -> showCamera(id, openedAt)
+            kind == TileKind.MEDIA -> closeViewer().copy(clock = false, screenBlank = false, musicOpen = id)
+            kind.isAgenda -> closeViewer().copy(clock = false, screenBlank = false, agendaOpen = id)
+            kind.hasContentScreen -> closeViewer().copy(clock = false, screenBlank = false, contentOpen = id)
+            else -> this
+        }
     }
 
     fun remoteCommand(command: PanelCommand, openedAt: Long): PanelUi {
         if (!configured || link != Link.ONLINE || remoteName == null || editor || unlocking) return this
         return when (command) {
             PanelCommand.Wake -> wakeDisplay()
-            PanelCommand.Sleep -> if (screenBlank) this else copy(
-                screenBlank = true, clock = false, camera = null, musicOpen = null, agendaOpen = null, contentOpen = null,
-            )
+            PanelCommand.Sleep -> if (screenBlank) this else closeViewer().copy(screenBlank = true, clock = false)
+            PanelCommand.ShowClock -> if (clock) this else closeViewer().copy(screenBlank = false, clock = true)
+            PanelCommand.CloseViewer -> closeViewer()
+            is PanelCommand.ShowPage -> closeViewer().copy(page = command.page, screenBlank = false, clock = false)
+            is PanelCommand.SetBrightness -> copy(brightnessPercent = command.percent)
+            is PanelCommand.KeepAwake -> copy(keepAwakeOverride = command.enabled)
             is PanelCommand.OpenCamera -> showCamera(command.entityId, openedAt)
+            is PanelCommand.OpenTile -> openTile(command.entityId, openedAt)
         }
     }
 

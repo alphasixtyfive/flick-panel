@@ -47,6 +47,31 @@ class PanelRemotePolicyTest {
     }
 
     @Test
+    fun scopedRemoteViewsNeverRunActionsOrTouchSavedSettings() {
+        val list = TileSpec("todo.shopping_list", TileKind.TASKS)
+        val lights = TileSpec("light.kitchen", TileKind.TOGGLE)
+        val panel = linked.copy(layout = RoomLayout(PanelConfig(favourites = listOf(list, lights))))
+        val asleep = panel.remoteCommand(PanelCommand.Sleep, 0)
+        assertSame(asleep, asleep.remoteCommand(PanelCommand.OpenTile(lights.entity), 1))
+        val agenda = asleep.remoteCommand(PanelCommand.OpenTile(list.entity), 2)
+        assertFalse(agenda.screenBlank)
+        assertEquals(list.entity, agenda.agendaOpen)
+        val clock = agenda.remoteCommand(PanelCommand.ShowClock, 3)
+        assertTrue(clock.clock)
+        assertNull(clock.agendaOpen)
+        val rooms = clock.remoteCommand(PanelCommand.ShowPage(Page.ROOMS), 4)
+        assertFalse(rooms.clock)
+        assertEquals(Page.ROOMS, rooms.page)
+        val overridden = rooms.remoteCommand(PanelCommand.SetBrightness(60), 5)
+            .remoteCommand(PanelCommand.KeepAwake(!panel.config.wallMode), 6)
+        assertEquals(60, overridden.brightnessPercent)
+        assertEquals(!panel.config.wallMode, overridden.keepsDisplayAwake)
+        assertEquals(panel.config, overridden.config)
+        assertEquals(panel.config.wallMode, overridden.remoteCommand(PanelCommand.KeepAwake(null), 7).keepsDisplayAwake)
+        assertNull(overridden.remoteCommand(PanelCommand.SetBrightness(null), 8).brightnessPercent)
+    }
+
+    @Test
     fun approachWakesEitherIdleDisplayToFavouritesWithoutRemoteLink() {
         val sensor = "binary_sensor.near_panel"
         val panel = linked.copy(

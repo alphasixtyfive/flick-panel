@@ -6,6 +6,8 @@ import app.flickpanel.ha.Link
 import app.flickpanel.ha.PanelCommand
 import app.flickpanel.ha.PanelRegistration
 import app.flickpanel.ha.PanelRemoteState
+import app.flickpanel.ha.PanelSensor
+import app.flickpanel.ha.PanelSensorReading
 import app.flickpanel.ha.parsePanelCommand
 import app.flickpanel.ha.parseServer
 import kotlinx.coroutines.CompletableDeferred
@@ -98,6 +100,54 @@ class HaPanelRemoteTest {
             } finally {
                 client.stop()
             }
+        }
+    }
+
+    @Test fun validatesDisplayCommandsAndRejectsMalformedArguments() {
+        fun parse(data: String) = parsePanelCommand(JSONObject("""{"message":"command_flick_panel","data":$data}"""))
+        assertEquals(PanelCommand.ShowClock, parse("""{"command":"show_clock"}"""))
+        assertEquals(PanelCommand.CloseViewer, parse("""{"command":"close_viewer"}"""))
+        assertEquals(PanelCommand.ShowPage(Page.ROOMS), parse("""{"command":"show_page","page":"rooms"}"""))
+        assertEquals(PanelCommand.SetBrightness(40), parse("""{"command":"set_brightness","level":40}"""))
+        assertEquals(PanelCommand.SetBrightness(null), parse("""{"command":"set_brightness","level":"auto"}"""))
+        assertEquals(PanelCommand.KeepAwake(false), parse("""{"command":"keep_awake","enabled":false}"""))
+        assertEquals(PanelCommand.OpenTile("todo.shopping_list"), parse("""{"command":"open_tile","entity_id":"todo.shopping_list"}"""))
+        for (data in listOf(
+            """{"command":"show_page","page":"settings"}""",
+            """{"command":"set_brightness","level":0}""",
+            """{"command":"set_brightness","level":101}""",
+            """{"command":"set_brightness","level":50.5}""",
+            """{"command":"set_brightness","level":"50"}""",
+            """{"command":"keep_awake","enabled":"false"}""",
+            """{"command":"open_tile","entity_id":"app:com.example.app"}""",
+        )) assertNull(parse(data))
+    }
+
+    @Test fun sensorUpdatesRegisterOnlyMissingEntitiesOnTheLinkedWebhook() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{
+                "battery_level":{"success":false,"error":{"code":"not_registered"}},
+                "charger_connected":{"success":true,"is_disabled":true}
+            }"""))
+            server.enqueue(MockResponse().setResponseCode(201).setBody("""{"success":true}"""))
+            val address = parseServer(server.url("/ha/").newBuilder().host("127.0.0.1").build().toString())
+            val client = HaClient(HaCredentials(address, "test-access-token"), this)
+            client.publishPanelSensors("test-private-webhook", listOf(
+                PanelSensorReading(PanelSensor.BATTERY, 61),
+                PanelSensorReading(PanelSensor.PLUGGED, true),
+            ))
+            val batch = server.takeRequest()
+            assertEquals("/ha/api/webhook/test-private-webhook", batch.path)
+            assertNull(batch.getHeader("Authorization"))
+            val update = JSONObject(batch.body.readUtf8())
+            assertEquals("update_sensor_states", update.getString("type"))
+            assertFalse(update.getJSONArray("data").getJSONObject(0).has("name"))
+            assertTrue(update.getJSONArray("data").getJSONObject(1).getBoolean("state"))
+            val registration = JSONObject(server.takeRequest().body.readUtf8())
+            assertEquals("register_sensor", registration.getString("type"))
+            assertEquals("battery", registration.getJSONObject("data").getString("device_class"))
+            assertFalse(registration.getJSONObject("data").has("disabled"))
+            assertEquals(2, server.requestCount)
         }
     }
 

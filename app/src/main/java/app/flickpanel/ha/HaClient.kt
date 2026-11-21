@@ -92,6 +92,31 @@ internal class HaClient(
 
     fun setPanelWebhook(webhookId: String?) = panelRemote.setWebhook(webhookId)
 
+    suspend fun publishPanelSensors(webhookId: String, readings: List<PanelSensorReading>) {
+        val result = panelWebhook(webhookId, "update_sensor_states", JSONArray(readings.map(PanelSensorReading::update)))
+        for (reading in readings) {
+            val status = result.optJSONObject(reading.sensor.id)
+            if (status?.optBoolean("success") == true) continue
+            if (status?.optJSONObject("error")?.optString("code") != "not_registered" ||
+                !panelWebhook(webhookId, "register_sensor", reading.registration()).optBoolean("success")
+            ) throw HaProblem("Home Assistant could not update the tablet sensors")
+        }
+    }
+
+    private suspend fun panelWebhook(webhookId: String, type: String, data: Any): JSONObject {
+        require(validPanelWebhook(webhookId))
+        val url = checkNotNull(credentials.server.resolve("api/webhook/$webhookId"))
+        val body = JSONObject().put("type", type).put("data", data).toString()
+            .toRequestBody("application/json".toMediaType())
+        return exchange(Request.Builder().url(url).post(body), null) { response ->
+            val source = response.body?.source()
+            if (!response.isSuccessful || source == null || source.request(16_385)) {
+                throw HaProblem("Home Assistant could not update the tablet sensors")
+            }
+            JSONObject(source.readUtf8())
+        }
+    }
+
     suspend fun registerPanel(registration: PanelRegistration): String {
         val endpoint = checkNotNull(credentials.server.resolve("api/mobile_app/registrations"))
         val body = registration.requestBody().toString().toRequestBody("application/json".toMediaType())

@@ -16,7 +16,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.onClick
@@ -36,7 +35,7 @@ internal fun AgendaPreview(
     val colors = MaterialTheme.colorScheme
     val dates = rememberAgendaDates()
     val content = state.content
-    val tasks = remember(content) { (content as? AgendaContent.Tasks)?.items?.filterNot(AgendaTask::completed).orEmpty() }
+    val tasks = (content as? AgendaContent.Tasks)?.open.orEmpty()
     Surface(onClick = open, modifier = modifier.semantics { onClick(label = "Open $title", action = null) },
         color = colors.surfaceContainer, shape = panelCardShape) {
         Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {

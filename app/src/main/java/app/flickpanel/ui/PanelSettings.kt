@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -25,15 +24,12 @@ import androidx.compose.material.icons.rounded.DisplaySettings
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -58,10 +54,9 @@ import app.flickpanel.config.HomeBadge
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelTheme
 import app.flickpanel.ha.Link
-import app.flickpanel.ha.PanelRemoteState
 
 internal enum class PanelPage(val label: String) {
-    DISPLAY("Display"), APPEARANCE("Appearance"), HOME_ASSISTANT("Home Assistant"), REMOTE_CONTROL("Remote control"),
+    DISPLAY("Display"), APPEARANCE("Appearance"), HOME_ASSISTANT("Home Assistant"), REMOTE_CONTROL("Tablet link"),
     HOME_BADGES("Warning badges"),
 }
 
@@ -75,9 +70,9 @@ internal fun PanelSettings(
     val context = LocalContext.current
     val album = draft.idleAlbum?.title ?: "Clock only"
     Column(
-        Modifier.widthIn(max = 780.dp).fillMaxWidth().verticalScroll(rememberScrollState())
+        Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(start = setupPadding, end = setupPadding, top = 12.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         when (page) {
             null -> SettingsListGroup {
@@ -124,7 +119,7 @@ internal fun PanelSettings(
             PanelPage.HOME_ASSISTANT -> {
                 SettingsListGroup {
                     SettingLink("Home Assistant connection", state.serverAddress, changeConnection)
-                    SettingLink("Remote control", state.remoteLabel(), { open(PanelPage.REMOTE_CONTROL) })
+                    SettingLink("Tablet link", state.remoteLabel(), { open(PanelPage.REMOTE_CONTROL) })
                 }
                 SettingsListGroup("Favourites") {
                     SettingLink("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", chooseMessage,
@@ -135,7 +130,7 @@ internal fun PanelSettings(
                         clear = draft.presenceEntity?.let { { change(draft.copy(presenceEntity = null)) } })
                 }
             }
-            PanelPage.REMOTE_CONTROL -> RemoteControlSettings(state, linkPanel, unlinkPanel)
+            PanelPage.REMOTE_CONTROL -> PanelLinkSettings(state, linkPanel, unlinkPanel)
             PanelPage.HOME_BADGES -> WarningBadgeSettings(draft.homeBadges, state, chooseBadge, editBadge) { removed ->
                 change(draft.copy(homeBadges = draft.homeBadges - removed))
             }
@@ -144,7 +139,7 @@ internal fun PanelSettings(
 }
 
 @Composable
-private fun SettingsListGroup(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
+internal fun SettingsListGroup(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (title != null) Text(
             title, Modifier.padding(start = 16.dp).semantics { heading() },
@@ -184,53 +179,6 @@ private fun IdleDelaySetting(current: Int, change: (Int) -> Unit) {
         },
         confirmButton = { TextButton(onClick = { choosing = false }) { Text("Cancel") } },
     )
-}
-
-@Composable
-private fun RemoteControlSettings(state: PanelUi, link: (String) -> Unit, unlink: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val linkedName = state.remoteName
-    var name by remember { mutableStateOf("Flick Panel") }
-    var confirmUnlink by remember { mutableStateOf(false) }
-    if (linkedName == null) {
-        Text("Link this tablet to wake the display or open a camera from Home Assistant.",
-            color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
-        OutlinedTextField(name, { name = it.take(48) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-            enabled = !state.busy, label = { Text("Tablet name") })
-        Button(onClick = { link(name) }, enabled = !state.busy && state.link == Link.ONLINE && name.isNotBlank()) {
-            Text(if (state.busy) "Linking…" else "Link tablet")
-        }
-    } else {
-        SettingsListGroup {
-            ListItem(
-                headlineContent = { Text(linkedName) },
-                supportingContent = { Text(state.remoteLabel()) },
-                leadingContent = { Icon(Icons.Rounded.SettingsRemote, null, tint = colors.primary) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-        }
-        Text("Use the tablet’s Mobile App notification action in Home Assistant to send commands.",
-            color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
-        if (state.remoteState == PanelRemoteState.UNAVAILABLE) {
-            Button(onClick = { link(linkedName) }, enabled = !state.busy && state.link == Link.ONLINE) {
-                Text("Relink tablet")
-            }
-        }
-        TextButton(onClick = { confirmUnlink = true }, enabled = !state.busy) { Text("Unlink tablet") }
-    }
-    if (confirmUnlink) AlertDialog(
-        onDismissRequest = { confirmUnlink = false },
-        title = { Text("Unlink this tablet?") },
-        text = { Text("You can remove its Mobile App entry in Home Assistant after unlinking.") },
-        confirmButton = { TextButton(onClick = { confirmUnlink = false; unlink() }) { Text("Unlink") } },
-        dismissButton = { TextButton(onClick = { confirmUnlink = false }) { Text("Cancel") } },
-    )
-}
-
-private fun PanelUi.remoteLabel(): String = if (remoteName == null) "Not linked" else when (remoteState) {
-    PanelRemoteState.READY -> "Ready"
-    PanelRemoteState.UNAVAILABLE -> "Unavailable"
-    PanelRemoteState.CONNECTING, PanelRemoteState.DISABLED -> "Connecting…"
 }
 
 private fun idleDelay(seconds: Int) = when {

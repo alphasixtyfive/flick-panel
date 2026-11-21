@@ -10,9 +10,8 @@ to return to the Home Assistant area defaults. Save changes to apply the layout.
 Cameras
 shows pinned previews and opens one full-screen feed at a time.
 In setup, use **Cameras** to choose gallery feeds, edit their settings and star the
-ones you want on Home. On wider tablets, the camera pair sits beside a two-by-two
-people grid. Swipe the people grid or use its arrows for more profiles. The agenda,
-app shortcuts and graphs sit below.
+ones you want on Home. On wider tablets, the camera pair sits beside the people
+grid, with the agenda and app shortcuts nearby.
 Use **Add tile → Android apps** to pin a launcher shortcut to an app already installed on the tablet.
 On a dedicated tablet, **Setup → Panel → Android Home app** opens Android's default
 launcher settings. Choosing Flick Panel there makes the Android Home gesture return to it
@@ -38,8 +37,9 @@ from other apps.
    tile, and **Undo removal** restores it before saving. Leaving the app or five minutes
    in setup closes the editor.
 
-On tablets, setup shows the section menu beside the current editor. **Save changes** saves the
-layout across all sections. On smaller displays, setup uses tabs.
+On tablets, setup shows the section menu beside the current editor. On smaller
+displays, setup uses a bottom navigation bar. **Save changes** saves the layout
+across all sections.
 
 The token is encrypted with Android Keystore. Use HTTPS when available. The app also accepts
 explicit private IPv4 addresses such as a local Home Assistant server at
@@ -72,12 +72,13 @@ explicit private IPv4 addresses such as a local Home Assistant server at
   scripts, **Confirm before running** adds a confirmation step.
 - **Compact reading** puts readings such as temperature and humidity in a short strip
   on Favourites. The tile shows an icon and a value, and TalkBack reads the tile name.
-- **Tasks** shows the number of open items and previews up to three on Favourites.
-  Open the tile to check tasks off, add a task when supported, or view completed items.
+- **Tasks** previews open items on Favourites. Open the tile for the checklist.
+  Tap a row to check it off, use **Add item**, or expand **Completed** to restore an item.
+  The app offers the actions supported by the list in Home Assistant.
 - **Calendar** previews up to two events on Favourites and opens a seven-day agenda
   grouped by date. The preview shows today's date when the agenda is empty.
 - **Music player** shows the current track on the tile. Tap it for artwork,
-  playback and a track position bar. The speaker button opens volume control.
+  playback, a track position bar and direct volume controls.
   **Browse music** opens the selected player's library. Its playback bar stays within
   reach while you browse. Controls follow the player's Home Assistant capabilities.
   Music Assistant playlists and radio stations appear with cover art and station logos when available.
@@ -105,10 +106,11 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 
 ## Control the panel from Home Assistant
 
-In PIN-protected setup, open **Panel → Home Assistant → Remote control**, name the
-tablet, and choose **Link tablet**. Home Assistant's built-in Mobile App
-integration adds a notification action for the tablet. Use that device's
-`notify.mobile_app_…` action in scripts or automations.
+In PIN-protected setup, open **Panel → Home Assistant → Tablet link**, name the
+tablet, and choose **Link tablet**. Home Assistant's built-in
+[Mobile App integration](https://www.home-assistant.io/integrations/mobile_app/)
+creates the device and its `notify.mobile_app_…` action. Check the action name in
+Home Assistant before using it in a script or automation.
 
 ```yaml
 action: notify.mobile_app_kitchen_panel
@@ -119,21 +121,38 @@ data:
     camera: camera.front_gate
 ```
 
-Replace the action with the one Home Assistant created for your tablet.
-To blank Panel or bring it back, use `command: sleep` or `command: wake` and omit
-`camera`. Only cameras saved under **Cameras** can be opened remotely.
-Blanking dims the display to Android's minimum and keeps Panel connected in the
-foreground. A tap restores it locally. Android's lock screen and display power
-are managed separately by the device.
+| Command | Additional data | Result |
+| --- | --- | --- |
+| `wake` | | Return from the clock or blank screen to Favourites |
+| `sleep` | | Blank the panel and reduce brightness to Android's minimum |
+| `show_clock` | | Show the idle clock and configured photos |
+| `set_brightness` | `level` as an integer from 1–100, or `auto` | Set or clear the brightness override |
+| `keep_awake` | `enabled` as `true`, `false`, or `auto` | Override or restore the saved Wall display setting |
+| `show_page` | `page` as `favourites`, `rooms`, or `cameras` | Open a dashboard tab |
+| `open_camera` | `camera` as a saved camera entity ID | Open its live feed |
+| `open_tile` | `entity_id` as a saved tile entity ID | Open a camera, music player, task list, calendar, map or reader |
+| `close_viewer` | | Close the current full-screen view |
+
+Display overrides apply until cleared, the tablet is unlinked, or the app restarts.
+Commands work while Flick Panel is in the foreground. A local tap also restores
+the blank display. Android manages hardware power and the lock screen separately.
+The tablet accepts commands outside PIN-protected setup. Use the underlying Home
+Assistant action to operate devices such as lights and gates.
+
+A linked tablet publishes five diagnostic entities under its Mobile App device:
+battery level, battery charging, charger connected, battery temperature, and
+display mode. The display sensor also reports the selected tab, brightness
+override and effective Wall display setting. Readings update on change while
+the tablet is linked and active. Home Assistant can disable individual entities.
 
 ## Data flow
 
 `ha` owns the authenticated connection and entity capabilities. `config` stores the
-versioned tablet layout and local setup. `PanelUi.kt` resolves configured areas into room
+versioned tablet layout and local setup. `RoomLayout.kt` resolves configured areas into room
 sections. `ui/Tiles.kt` arranges the dashboard grid, and `ui/PanelTile.kt` dispatches to
 individual tile implementations. Home Assistant owns device
-state and actions. The panel loads configured areas after connecting and subscribes to
-their controls alongside pinned entities. Timestamp-only notifications reuse the current
+state and actions. The panel loads areas when configured or when Rooms is opened.
+Switching tabs reuses the room subscription. Timestamp-only updates reuse the current
 entity snapshot. Favourites and Rooms compose rows as they approach the viewport. Camera
 previews and graph refreshes follow those rows. `PanelImages.kt` bounds
 image memory and decodes scaled copies off the UI thread, with smaller caches on low-memory
@@ -141,7 +160,8 @@ devices. Concurrent consumers share a request and the last consumer to leave can
 Music artwork, idle photos, and
 recent music folders are reused on the same Home Assistant connection. Agenda cards
 share a rate-limited refresh with their full-list views and retain the last results
-in memory if Home Assistant disconnects.
+in memory if Home Assistant disconnects. A checked item moves immediately and is
+restored if Home Assistant rejects the change.
 
 Live video uses Home Assistant HLS and one Media3 player, as in Flick TV. Android releases the player
 when the viewer closes or the app goes to the background.

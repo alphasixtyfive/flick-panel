@@ -1,5 +1,6 @@
 package app.flickpanel.ha
 
+import app.flickpanel.Page
 import app.flickpanel.config.validEntity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -44,7 +45,13 @@ internal enum class PanelRemoteState { DISABLED, CONNECTING, READY, UNAVAILABLE 
 internal sealed interface PanelCommand {
     data object Wake : PanelCommand
     data object Sleep : PanelCommand
+    data object ShowClock : PanelCommand
+    data object CloseViewer : PanelCommand
+    data class ShowPage(val page: Page) : PanelCommand
+    data class SetBrightness(val percent: Int?) : PanelCommand
+    data class KeepAwake(val enabled: Boolean?) : PanelCommand
     data class OpenCamera(val entityId: String) : PanelCommand
+    data class OpenTile(val entityId: String) : PanelCommand
 }
 
 internal fun validPanelWebhook(value: String): Boolean = value.length in 8..128 && value.all {
@@ -57,9 +64,28 @@ internal fun parsePanelCommand(event: JSONObject): PanelCommand? {
     return when (data.opt("command")) {
         "wake" -> PanelCommand.Wake
         "sleep" -> PanelCommand.Sleep
+        "show_clock" -> PanelCommand.ShowClock
+        "close_viewer" -> PanelCommand.CloseViewer
+        "show_page" -> when (data.opt("page")) {
+            "favourites" -> PanelCommand.ShowPage(Page.FAVOURITES)
+            "rooms" -> PanelCommand.ShowPage(Page.ROOMS)
+            "cameras" -> PanelCommand.ShowPage(Page.CAMERAS)
+            else -> null
+        }
+        "set_brightness" -> when (val level = data.opt("level")) {
+            "auto" -> PanelCommand.SetBrightness(null)
+            is Int -> level.takeIf { it in 1..100 }?.let { PanelCommand.SetBrightness(it) }
+            else -> null
+        }
+        "keep_awake" -> when (val enabled = data.opt("enabled")) {
+            "auto" -> PanelCommand.KeepAwake(null)
+            is Boolean -> PanelCommand.KeepAwake(enabled)
+            else -> null
+        }
         "open_camera" -> (data.opt("camera") as? String)
             ?.takeIf { it.startsWith("camera.") && validEntity(it) }
             ?.let { PanelCommand.OpenCamera(it) }
+        "open_tile" -> (data.opt("entity_id") as? String)?.takeIf(::validEntity)?.let(PanelCommand::OpenTile)
         else -> null
     }
 }

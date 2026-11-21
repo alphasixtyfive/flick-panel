@@ -22,16 +22,20 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val state by model.ui.collectAsStateWithLifecycle()
-            val wall = state.config.wallMode && state.configured
+            val wall = state.keepsDisplayAwake && state.configured
             val hasPhotos = state.config.idleAlbum != null
             val blank = state.screenBlank
-            LaunchedEffect(state.configured, state.clock, wall, hasPhotos, blank) {
+            val level = state.brightnessPercent?.div(100f)
+            LaunchedEffect(state.configured, state.clock, wall, hasPhotos, blank, level) {
                 if (wall || blank) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 val brightness = when {
                     blank -> 0f
-                    wall && state.clock -> if (hasPhotos) .22f else .13f
-                    else -> -1f
+                    wall && state.clock -> {
+                        val idleMaximum = if (hasPhotos) .22f else .13f
+                        minOf(level ?: idleMaximum, idleMaximum)
+                    }
+                    else -> level ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                 }
                 if (window.attributes.screenBrightness != brightness) {
                     window.attributes = window.attributes.apply { screenBrightness = brightness }

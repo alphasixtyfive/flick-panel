@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,8 +23,14 @@ import kotlinx.coroutines.sync.withPermit
 import java.time.Instant
 import java.time.ZoneId
 
+private val taskRefreshDelays = listOf(0L, 150L, 300L, 600L, 1_200L)
+
 internal sealed interface AgendaContent {
-    data class Tasks(val items: List<AgendaTask>) : AgendaContent
+    data class Tasks(val items: List<AgendaTask>) : AgendaContent {
+        private val groups by lazy { items.partition { !it.completed } }
+        val open get() = groups.first
+        val completed get() = groups.second
+    }
     data class Calendar(val events: List<AgendaEvent>) : AgendaContent
 }
 
@@ -67,23 +74,41 @@ internal class PanelAgenda(private val scope: CoroutineScope) {
         }
     }
 
-    fun changeTasks(client: HaClient, id: String, change: suspend HaClient.() -> Unit): Boolean {
+    fun changeTasks(
+        client: HaClient, id: String, optimistic: AgendaContent.Tasks? = null,
+        confirmed: (List<AgendaTask>) -> Boolean, change: suspend HaClient.() -> Unit,
+    ): Boolean {
         if (requests[id]?.isActive == true) return false
+        val previous = cached(id)?.content
         requestedAt[id] = SystemClock.elapsedRealtime()
-        update(id) { it.copy(saving = true, issue = null) }
+        update(id) { it.copy(content = optimistic ?: previous, saving = true, issue = null) }
         run(id) {
-            client.change()
+            try {
+                client.change()
+            } catch (failure: Exception) {
+                currentCoroutineContext().ensureActive()
+                requestedAt.remove(id)
+                update(id) { it.copy(content = previous) }
+                throw failure
+            }
             update(id) { it.copy(savedRevision = it.savedRevision + 1) }
             try {
-                val tasks = client.tasks(id)
-                update(id) { it.copy(content = AgendaContent.Tasks(tasks)) }
+                // Some Home Assistant providers publish the new list after acknowledging the write.
+                for (wait in taskRefreshDelays) {
+                    delay(wait)
+                    val tasks = client.tasks(id)
+                    if (confirmed(tasks)) {
+                        update(id) { it.copy(content = AgendaContent.Tasks(tasks)) }
+                        return@run
+                    }
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
                 currentCoroutineContext().ensureActive()
-                requestedAt.remove(id)
-                update(id) { it.copy(issue = "Change saved. Refresh to update the list.") }
             }
+            requestedAt.remove(id)
+            update(id) { it.copy(issue = "Change saved. Refresh to update the list.") }
         }
         return true
     }

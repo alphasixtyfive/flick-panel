@@ -49,6 +49,7 @@ internal fun PanelScreen(state: PanelUi, model: PanelViewModel) {
         val agenda = state.config.favourites.firstOrNull { it.entity == state.agendaOpen && it.kind.isAgenda }
         val content = state.config.favourites.firstOrNull { it.entity == state.contentOpen && it.kind.hasContentScreen }
         when {
+            state.editor -> EditPanel(state, model)
             state.screenBlank -> {
                 Box(Modifier.fillMaxSize().background(Color.Black).clickable(
                     interactionSource = null, indication = null, onClickLabel = "Wake panel",
@@ -106,7 +107,6 @@ internal fun PanelScreen(state: PanelUi, model: PanelViewModel) {
             }
         }
         if (state.unlocking) UnlockEditor(state, model::unlock, model::relock)
-        if (state.editor) EditPanel(state, model)
         BackHandler(state.configured && state.page != Page.FAVOURITES && !state.clock && !state.screenBlank &&
             !state.editor && !state.unlocking && !state.hasViewer) {
             model.selectPage(Page.FAVOURITES)

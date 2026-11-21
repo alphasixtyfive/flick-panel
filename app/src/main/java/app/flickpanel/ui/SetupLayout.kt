@@ -1,5 +1,6 @@
 package app.flickpanel.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,12 +50,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import app.flickpanel.config.PanelTheme
 
 internal val setupPadding = 24.dp
-private val setupDetailWidth = 840.dp
+private val setupDetailWidth = 760.dp
 
 internal enum class SetupSection(val label: String, val icon: ImageVector) {
     FAVOURITES("Favourites", Icons.Rounded.FavoriteBorder),
@@ -80,35 +79,33 @@ internal fun SetupLayout(
     save: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    Dialog(onDismissRequest = back,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        PanelColors(theme, highContrast) {
-            Surface(Modifier.fillMaxSize()) {
-                BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
-                    val fontScale = LocalDensity.current.fontScale
-                    val twoPanes = maxWidth >= tabletWidthDp.dp && maxWidth >= 640.dp * fontScale
-                    val iconOnlySave = maxWidth < 360.dp || (!twoPanes && fontScale >= 1.3f)
-                    Row(Modifier.fillMaxSize()) {
-                        if (twoPanes) SetupCategoryPane(section, openSection, close, busy)
-                        Box(Modifier.weight(1f).fillMaxHeight(),
-                            contentAlignment = if (twoPanes) Alignment.TopStart else Alignment.TopCenter) {
-                            Column(Modifier.widthIn(max = setupDetailWidth).fillMaxSize()) {
-                                SetupToolbar(
-                                    title = detailTitle ?: section.label,
-                                    detail = detailTitle != null,
-                                    showNavigation = detailTitle != null || !twoPanes,
-                                    canSave = canSave,
-                                    dirty = dirty,
-                                    busy = busy,
-                                    iconOnlySave = iconOnlySave,
-                                    navigate = if (detailTitle != null) back else close,
-                                    save = save,
-                                )
-                                Box(Modifier.weight(1f).fillMaxWidth().panelEntrance(destination, reduceMotion)) {
-                                    content()
-                                }
-                                if (!twoPanes && detailTitle == null) SetupNavigationBar(section, busy, openSection)
+    BackHandler(onBack = back)
+    PanelColors(theme, highContrast) {
+        Surface(Modifier.fillMaxSize()) {
+            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+                val fontScale = LocalDensity.current.fontScale
+                val twoPanes = maxWidth >= tabletWidthDp.dp && maxWidth >= 640.dp * fontScale
+                val iconOnlySave = maxWidth < 360.dp || (!twoPanes && fontScale >= 1.3f)
+                Row(Modifier.fillMaxSize()) {
+                    if (twoPanes) SetupCategoryPane(section, openSection, close, busy)
+                    Box(Modifier.weight(1f).fillMaxHeight().padding(start = if (twoPanes) 12.dp else 0.dp),
+                        contentAlignment = if (twoPanes) Alignment.TopStart else Alignment.TopCenter) {
+                        Column(Modifier.widthIn(max = setupDetailWidth).fillMaxSize()) {
+                            SetupToolbar(
+                                title = detailTitle ?: section.label,
+                                detail = detailTitle != null,
+                                showNavigation = detailTitle != null || !twoPanes,
+                                canSave = canSave,
+                                dirty = dirty,
+                                busy = busy,
+                                iconOnlySave = iconOnlySave,
+                                navigate = if (detailTitle != null) back else close,
+                                save = save,
+                            )
+                            Box(Modifier.weight(1f).fillMaxWidth().panelEntrance(destination, reduceMotion)) {
+                                content()
                             }
+                            if (!twoPanes && detailTitle == null) SetupNavigationBar(section, busy, openSection)
                         }
                     }
                 }

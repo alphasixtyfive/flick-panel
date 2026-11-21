@@ -61,6 +61,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var linkJob: Job? = null
     private var stateJob: Job? = null
     private var remoteJob: Job? = null
+    private var telemetryJob: Job? = null
     private var catalogueJob: Job? = null
     private var idleJob: Job? = null
     private var editorTimer: Job? = null
@@ -75,6 +76,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private data class MusicPage(val choices: List<MediaChoice>, val fetchedAt: Long)
     private val musicPages = LruCache<MusicFolder, MusicPage>(16)
     private var foreground = false
+    private var roomControlsRequested = false
     private var securityEpoch = 0
     private var presence = false
 
@@ -133,7 +135,6 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (next === _ui.value) return
         approachJob?.cancel()
         _ui.value = next
-        updateSelection()
         touch()
     }
 
@@ -146,9 +147,16 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun selectPage(page: Page) {
         _ui.update { it.copy(page = page) }
-        if (page == Page.ROOMS && _ui.value.catalogue.entries.isEmpty()) loadCatalogue()
-        updateSelection()
+        if (page == Page.ROOMS) showRoomControls()
         touch()
+    }
+
+    private fun showRoomControls() {
+        if (!roomControlsRequested) {
+            roomControlsRequested = true
+            updateSelection()
+        }
+        if (_ui.value.catalogue.entries.isEmpty()) loadCatalogue()
     }
 
     fun showUnlock() {
@@ -209,7 +217,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
                 ))
                 withContext(Dispatchers.IO) { store.saveRemote(SavedRemote(id, label)) }
                 _ui.update { it.copy(remoteName = label, remoteState = PanelRemoteState.CONNECTING) }
-                active.setPanelWebhook(id)
+                bindRemote(active, id)
             }
             _ui.update { it.copy(busy = false) }
         }
@@ -223,7 +231,8 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             safely {
                 withContext(Dispatchers.IO) { store.clearRemote() }
                 _ui.update { it.copy(remoteName = null, remoteState = PanelRemoteState.DISABLED) }
-                client?.setPanelWebhook(null)
+                client?.let { bindRemote(it, null) }
+                _ui.update { it.copy(brightnessPercent = null, keepAwakeOverride = null) }
             }
             _ui.update { it.copy(busy = false) }
         }
@@ -346,14 +355,22 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val active = taskClient(id) ?: return
         if (_ui.value.entities[id]?.canUpdateTasks != true) return
         val tasks = (agenda.cached(id)?.content as? AgendaContent.Tasks)?.items ?: return
-        if (tasks.none { it.uid == uid && it.completed != completed }) return
-        agenda.changeTasks(active, id) { setTaskCompleted(id, uid, completed) }
+        val task = tasks.firstOrNull { it.uid == uid && it.completed != completed } ?: return
+        val optimistic = AgendaContent.Tasks(tasks.map { if (it.uid == uid) task.copy(completed = completed) else it })
+        agenda.changeTasks(active, id, optimistic,
+            confirmed = { updated -> updated.any { it.uid == uid && it.completed == completed } },
+        ) { setTaskCompleted(id, uid, completed) }
     }
 
     fun addTask(id: String, summary: String): Boolean {
         val active = taskClient(id) ?: return false
         if (_ui.value.entities[id]?.canAddTasks != true) return false
-        return agenda.changeTasks(active, id) { addTask(id, summary) }
+        val existing = (agenda.cached(id)?.content as? AgendaContent.Tasks)?.items
+            ?.mapTo(hashSetOf()) { it.uid }.orEmpty()
+        val title = summary.trim()
+        return agenda.changeTasks(active, id,
+            confirmed = { updated -> updated.any { it.uid !in existing && it.summary == title } },
+        ) { addTask(id, title) }
     }
 
     private fun agendaTile(id: String) = _ui.value.config.favourites.firstOrNull { it.entity == id && it.kind.isAgenda }
@@ -582,6 +599,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         linkJob?.cancel()
         stateJob?.cancel()
         remoteJob?.cancel()
+        telemetryJob?.cancel()
         catalogueJob?.cancel()
         cancelCommands()
         agenda.keep(emptySet())
@@ -593,15 +611,18 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         musicPages.evictAll()
         approachJob?.cancel()
         presence = false
+        roomControlsRequested = _ui.value.page == Page.ROOMS
         _ui.update { it.copy(
             entities = emptyMap(), layout = RoomLayout(it.config), graphs = emptyMap(),
             pending = emptyMap(), link = Link.CONNECTING, serverAddress = credentials.server.toString(),
             remoteName = remote?.name,
+            brightnessPercent = null,
+            keepAwakeOverride = null,
             remoteState = if (remote == null) PanelRemoteState.DISABLED else PanelRemoteState.CONNECTING,
         ) }
         val active = HaClient(credentials, viewModelScope)
         client = active
-        active.setPanelWebhook(remote?.webhookId)
+        bindRemote(active, remote?.webhookId)
         updateSelection()
         linkJob = viewModelScope.launch {
             active.link.collect { state ->
@@ -615,8 +636,11 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
         stateJob = viewModelScope.launch {
             active.entities.collect { states ->
+                val current = _ui.value
                 _ui.update { it.copy(entities = states) }
                 updatePresence(states)
+                val list = current.agendaOpen?.takeIf { it.startsWith("todo.") }
+                if (list != null && current.entities[list]?.state != states[list]?.state) loadAgenda(list, force = true)
             }
         }
         remoteJob = viewModelScope.launch {
@@ -630,6 +654,16 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             }
         }
         if (foreground) active.start()
+    }
+
+    private fun bindRemote(active: HaClient, webhookId: String?) {
+        telemetryJob?.cancel()
+        active.setPanelWebhook(webhookId)
+        telemetryJob = webhookId?.let { id ->
+            viewModelScope.launch {
+                publishPanelTelemetry(getApplication<Application>(), active, id, _ui)
+            }
+        }
     }
 
     private fun updatePresence(entities: Map<String, Entity>) {
@@ -654,14 +688,12 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (!foreground) return
         val current = _ui.value
         val next = current.remoteCommand(command, SystemClock.elapsedRealtime())
-        if (next === current) return
-        if (command == PanelCommand.Wake) {
-            showAwakeDisplay(next)
-            return
-        }
-        approachJob?.cancel()
-        idleJob?.cancel()
+        if (next == current) return
         _ui.value = next
+        if (command is PanelCommand.SetBrightness || command is PanelCommand.KeepAwake) return
+        approachJob?.cancel()
+        if (next.page == Page.ROOMS && !next.hasViewer && !next.clock && !next.screenBlank) showRoomControls()
+        if (next.hasViewer || next.clock || next.screenBlank) idleJob?.cancel() else touch()
     }
 
     private fun updateSelection() {
@@ -671,7 +703,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         current.config.favourites.mapNotNullTo(ids) { it.statusEntity }
         current.config.favourites.mapNotNullTo(ids) { it.cameraGate }
         current.config.favourites.mapNotNullTo(ids) { it.cameraStream }
-        if (current.config.roomIds?.isNotEmpty() == true || current.page == Page.ROOMS) {
+        if (current.config.roomIds?.isNotEmpty() == true || roomControlsRequested) {
             current.roomSections.forEach { section -> section.tiles.mapTo(ids) { it.entity } }
         }
         current.config.presenceEntity?.let(ids::add)
