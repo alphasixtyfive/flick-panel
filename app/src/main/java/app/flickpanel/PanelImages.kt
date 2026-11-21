@@ -15,26 +15,31 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
-internal class PanelImages(parent: CoroutineScope) {
+private const val MiB = 1024 * 1024
+
+internal class PanelImages(parent: CoroutineScope, lowMemory: Boolean) {
     private val job = SupervisorJob(parent.coroutineContext[Job])
     private val scope = CoroutineScope(parent.coroutineContext + job)
-    val snapshots = ImageCache(scope, byteLimit = 12 * 1024 * 1024, maxEdge = 1440, lifetimeMillis = 24_000)
-    val artwork = ImageCache(scope, byteLimit = 8 * 1024 * 1024, maxEdge = 480, lifetimeMillis = 30 * 60_000)
-    val photos = ImageCache(scope, byteLimit = 12 * 1024 * 1024, maxEdge = 2000, lifetimeMillis = 15 * 60_000)
+    val snapshots = ImageCache(scope, byteLimit = (if (lowMemory) 6 else 12) * MiB,
+        maxEdge = if (lowMemory) 1080 else 1440, lifetimeMillis = 24_000)
+    val artwork = ImageCache(scope, byteLimit = (if (lowMemory) 3 else 8) * MiB,
+        maxEdge = if (lowMemory) 320 else 480, lifetimeMillis = 30 * 60_000)
+    val photos = ImageCache(scope, byteLimit = (if (lowMemory) 6 else 12) * MiB,
+        maxEdge = if (lowMemory) 1200 else 2000, lifetimeMillis = 15 * 60_000)
 
     fun close() { job.cancel() }
 }
 
 internal class ImageCache(
-    private val scope: CoroutineScope, byteLimit: Int, private val maxEdge: Int, private val lifetimeMillis: Long,
+    scope: CoroutineScope, byteLimit: Int, private val maxEdge: Int, private val lifetimeMillis: Long,
 ) {
     private data class CachedImage(val bitmap: Bitmap, val fetchedAt: Long)
 
     private val images = object : LruCache<String, CachedImage>(byteLimit) {
         override fun sizeOf(key: String, value: CachedImage) = value.bitmap.allocationByteCount
     }
-    private val requests = Semaphore(2)
-    private val inFlight = mutableMapOf<String, Deferred<Bitmap?>>()
+    private val fetchSlots = Semaphore(2)
+    private val requests = ImageRequests(scope)
 
     fun cached(key: String): Bitmap? = images[key]?.bitmap
 
@@ -44,21 +49,41 @@ internal class ImageCache(
 
     suspend fun load(key: String, fetch: suspend () -> ByteArray?): Bitmap? {
         fresh(key)?.let { return it }
-        val request = synchronized(inFlight) {
-            fresh(key)?.let { return it }
-            inFlight[key] ?: scope.async(start = CoroutineStart.LAZY) {
-                requests.withPermit {
-                    val data = fetch() ?: return@withPermit null
-                    val bitmap = decodePanelImage(data, maxEdge) ?: return@withPermit null
-                    images.put(key, CachedImage(bitmap, SystemClock.elapsedRealtime()))
-                    bitmap
-                }
-            }.also { job ->
-                inFlight[key] = job
-                job.invokeOnCompletion { synchronized(inFlight) { inFlight.remove(key, job) } }
+        return requests.load(key) {
+            fetchSlots.withPermit {
+                fresh(key)?.let { return@withPermit it }
+                val data = fetch() ?: return@withPermit null
+                val bitmap = decodePanelImage(data, maxEdge) ?: return@withPermit null
+                images.put(key, CachedImage(bitmap, SystemClock.elapsedRealtime()))
+                bitmap
             }
         }
-        return request.await()
+    }
+}
+
+internal class ImageRequests(private val scope: CoroutineScope) {
+    private class Request(val job: Deferred<Bitmap?>, var waiters: Int = 0)
+
+    private val inFlight = mutableMapOf<String, Request>()
+
+    suspend fun load(key: String, fetch: suspend () -> Bitmap?): Bitmap? {
+        val request = synchronized(inFlight) {
+            val pending = inFlight[key] ?: Request(scope.async(start = CoroutineStart.LAZY) { fetch() }).also { created ->
+                inFlight[key] = created
+                created.job.invokeOnCompletion { synchronized(inFlight) { inFlight.remove(key, created) } }
+            }
+            pending.waiters++
+            pending
+        }
+        try {
+            return request.job.await()
+        } finally {
+            val abandoned = synchronized(inFlight) {
+                request.waiters--
+                request.waiters == 0 && inFlight.remove(key, request)
+            }
+            if (abandoned) request.job.cancel()
+        }
     }
 }
 

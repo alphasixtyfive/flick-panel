@@ -39,7 +39,7 @@ internal fun PanelTile(
     when (tile.kind) {
         TileKind.TOGGLE, TileKind.ACTION ->
             ToggleActionTile(tile, state, model, modifier, live, ready)
-        TileKind.SLIDER -> BrightnessTile(label, entity, live, pending, ready, model, modifier)
+        TileKind.SLIDER -> BrightnessTile(label, entity, live, pending.takeIf { online }, ready, model, modifier)
         TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier) { increase ->
             model.stepTemperature(tile.entity, increase)
         }

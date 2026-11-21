@@ -49,6 +49,7 @@ internal data class Entity(
     val available get() = state.isNotBlank() && state !in setOf("unavailable", "unknown")
     val unit get() = attributes.text("unit_of_measurement").orEmpty()
     val mediaFeatures get() = attributes.optLong("supported_features")
+    val playingMedia get() = state == "playing" || state == "buffering"
     val volumePercent get() = attributes.optDouble("volume_level", Double.NaN)
         .takeIf { it in 0.0..1.0 }?.let { (it * 100).roundToInt() }
 

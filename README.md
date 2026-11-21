@@ -113,9 +113,11 @@ versioned tablet layout and local setup. `PanelUi.kt` resolves configured areas 
 sections. `ui/Tiles.kt` arranges the dashboard grid, and `ui/PanelTile.kt` dispatches to
 individual tile implementations. Home Assistant owns device
 state and actions. The panel loads configured areas after connecting and subscribes to
-their controls alongside pinned entities. `PanelImages.kt` bounds image memory and decodes
-scaled copies off the UI thread. Concurrent requests for the same image share the
-fetch and decode. Camera previews refresh while visible. Music artwork, idle photos, and
+their controls alongside pinned entities. Favourites composes rows as they approach the
+viewport. Camera previews and graph refreshes follow those rows. `PanelImages.kt` bounds
+image memory and decodes scaled copies off the UI thread, with smaller caches on low-memory
+devices. Concurrent consumers share a request and the last consumer to leave cancels it.
+Music artwork, idle photos, and
 recent music folders are reused on the same Home Assistant connection. Agenda cards
 share a rate-limited refresh with their full-list views and retain the last results
 in memory if Home Assistant disconnects.

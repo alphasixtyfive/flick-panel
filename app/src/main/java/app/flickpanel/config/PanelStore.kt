@@ -7,6 +7,7 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import app.flickpanel.ha.HaCredentials
 import app.flickpanel.ha.parseServer
+import org.json.JSONException
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -34,10 +35,24 @@ private const val TOKEN_CIPHER = "AES/GCM/NoPadding"
 
 internal data class SavedPanel(
     val configured: Boolean, val config: PanelConfig, val credentials: HaCredentials?, val remote: SavedRemote?,
+    val layoutUnreadable: Boolean = false,
 )
 
 internal class SavedRemote(val webhookId: String, val name: String) {
     override fun toString() = "SavedRemote(redacted)"
+}
+
+internal fun restoreSavedPanel(
+    layout: String?, configured: Boolean, credentials: HaCredentials?, remote: SavedRemote?,
+): SavedPanel {
+    val config = try {
+        layout?.let(PanelConfigCodec::decode)
+    } catch (_: JSONException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    }
+    return SavedPanel(configured, config ?: PanelConfig(), credentials, remote, layout != null && config == null)
 }
 
 internal class PanelStore(context: Context) {
@@ -45,9 +60,13 @@ internal class PanelStore(context: Context) {
 
     @Synchronized
     fun read(): SavedPanel {
-        val config = prefs.getString(LAYOUT, null)?.let(PanelConfigCodec::decode) ?: PanelConfig()
         val credentials = readCredentials()
-        return SavedPanel(prefs.contains(PIN_HASH), config, credentials, credentials?.let { readRemote(it.server.toString()) })
+        return restoreSavedPanel(
+            layout = prefs.getString(LAYOUT, null),
+            configured = prefs.contains(PIN_HASH),
+            credentials = credentials,
+            remote = credentials?.let { readRemote(it.server.toString()) },
+        )
     }
 
     private fun readCredentials(): HaCredentials? {
@@ -61,15 +80,14 @@ internal class PanelStore(context: Context) {
         val url = credentials.server.toString()
         val prior = readCredentials()
         val remote = if (prior != null && prior.server == credentials.server && prior.token == credentials.token) readRemote(url) else null
-        val edit = prefs.edit()
-            .putString(SERVER, url)
-            .putString(LAYOUT, PanelConfigCodec.encode(config))
+        val edit = prefs.edit().putString(SERVER, url)
         if (remote == null) edit.remove(REMOTE_IV).remove(REMOTE_DATA).remove(REMOTE_NAME)
         writeSecret(edit, TOKEN_IV, TOKEN_DATA, url, credentials.token)
         if (newPin != null) {
             require(validPin(newPin)) { "Choose a PIN with 4 to 8 digits" }
             val salt = ByteArray(16).also(SecureRandom()::nextBytes)
-            edit.putString(PIN_SALT, encode(salt))
+            edit.putString(LAYOUT, PanelConfigCodec.encode(config))
+                .putString(PIN_SALT, encode(salt))
                 .putString(PIN_HASH, encode(derive(newPin, salt)))
                 .remove(PIN_FAILURES)
                 .remove(PIN_WAIT)

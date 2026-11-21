@@ -42,7 +42,9 @@ internal fun PersonTile(label: String, live: Entity?, online: Boolean, modifier:
                 TileTitle(label, Modifier.weight(1f))
                 if (location != null) Icon(Icons.Rounded.ArrowOutward, "Open map", Modifier.size(19.dp), tint = colors.onSurfaceVariant)
             }
-            TileStatus(person?.personStatus() ?: "Unavailable")
+            val status = person?.personStatus()
+            if (status != null) TileValue(status, maxLines = 2)
+            else TileStatus("Unavailable")
         }
     }
 }

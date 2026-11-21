@@ -84,7 +84,8 @@ private fun PinField(value: String, change: (String) -> Unit, label: String) {
 internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     AlertDialog(modifier = Modifier.widthIn(max = 304.dp), onDismissRequest = cancel, title = { Text("Unlock setup") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(7.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
             Text(if (pin.isEmpty()) "Enter PIN" else "●".repeat(pin.length),
                 modifier = Modifier.padding(bottom = 7.dp).clearAndSetSemantics {
                     contentDescription = if (pin.isEmpty()) "Enter PIN" else "${pin.length} digits entered"

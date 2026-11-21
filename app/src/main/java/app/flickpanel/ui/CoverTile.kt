@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -79,6 +80,7 @@ private fun GateToggleTile(
         modifier = modifier.semantics {
             role = Role.Button
             stateDescription = status
+            if (action != null) onClick(label = "${action.label} $label", action = null)
         },
         shape = panelCardShape,
         color = if (isOpen) colors.primaryContainer else colors.surfaceContainer,
@@ -87,11 +89,8 @@ private fun GateToggleTile(
         Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             val accent = if (isOpen) colors.onPrimaryContainer else colors.primary
             ControlTileTitle(label, Icons.Rounded.Fence, accent)
-            TileStatus(status, color = if (isOpen) colors.onPrimaryContainer else colors.onSurfaceVariant)
-            if (action != null) {
-                val hint = if (action == CoverAction.OPEN) "Tap to open" else "Tap to close"
-                Text(hint, style = MaterialTheme.typography.labelLarge, color = accent)
-            }
+            if (action != null) TileValue(status, maxLines = 2)
+            else TileStatus(status, color = if (isOpen) colors.onPrimaryContainer else colors.onSurfaceVariant)
         }
     }
 }

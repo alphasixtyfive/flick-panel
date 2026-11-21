@@ -1,5 +1,6 @@
 package app.flickpanel
 
+import android.app.ActivityManager
 import android.app.Application
 import android.graphics.Bitmap
 import android.os.Build
@@ -66,7 +67,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private val commandJobs = mutableMapOf<String, Job>()
     private val graphTimes = mutableMapOf<String, Long>()
     private val graphRequests = mutableSetOf<String>()
-    private var images = PanelImages(viewModelScope)
+    private val lowImageMemory = application.getSystemService(ActivityManager::class.java)
+        ?.let { it.isLowRamDevice || it.memoryClass <= 128 } == true
+    private var images = PanelImages(viewModelScope, lowImageMemory)
     private data class MusicFolder(val player: String, val type: String?, val id: String?)
     private data class MusicPage(val choices: List<MediaChoice>, val fetchedAt: Long)
     private val musicPages = LruCache<MusicFolder, MusicPage>(16)
@@ -78,7 +81,12 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch {
             safely {
                 val saved = withContext(Dispatchers.IO) { store.read() }
-                _ui.update { it.copy(loading = false, configured = saved.configured, layout = RoomLayout(saved.config)) }
+                _ui.update { it.copy(
+                    loading = false,
+                    configured = saved.configured,
+                    layout = RoomLayout(saved.config),
+                    error = if (saved.layoutUnreadable) "Saved layout couldn't be read. Create a new layout in Setup." else null,
+                ) }
                 if (saved.credentials != null) setupClient(saved.credentials, saved.remote)
             }
             _ui.update { it.copy(loading = false) }
@@ -347,10 +355,13 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun mediaTransport(entity: Entity, transport: MediaTransport) {
-        if (!entity.mediaFeatures.hasMediaFeature(transport.bit)) return
-        val active = client ?: return
-        viewModelScope.launch { safely { active.command(entity.id, "media_player", transport.service) } }
+    fun mediaTransport(id: String, transport: MediaTransport) {
+        val entity = _ui.value.entities[id] ?: return
+        if (entity.domain != "media_player" || !entity.mediaFeatures.hasMediaFeature(transport.bit)) return
+        val play = transport == MediaTransport.PLAY
+        if (entity.playingMedia == play) return
+        send(entity, transport.service, pending = if (play) "Starting…" else "Pausing…",
+            matches = { it.available && it.playingMedia == play })
     }
 
     fun setVolume(entity: Entity, percent: Int) {
@@ -462,6 +473,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     fun cachedSnapshot(id: String, revision: String = ""): Bitmap? = images.snapshots.cached("$id@$revision")
 
     suspend fun snapshot(id: String, revision: String = ""): Bitmap? {
+        if (!foreground) return null
         val active = client ?: return null
         return images.snapshots.load("$id@$revision") { active.snapshot(id) }
     }
@@ -484,20 +496,23 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun videoTransport(): OkHttpClient = client?.videoClient ?: throw HaProblem("Home Assistant isn't connected")
 
-    fun loadGraph(id: String) {
+    suspend fun loadGraph(id: String) {
+        if (!foreground) return
         val active = client ?: return
         val now = SystemClock.elapsedRealtime()
         if (graphTimes[id]?.let { now - it < 60_000 } == true || !graphRequests.add(id)) return
-        viewModelScope.launch {
-            try {
-                val values = active.history(id)
-                if (client === active) {
-                    graphTimes[id] = now
-                    _ui.update { it.copy(graphs = it.graphs + (id to values)) }
-                }
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { graphTimes[id] = now }
-            finally { graphRequests.remove(id) }
+        try {
+            val values = withContext(Dispatchers.Default) { active.history(id) }
+            if (client === active) {
+                graphTimes[id] = now
+                _ui.update { it.copy(graphs = it.graphs + (id to values)) }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            if (client === active) graphTimes[id] = now
+        } finally {
+            if (client === active) graphRequests.remove(id)
         }
     }
 
@@ -528,7 +543,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         graphTimes.clear()
         graphRequests.clear()
         images.close()
-        images = PanelImages(viewModelScope)
+        images = PanelImages(viewModelScope, lowImageMemory)
         musicPages.evictAll()
         presence = null
         _ui.update { it.copy(

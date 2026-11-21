@@ -82,24 +82,33 @@ private val Graphite = darkColorScheme(
 private val Amber = darkColorScheme(
     primary = Color(0xfff2c78b), onPrimary = Color(0xff39270e),
     primaryContainer = Color(0xff513d27), onPrimaryContainer = Color(0xfffae5c6),
-    secondary = Color(0xffddcab0), secondaryContainer = Color(0xff483c30),
+    secondary = Color(0xffddcab0), onSecondary = Color(0xff352d22), secondaryContainer = Color(0xff483c30),
     onSecondaryContainer = Color(0xfff6ebdd), background = Color(0xff1b1918),
+    tertiary = Color(0xffb7cca4), onTertiary = Color(0xff26351d),
+    tertiaryContainer = Color(0xff384b30), onTertiaryContainer = Color(0xffdeedcf),
     onBackground = Color(0xfff5eee8), surface = Color(0xff1b1918), onSurface = Color(0xfff5eee8),
-    surfaceContainerLow = Color(0xff241f1b), surfaceContainer = Color(0xff2b2622),
-    surfaceContainerHigh = Color(0xff332c26), surfaceContainerHighest = Color(0xff40362f),
+    surfaceDim = Color(0xff1b1918), surfaceBright = Color(0xff493d34),
+    surfaceContainerLowest = Color(0xff151311), surfaceContainerLow = Color(0xff241f1b),
+    surfaceContainer = Color(0xff332d26), surfaceContainerHigh = Color(0xff3a322b),
+    surfaceContainerHighest = Color(0xff443830),
     surfaceVariant = Color(0xff41372f), onSurfaceVariant = Color(0xffcfc1b3),
+    inverseSurface = Color(0xffeee0d2), inverseOnSurface = Color(0xff342920), inversePrimary = Color(0xff784e24),
     outline = Color(0xff9b8c7f), outlineVariant = Color(0xff4b4138)
 )
 
 private val Porcelain = lightColorScheme(
     primary = Color(0xff315b83), onPrimary = Color.White,
-    primaryContainer = Color(0xffdbeaff), onPrimaryContainer = Color(0xff153b5f),
-    secondary = Color(0xff4d6278), secondaryContainer = Color(0xffdde7f0),
+    primaryContainer = Color(0xffb5d2f0), onPrimaryContainer = Color(0xff153b5f),
+    secondary = Color(0xff4d6278), onSecondary = Color.White, secondaryContainer = Color(0xffdde7f0),
     onSecondaryContainer = Color(0xff22384d), background = Color(0xfff6f6f3),
+    tertiary = Color(0xff38645c), onTertiary = Color.White,
+    tertiaryContainer = Color(0xffd0e9e1), onTertiaryContainer = Color(0xff153c35),
     onBackground = Color(0xff202832), surface = Color(0xfff6f6f3), onSurface = Color(0xff202832),
-    surfaceContainerLow = Color(0xfffaf9f6), surfaceContainer = Color(0xffe6eaf0),
+    surfaceDim = Color(0xffdce2e8), surfaceBright = Color(0xfffafaf8),
+    surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xfffaf9f6), surfaceContainer = Color(0xffe6eaf0),
     surfaceContainerHigh = Color(0xffdde4ec), surfaceContainerHighest = Color(0xffd3dce6),
     surfaceVariant = Color(0xffdfe5ed), onSurfaceVariant = Color(0xff364351),
+    inverseSurface = Color(0xff293744), inverseOnSurface = Color(0xffeef5fc), inversePrimary = Color(0xffbfdfff),
     outline = Color(0xff727e8e), outlineVariant = Color(0xffc5cdd8)
 )
 

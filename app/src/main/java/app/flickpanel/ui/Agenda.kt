@@ -18,7 +18,6 @@ import androidx.compose.material.icons.rounded.ArrowOutward
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,14 +78,11 @@ internal fun AgendaPreview(
             if (message != null) AgendaSubtitle(message)
             when (val content = state.content) {
                 is AgendaContent.Tasks -> for (item in content.items.asSequence().filterNot { it.completed }.take(limit)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.RadioButtonUnchecked, null, Modifier.size(15.dp), tint = colors.onSurfaceVariant)
-                        Text(item.summary, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+                    Text(item.summary, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 is AgendaContent.Calendar -> for (event in content.events.take(limit)) {
                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text(event.summary, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(event.summary, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         AgendaSubtitle(dates.eventSubtitle(event))
                     }
                 }

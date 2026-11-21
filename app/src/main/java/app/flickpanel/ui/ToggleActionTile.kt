@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -53,7 +54,7 @@ internal fun ToggleActionTile(
     val text = pending ?: when {
         !ready -> "Unavailable"
         countdown != null -> countdown.label
-        action -> "Run"
+        action -> null
         on -> "On"
         else -> "Off"
     }
@@ -66,8 +67,10 @@ internal fun ToggleActionTile(
             }
         }
     }, enabled = ready, modifier = modifier.semantics {
-        stateDescription = text
-        if (!action) {
+        if (text != null) stateDescription = text
+        if (action) {
+            if (ready) onClick(label = "Run $label", action = null)
+        } else {
             role = Role.Switch
             toggleableState = ToggleableState(on)
         }
@@ -84,8 +87,10 @@ internal fun ToggleActionTile(
                 },
                 if (active) colors.onPrimaryContainer else colors.primary,
             )
-            if (countdown != null && pending == null) TileValue(text)
-            else TileStatus(text, color = if (active) colors.onPrimaryContainer else colors.onSurfaceVariant)
+            if (text != null) {
+                if (ready) TileValue(text, maxLines = 2)
+                else TileStatus(text, color = if (active) colors.onPrimaryContainer else colors.onSurfaceVariant)
+            }
         }
     }
     if (confirming.value && live != null) {

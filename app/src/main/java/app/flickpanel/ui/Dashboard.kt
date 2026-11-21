@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +26,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MeetingRoom
@@ -150,15 +152,11 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             DashboardNavigation(state.page, wide, compact, short, model::selectPage)
             key(state.page) {
-                val body = Modifier.fillMaxSize().padding(top = if (short) 10.dp else 22.dp)
-                    .panelEntrance(state.page, state.config.reduceMotion)
+                val body = Modifier.fillMaxSize().padding(top = if (short) 10.dp else 16.dp)
                 when (state.page) {
                     Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
                     Page.ROOMS -> Rooms(state, model, tileColumns, body)
-                    Page.FAVOURITES -> Column(body.verticalScroll(rememberScrollState()).padding(bottom = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(tileGap)) {
-                        Favourites(state, model, tileColumns, resizeTiles = !compact)
-                    }
+                    Page.FAVOURITES -> Favourites(state, model, tileColumns, resizeTiles = !compact, modifier = body)
                 }
             }
         }
@@ -171,7 +169,7 @@ internal fun DashboardHeader(
     title: String, weather: Entity?, wide: Boolean, short: Boolean, stacked: Boolean,
     unlock: () -> Unit, idle: () -> Unit,
 ) {
-    val padding = if (short) 6.dp else if (wide) 34.dp else 18.dp
+    val padding = if (short) 6.dp else if (wide) 22.dp else 18.dp
     val prominent = wide && !short
     val titleContent: @Composable (Modifier) -> Unit = { modifier ->
         Text(
@@ -217,19 +215,23 @@ private fun HeaderClock(wide: Boolean, showIdleScreen: () -> Unit) {
     Box(Modifier.heightIn(min = 48.dp).clickable(interactionSource = null, indication = null,
         onClickLabel = "Show idle screen", role = Role.Button, onClick = showIdleScreen),
         contentAlignment = Alignment.Center) {
-        Text(clockTime().format(clockFormat),
-            style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge)
+        val style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge
+        Text(clockTime().format(clockFormat), style = style.copy(fontFeatureSettings = "'tnum'"))
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, short: Boolean, selectPage: (Page) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val stacked = compact && !short && LocalDensity.current.fontScale < 1.3f
-    val scroll = if (stacked) Modifier else Modifier.horizontalScroll(rememberScrollState())
-    Row(Modifier.fillMaxWidth().padding(top = if (short) 6.dp else if (wide) 28.dp else 16.dp)
-        .then(scroll).selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val largeText = LocalDensity.current.fontScale >= 1.3f
+    val stacked = compact && !short && !largeText
+    val textOnly = compact && largeText
+    val typography = MaterialTheme.typography
+    val labelStyle = if (stacked || textOnly) typography.labelLarge else typography.titleMedium
+    val group = Modifier.fillMaxWidth().padding(top = if (short) 6.dp else 16.dp).selectableGroup()
+    val spacing = Arrangement.spacedBy(8.dp)
+    val tabs: @Composable RowScope.() -> Unit = {
         for (page in Page.entries) {
             val icon = when (page) {
                 Page.FAVOURITES -> Icons.Rounded.FavoriteBorder
@@ -246,33 +248,38 @@ internal fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean,
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
                         Icon(icon, null, Modifier.size(20.dp))
-                        Text(page.label, style = MaterialTheme.typography.labelLarge,
+                        Text(page.label, style = labelStyle,
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 } else {
                     Row(Modifier.heightIn(min = if (short) 48.dp else 56.dp)
                         .padding(horizontal = if (wide) 20.dp else 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(icon, null, Modifier.size(24.dp))
-                        Text(page.label, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                        if (!textOnly) Icon(icon, null, Modifier.size(24.dp))
+                        Text(page.label, style = labelStyle, maxLines = 1)
                     }
                 }
             }
         }
     }
+    when {
+        stacked -> Row(group, horizontalArrangement = spacing, content = tabs)
+        short -> Row(group.horizontalScroll(rememberScrollState()), horizontalArrangement = spacing, content = tabs)
+        else -> FlowRow(group, horizontalArrangement = spacing, verticalArrangement = spacing) { tabs() }
+    }
 }
 
 @Composable
-private fun Favourites(state: PanelUi, model: PanelViewModel, columns: Int, resizeTiles: Boolean) {
+private fun Favourites(state: PanelUi, model: PanelViewModel, columns: Int, resizeTiles: Boolean, modifier: Modifier) {
     val tiles = remember(state.config.favourites) {
         val headerWeather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
         state.config.favourites.filter { it.showOnHome && it != headerWeather }
     }
     if (tiles.isEmpty()) {
-        EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.")
+        Column(modifier) { EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.") }
         return
     }
-    FavouritesTileGrid(tiles, state, model, columns, resizeTiles)
+    FavouritesTileGrid(tiles, state, model, columns, resizeTiles, modifier)
 }
 
 @Composable

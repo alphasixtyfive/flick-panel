@@ -1,9 +1,9 @@
 package app.flickpanel.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -41,6 +42,7 @@ internal fun ValueTile(
     val entity = state.entity(tile.entity)
     val colors = MaterialTheme.colorScheme
     val trend = tile.kind == TileKind.TREND
+    val points = if (trend) state.graphs[tile.entity].orEmpty() else emptyList()
     if (trend && state.link == Link.ONLINE) LaunchedEffect(tile.entity) {
         while (isActive) {
             model.loadGraph(tile.entity)
@@ -55,13 +57,12 @@ internal fun ValueTile(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 TileTitle(label, Modifier.weight(1f))
-                if (trend) Text("6 h", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                if (points.size > 1) Text("6 h", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
             }
             val value = displayValue(entity)
             if (entity?.available == true) TileValue(value, prominent = entity.state.toDoubleOrNull()?.isFinite() == true, maxLines = 2)
             else TileStatus(value)
             if (trend) {
-                val points = state.graphs[tile.entity].orEmpty()
                 if (points.size > 1) {
                     val chart = if (wideGraph) Modifier.weight(1f) else Modifier.height(21.dp)
                     Sparkline(points, chart.fillMaxWidth())
@@ -108,17 +109,20 @@ internal fun formatNumber(value: Double, precision: Int): String =
 @Composable
 private fun Sparkline(points: List<GraphPoint>, modifier: Modifier) {
     val color = MaterialTheme.colorScheme.primary
-    val first = points.first().time
-    val elapsed = (points.last().time - first).coerceAtLeast(1)
-    val low = points.minOf { it.value }
-    val range = (points.maxOf { it.value } - low).coerceAtLeast(.01)
-    Canvas(modifier.semantics { contentDescription = "Last six hours" }) {
+    Spacer(modifier.semantics { contentDescription = "Last six hours" }.drawWithCache {
+        val first = points.first().time
+        val elapsed = (points.last().time - first).coerceAtLeast(1)
+        val low = points.minOf { it.value }
+        val range = (points.maxOf { it.value } - low).coerceAtLeast(.01)
+        val horizontalInset = minOf(2.dp.toPx(), size.width / 2)
+        val verticalInset = minOf(4.dp.toPx(), size.height / 2)
         val curve = Path()
         for ((index, point) in points.withIndex()) {
-            val x = ((point.time - first).toDouble() / elapsed).toFloat() * (size.width - 4f) + 2f
-            val y = size.height - (((point.value - low) / range).toFloat() * (size.height - 8f) + 4f)
+            val x = ((point.time - first).toDouble() / elapsed).toFloat() * (size.width - 2 * horizontalInset) + horizontalInset
+            val y = size.height - (((point.value - low) / range).toFloat() * (size.height - 2 * verticalInset) + verticalInset)
             if (index == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
         }
-        drawPath(curve, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-    }
+        val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        onDrawBehind { drawPath(curve, color, style = stroke) }
+    })
 }

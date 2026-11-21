@@ -88,7 +88,7 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
     val colors = MaterialTheme.colorScheme
     val features = entity?.mediaFeatures ?: 0L
     val state = entity?.state
-    val playing = state == "playing" || state == "buffering"
+    val playing = entity?.playingMedia == true
     val hasCurrent = playing || state == "paused"
     val transport = if (playing) MediaTransport.PAUSE else MediaTransport.PLAY
     val canBrowse = features.canBrowseMusic()
@@ -99,7 +99,8 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
     val cover = rememberMusicArtwork(entity?.attributes?.text("entity_picture")?.takeIf { ready && hasCurrent }, model)
     val detail = when {
         adjusting != null -> "Volume $adjusting%"
-        entity?.available != true -> "Unavailable"
+        pending != null -> pending
+        !ready || entity?.available != true -> "Unavailable"
         hasCurrent -> listOfNotNull(entity.attributes.text("media_title"), entity.attributes.text("media_artist"))
             .joinToString(" \u00B7 ").takeIf { it.isNotEmpty() }
         canBrowse -> "Browse music"
@@ -137,7 +138,7 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
                 TileStatus(detail.orEmpty(), Modifier.weight(1f))
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     if (showTransport) {
-                        FilledTonalIconButton(onClick = { entity?.let { model.mediaTransport(it, transport) } },
+                        FilledTonalIconButton(onClick = { entity?.let { model.mediaTransport(it.id, transport) } },
                             modifier = Modifier.fillMaxSize(), enabled = ready) {
                             Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 if (playing) "Pause" else "Play")

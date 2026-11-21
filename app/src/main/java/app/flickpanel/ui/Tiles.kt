@@ -2,11 +2,15 @@ package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -40,41 +44,65 @@ internal fun TileGrid(
 @Composable
 internal fun FavouritesTileGrid(
     tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, resizeTiles: Boolean,
+    modifier: Modifier,
 ) {
-    if (columns < 4) {
-        TileGrid(tiles, state, model, columns = columns, resizeTiles = resizeTiles)
-        return
+    val compact = columns >= 4
+    val resizable = compact || resizeTiles
+    val (apps, devices) = remember(tiles, compact) {
+        if (compact) tiles.partition { it.kind == TileKind.APP } else emptyList<TileSpec>() to tiles
     }
-
-    val (apps, devices) = remember(tiles) { tiles.partition { it.kind == TileKind.APP } }
     val summary = if (apps.size >= 3) devices.firstOrNull { it.kind == TileKind.TREND }?.takeUnless { it.wideOnTablet } else null
     val controls = remember(devices, summary) { devices.filterNot { it == summary } }
-    val camera = controls.firstOrNull { it.kind == TileKind.CAMERA }
-    val rows = remember(controls, camera) {
-        packTileRows(controls.filterNot { it.kind == TileKind.CAMERA }, columns = 2, compact = true, resizeTiles = true)
+    val camera = if (compact) controls.firstOrNull { it.kind == TileKind.CAMERA } else null
+    val featureRows = remember(controls, camera) {
+        if (camera == null) emptyList()
+        else packTileRows(controls.filterNot { it.kind == TileKind.CAMERA }, columns = 2, compact = true, resizeTiles = true)
+            .takeIf { it.size >= 2 }?.take(3).orEmpty()
     }
-    if (camera != null && rows.size >= 2) {
-        val featureRows = rows.take(3)
-        FeaturedCamera(camera, featureRows, state, model)
-        val remaining = remember(controls, camera, featureRows) {
+    val remaining = remember(controls, camera, featureRows) {
+        if (featureRows.isEmpty()) controls else {
             val featured = featureRows.flatten().toSet() + camera
             controls.filterNot { it in featured }
         }
-        TileGrid(remaining, state, model, columns = 4, compact = true)
-    } else {
-        TileGrid(controls, state, model, columns = 4, compact = true)
     }
-    if (summary != null) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
-            Column(Modifier.weight(1f)) {
-                TileGrid(apps.take(4), state, model, columns = 2, compact = true)
+    val controlRows = remember(remaining, columns, compact, resizable) {
+        packTileRows(remaining, columns, compact, resizable)
+    }
+    val appRows = remember(apps, summary, columns, compact, resizable) {
+        packTileRows(if (summary == null) apps else apps.drop(4), columns, compact, resizable)
+    }
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(tileGap),
+    ) {
+        if (camera != null && featureRows.isNotEmpty()) {
+            item(key = "featured:${camera.entity}", contentType = "featured") {
+                FeaturedCamera(camera, featureRows, state, model)
             }
-            PanelTile(summary, state, model, Modifier.weight(1f).height(shortcutHeight * 2 + tileGap),
-                compact = true, wideGraph = true)
         }
-        TileGrid(apps.drop(4), state, model, columns = 4, compact = true)
-    } else {
-        TileGrid(apps, state, model, columns = 4, compact = true)
+        tileRows(controlRows, state, model, columns, compact, resizable)
+        if (summary != null) {
+            item(key = "summary:${summary.entity}", contentType = "summary") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
+                    Column(Modifier.weight(1f)) {
+                        TileGrid(apps.take(4), state, model, columns = 2, compact = true)
+                    }
+                    PanelTile(summary, state, model, Modifier.weight(1f).height(shortcutHeight * 2 + tileGap),
+                        compact = true, wideGraph = true)
+                }
+            }
+        }
+        tileRows(appRows, state, model, columns, compact, resizable)
+    }
+}
+
+private fun LazyListScope.tileRows(
+    rows: List<List<TileSpec>>, state: PanelUi, model: PanelViewModel,
+    columns: Int, compact: Boolean, resizeTiles: Boolean,
+) {
+    items(rows, key = { it.first().entity }, contentType = { "tiles" }) { row ->
+        TileRow(row, state, model, columns, compact, resizeTiles)
     }
 }
 

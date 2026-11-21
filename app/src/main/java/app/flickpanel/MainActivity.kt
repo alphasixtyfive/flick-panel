@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -99,8 +101,11 @@ class MainActivity : ComponentActivity() {
                         val tile = state.config.favourites.firstOrNull { it.entity == camera }
                         val title = tile?.let(state::label)
                         val features = state.entity(camera)?.attributes?.optLong("supported_features", -1L) ?: -1L
-                        CameraViewer(camera, title, canStream = features and 2L != 0L, openedAt = state.cameraOpenedAt,
-                            gateId = tile?.cameraGate, state = state, model = model)
+                        Box(Modifier.fillMaxSize()) {
+                            CameraViewer(camera, title, canStream = features and 2L != 0L, openedAt = state.cameraOpenedAt,
+                                gateId = tile?.cameraGate, state = state, model = model)
+                            SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
+                        }
                         BackHandler(onBack = model::closeCamera)
                     }
                     music != null -> MusicBrowser(music, state.entity(music)?.name, model)
@@ -118,7 +123,7 @@ class MainActivity : ComponentActivity() {
                         BackHandler(onBack = model::closeContent)
                     }
                     else -> dashboard.SaveableStateProvider("dashboard") {
-                        val insets = if (state.configured) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets
+                        val insets = if (state.configured) WindowInsets.displayCutout else ScaffoldDefaults.contentWindowInsets
                         Scaffold(snackbarHost = { SnackbarHost(snacks) }, contentWindowInsets = insets) { padding ->
                             Box(Modifier.fillMaxSize().padding(padding)) {
                                 when {

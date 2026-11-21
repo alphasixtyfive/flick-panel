@@ -31,7 +31,9 @@ internal fun BrightnessTile(
     val preview = remember(entity?.id) { mutableStateOf<Int?>(null) }
     val draggingLevel = preview.value
     val on = entity?.state == "on"
-    val level = draggingLevel ?: pending?.removeSuffix("%")?.toIntOrNull() ?: entity?.brightness
+    val level = if (enabled || pending != null) {
+        draggingLevel ?: pending?.removeSuffix("%")?.toIntOrNull() ?: entity?.brightness
+    } else null
     val status = when {
         draggingLevel != null -> "$draggingLevel%"
         pending != null -> pending
@@ -54,7 +56,7 @@ internal fun BrightnessTile(
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             ControlTileTitle(label, Icons.Rounded.Lightbulb, colors.primary)
-            if (status.endsWith('%')) TileValue(status)
+            if (status.endsWith('%') || enabled && pending == null) TileValue(status)
             else TileStatus(status)
         }
     }

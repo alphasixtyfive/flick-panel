@@ -94,9 +94,9 @@ internal fun IdlePhotos(
                     contentScale = ContentScale.Crop,
                 )
                 Box(Modifier.matchParentSize().background(Brush.verticalGradient(
-                    0f to Color(0x75000000), 0.25f to Color(0x29000000),
-                    0.49f to Color(0x84000000), 0.63f to Color(0x99000000),
-                    0.85f to Color(0x33000000), 1f to Color(0x40000000),
+                    0f to Color(0x99000000), 0.28f to Color(0x99000000),
+                    0.42f to Color(0xa3000000), 0.74f to Color(0x99000000),
+                    1f to Color(0x40000000),
                 )))
             }
         }
