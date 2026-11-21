@@ -78,6 +78,8 @@ import java.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+internal val musicScreenWidth = 960.dp
+
 @Composable
 internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel) {
     val entity = state.entities[id]
@@ -118,7 +120,7 @@ internal fun NowPlaying(
         val headerButtonSize = 48.dp
         val availableHeight = maxHeight
         Column(
-            Modifier.widthIn(max = 1000.dp).fillMaxWidth().verticalScroll(rememberScrollState())
+            Modifier.widthIn(max = musicScreenWidth).fillMaxWidth().verticalScroll(rememberScrollState())
                 .padding(horizontal = inset, vertical = verticalPadding),
             verticalArrangement = Arrangement.spacedBy(headerGap),
         ) {

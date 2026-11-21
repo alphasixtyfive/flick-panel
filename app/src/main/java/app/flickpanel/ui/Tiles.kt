@@ -30,6 +30,7 @@ import app.flickpanel.config.TileSpec
 internal val tileGap = 14.dp
 private val cellHeight = 132.dp
 private val compactCellHeight = 110.dp
+private val personTileHeight = 86.dp
 private val shortcutHeight = 64.dp
 
 @Composable
@@ -43,7 +44,13 @@ internal fun FavouritesTileGrid(
         homeTileGroups(tiles, columns, compact, resizable)
     }
     val firstCameraRow = groups.cameras.firstOrNull()
-    val sharedRow = compact && firstCameraRow?.size == 2 && groups.people.size in 1..2
+    val peopleBesideCameras = if (compact && firstCameraRow?.size == 2) groups.people.take(3) else emptyList()
+    val agendaBesideCameras = groups.agenda.singleOrNull()?.takeIf {
+        peopleBesideCameras.size == 3 && groups.agendaColumns == 2
+    }
+    val remainingPeople = remember(groups.people, peopleBesideCameras, columns, compact, resizable) {
+        packTileRows(groups.people.drop(peopleBesideCameras.size).flatten(), columns, compact, resizable)
+    }
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(bottom = 20.dp),
@@ -51,29 +58,37 @@ internal fun FavouritesTileGrid(
     ) {
         if (badges.isNotEmpty()) item(key = "home-warnings") { HomeWarnings(badges) }
         tileRows(groups.controls, state, model, columns, compact, resizable)
-        if (sharedRow) {
+        if (firstCameraRow != null && peopleBesideCameras.isNotEmpty()) {
             item(key = "home-glance", contentType = "home-glance") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
-                    HomeCameraRow(firstCameraRow, columns, state, model,
-                        modifier = Modifier.weight(1f), previewHeight = 186.dp)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(tileGap)) {
-                        for (row in groups.people) {
+                        val peopleHeight = personTileHeight * peopleBesideCameras.size + tileGap * (peopleBesideCameras.size - 1)
+                        HomeCameraRow(
+                            firstCameraRow, columns, state, model,
+                            previewHeight = if (agendaBesideCameras == null) maxOf(186.dp, peopleHeight) else 154.dp,
+                        )
+                        if (agendaBesideCameras != null) {
+                            TileRow(agendaBesideCameras, state, model, groups.agendaColumns, compact, resizable)
+                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                        for (row in peopleBesideCameras) {
                             TileRow(row, state, model, groups.peopleColumns, compact, resizable)
                         }
                     }
                 }
             }
         }
-        val cameraRows = if (sharedRow) groups.cameras.drop(1) else groups.cameras
+        val cameraRows = if (peopleBesideCameras.isEmpty()) groups.cameras else groups.cameras.drop(1)
         items(cameraRows, key = { "home-cameras:" + it.first().entity }, contentType = { "home-cameras" }) { cameras ->
             HomeCameraRow(cameras, columns, state, model)
         }
-        if (!sharedRow) {
-            tileRows(groups.people, state, model, groups.peopleColumns, compact, resizable)
+        tileRows(remainingPeople, state, model, columns, compact, resizable)
+        if (agendaBesideCameras == null) {
+            val agendaColumns = if (compact) columns else groups.agendaColumns
+            tileRows(groups.agenda, state, model, agendaColumns, compact, resizable)
         }
-        tileRows(groups.agenda, state, model, groups.agendaColumns, compact, resizable)
-        val shortcutColumns = minOf(columns, groups.shortcuts.size).coerceAtLeast(1)
-        tileRows(groups.shortcuts.chunked(shortcutColumns), state, model, shortcutColumns, compact, resizable,
+        tileRows(groups.shortcuts.chunked(columns), state, model, columns, compact, resizable,
             shortcutRow = true)
         tileRows(groups.history, state, model, columns, compact, resizable)
     }
@@ -85,10 +100,9 @@ private fun HomeCameraRow(
     columns: Int,
     state: PanelUi,
     model: PanelViewModel,
-    modifier: Modifier = Modifier,
     previewHeight: Dp = if (columns > 1) 142.dp else 180.dp,
 ) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
         for (camera in cameras) {
             CameraTile(camera, state, model, Modifier.weight(1f).height(previewHeight))
         }
@@ -116,7 +130,7 @@ private fun TileRow(
                 TileKind.APP -> if (compact) shortcutHeight else 76.dp
                 TileKind.TREND -> if (shortcutRow) shortcutHeight else if (compact) compactCellHeight else cellHeight
                 TileKind.CAMERA -> 142.dp
-                TileKind.PERSON -> 86.dp
+                TileKind.PERSON -> personTileHeight
                 TileKind.IMAGE -> if (compact && tile.wideOnTablet) 190.dp else 144.dp
                 TileKind.TASKS, TileKind.CALENDAR -> if (compact) 126.dp else 144.dp
                 else -> if (compact) compactCellHeight else cellHeight

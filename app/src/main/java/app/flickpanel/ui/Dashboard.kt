@@ -243,31 +243,35 @@ internal fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Pag
     val tabLabel = if (short) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium
     val tabs: @Composable () -> Unit = {
         for (page in Page.entries) {
+            val selected = current == page
             Tab(
-                selected = current == page,
+                selected = selected,
                 onClick = { selectPage(page) },
                 selectedContentColor = colors.primary,
                 unselectedContentColor = colors.onSurfaceVariant,
                 modifier = Modifier.heightIn(min = if (short) 48.dp else 56.dp),
             ) {
                 Text(page.label, Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
-                    style = tabLabel, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    style = tabLabel, fontWeight = if (selected) FontWeight.SemiBold else tabLabel.fontWeight,
+                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
     BoxWithConstraints(
-        Modifier.padding(top = if (short) 4.dp else 10.dp).widthIn(max = 480.dp).fillMaxWidth(),
+        Modifier.padding(top = if (short) 4.dp else 10.dp).widthIn(max = 420.dp).fillMaxWidth(),
     ) {
         val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
         if (maxWidth < 284.dp * fontScale) {
             PrimaryScrollableTabRow(
                 selectedTabIndex = current.ordinal, edgePadding = 0.dp,
-                containerColor = Color.Transparent, contentColor = colors.primary, tabs = tabs,
+                containerColor = Color.Transparent, contentColor = colors.primary,
+                indicator = {}, divider = {}, tabs = tabs,
             )
         } else {
             PrimaryTabRow(
                 selectedTabIndex = current.ordinal,
-                containerColor = Color.Transparent, contentColor = colors.primary, tabs = tabs,
+                containerColor = Color.Transparent, contentColor = colors.primary,
+                indicator = {}, divider = {}, tabs = tabs,
             )
         }
     }

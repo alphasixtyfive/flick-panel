@@ -1,8 +1,6 @@
 package app.flickpanel.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,13 +10,13 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -27,19 +25,15 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,10 +49,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -66,7 +57,6 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelViewModel
 import app.flickpanel.ha.MediaChoice
@@ -154,13 +144,14 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel, cl
 
     Surface(Modifier.fillMaxSize(), color = colors.surface) {
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
-            val wide = maxWidth >= tabletWidthDp.dp
-            val cardMinimum = if (wide) 194.dp else 154.dp
+            val wide = maxWidth >= 680.dp
+            val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+            val libraryColumns = if (minOf(maxWidth, musicScreenWidth) >= 700.dp * fontScale) 2 else 1
             val speakerInline = maxWidth >= 620.dp
             Column(
-                Modifier.widthIn(max = panelMaxWidth).fillMaxSize()
-                    .padding(horizontal = if (wide) panelWidePadding else 20.dp)
-                    .padding(top = if (wide) 34.dp else 18.dp),
+                Modifier.widthIn(max = musicScreenWidth).fillMaxSize()
+                    .padding(horizontal = if (wide) 28.dp else 20.dp)
+                    .padding(top = 16.dp),
             ) {
                 MusicHeader(
                     collection = current?.title,
@@ -186,13 +177,13 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel, cl
                         Modifier.weight(1f),
                         state = overviewScroll,
                         contentPadding = PaddingValues(bottom = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         items(shelves) { shelf ->
                             MusicShelf(
                                 shelf.title,
                                 cache[shelf],
-                                cardMinimum,
+                                libraryColumns,
                                 model,
                                 failed = failures[shelf] == true,
                                 enabled = !starting,
@@ -212,15 +203,15 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel, cl
                     }
                 } else {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(cardMinimum),
+                        columns = GridCells.Fixed(libraryColumns),
                         modifier = Modifier.weight(1f),
                         state = gridScroll,
                         contentPadding = PaddingValues(bottom = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(results) { item ->
-                            MusicCard(item, model, !starting, open = { open(item) }, play = { play(item) })
+                            MusicEntry(item, model, !starting, open = { open(item) }, play = { play(item) })
                         }
                     }
                 }
@@ -250,11 +241,11 @@ private fun MusicHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            FilledTonalIconButton(onClick = back, enabled = !starting, modifier = Modifier.size(48.dp)) {
+            IconButton(onClick = back, enabled = !starting, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, if (collection == null) "Back to player" else "Back")
             }
             Text(
-                title, Modifier.weight(1f).semantics { heading() }, style = type.displaySmall,
+                title, Modifier.weight(1f).semantics { heading() }, style = type.headlineMedium,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
             if (speaker != null && speakerInline) {
@@ -300,7 +291,7 @@ private fun MusicSpeaker(speaker: String, modifier: Modifier) {
 private fun MusicShelf(
     title: String,
     choices: List<MediaChoice>?,
-    cardMinimum: Dp,
+    columns: Int,
     model: PanelViewModel,
     failed: Boolean,
     enabled: Boolean,
@@ -311,7 +302,7 @@ private fun MusicShelf(
 ) {
     val colors = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -323,13 +314,12 @@ private fun MusicShelf(
                 modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "See all $title" },
             ) {
                 Text("See all", style = type.labelLarge)
-                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.size(22.dp))
             }
         }
 
         if (choices.isNullOrEmpty()) {
             Row(
-                Modifier.fillMaxWidth().heightIn(min = 132.dp),
+                Modifier.fillMaxWidth().heightIn(min = 64.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -346,17 +336,15 @@ private fun MusicShelf(
                 }
             }
         } else {
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val gap = 14.dp
-                val columns = ((maxWidth + gap) / (cardMinimum + gap)).toInt().coerceAtLeast(1)
-                val cardWidth = (maxWidth - gap * (columns - 1)) / columns
-                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    for (item in choices.take(columns)) {
-                        MusicCard(
+            for (row in choices.take(if (columns == 2) 4 else 3).chunked(columns)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for (item in row) {
+                        MusicEntry(
                             item, model, enabled, open = { open(item) }, play = { play(item) },
-                            modifier = Modifier.width(cardWidth),
+                            modifier = Modifier.weight(1f),
                         )
                     }
+                    if (row.size < columns) Spacer(Modifier.weight(1f))
                 }
             }
         }
@@ -366,33 +354,23 @@ private fun MusicShelf(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MusicSources(choices: List<MediaChoice>, enabled: Boolean, open: (MediaChoice) -> Unit) {
-    val colors = MaterialTheme.colorScheme
     Column(
         Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("More to browse", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
+        Text("Library", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             for (item in choices) {
-                Surface(
+                FilledTonalButton(
                     onClick = { open(item) },
                     enabled = enabled,
-                    modifier = Modifier.widthIn(min = 152.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    color = colors.surfaceContainer,
+                    modifier = Modifier.heightIn(min = 48.dp),
                 ) {
-                    Box(
-                        Modifier.heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        Text(
-                            item.title, style = MaterialTheme.typography.labelLarge,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    Text(item.title, style = MaterialTheme.typography.labelLarge, maxLines = 2,
+                        overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -423,7 +401,7 @@ private fun MusicBrowserStatus(pending: Boolean, failed: Boolean, modifier: Modi
 }
 
 @Composable
-private fun MusicCard(
+private fun MusicEntry(
     item: MediaChoice,
     model: PanelViewModel,
     enabled: Boolean,
@@ -433,67 +411,28 @@ private fun MusicCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val artwork = rememberPanelImage(item.artwork, model::cachedArtwork, model::loadArtwork)
-    val buttonContainer = if (artwork == null) colors.secondaryContainer else Color(0xde17191c)
-    val buttonContent = if (artwork == null) colors.onSecondaryContainer else Color.White
-    Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
-        Box {
-            if (artwork != null) {
-                Image(artwork, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
-                Box(
-                    Modifier.matchParentSize().background(
-                        Brush.verticalGradient(
-                            0.26f to Color.Transparent,
-                            0.51f to Color(0xa5000000),
-                            1f to Color(0xe9000000),
-                        )
-                    ),
-                )
-            }
-            Column(
-                Modifier.fillMaxWidth().heightIn(min = 132.dp).clickable(
-                    enabled = enabled,
-                    role = Role.Button,
-                    onClickLabel = if (item.expandable) "Open folder" else "Play",
-                    onClick = if (item.expandable) open else play,
-                ).padding(start = 16.dp, top = 12.dp, end = 12.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
-            ) {
-                Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterEnd) {
-                    if (item.expandable && item.playable) {
-                        FilledTonalIconButton(
-                            onClick = play,
-                            enabled = enabled,
-                            modifier = Modifier.size(48.dp),
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = buttonContainer,
-                                contentColor = buttonContent,
-                            ),
-                        ) {
-                            Icon(Icons.Rounded.PlayArrow, "Play ${item.title}", Modifier.size(26.dp))
-                        }
-                    } else {
-                        val filled = item.playable || artwork != null
-                        Box(
-                            Modifier.size(48.dp).background(
-                                if (filled) buttonContainer else Color.Transparent, CircleShape
-                            ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                if (item.playable) Icons.Rounded.PlayArrow else Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                null, Modifier.size(26.dp),
-                                tint = if (filled) buttonContent else colors.onSurfaceVariant,
-                            )
-                        }
-                    }
+    Surface(modifier, shape = MaterialTheme.shapes.medium, color = colors.surfaceContainer) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = if (item.expandable) "Open folder" else "Play",
+                onClick = if (item.expandable) open else play,
+            ).padding(start = 8.dp, top = 7.dp, end = 10.dp, bottom = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            MusicArtwork(artwork, Modifier.size(48.dp), 23.dp)
+            Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (item.expandable && item.playable) {
+                IconButton(onClick = play, enabled = enabled, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.PlayArrow, "Play ${item.title}", Modifier.size(26.dp))
                 }
-                Text(
-                    item.title, Modifier.fillMaxWidth().padding(end = 4.dp),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (artwork == null) colors.onSurface else Color.White,
-                    minLines = 2,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+            } else {
+                Icon(
+                    if (item.expandable) Icons.AutoMirrored.Rounded.KeyboardArrowRight else Icons.Rounded.PlayArrow,
+                    null, Modifier.size(22.dp), tint = colors.onSurfaceVariant,
                 )
             }
         }
