@@ -62,6 +62,7 @@ private enum class DeviceFilter(val label: String, private vararg val domains: S
     SENSORS("Sensors", "sensor", "binary_sensor", "timer", "input_text", "weather", "image", "cover"),
     CAMERAS("Cameras", "camera"),
     MEDIA("Media", "media_player"),
+    AGENDA("Tasks & calendar", "todo", "calendar"),
     ACTIONS("Actions", "button", "input_button", "scene", "script");
 
     fun shows(domain: String) = this == ALL || domain in domains
@@ -161,6 +162,8 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                         TileKind.APP -> "Open app"
                         TileKind.ACTION -> if (confirmAction) "Confirm to run" else "Run"
                         TileKind.CAMERA -> if (showOnHome) "Favourites and camera gallery" else "Camera gallery"
+                        TileKind.TASKS -> "To-do list"
+                        TileKind.CALENDAR -> "Upcoming events"
                         else -> displayValue(preview).takeUnless { it == "Unavailable" } ?: kind.label
                     }
                     Text(example, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -177,11 +180,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                 }
             }
             if (kind.resizable) {
-                Text("Width on tablets", style = MaterialTheme.typography.titleSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !wideOnTablet, onClick = { wideOnTablet = false }, label = { Text("Standard") })
-                    FilterChip(selected = wideOnTablet, onClick = { wideOnTablet = true }, label = { Text("Wide") })
-                }
+                TileSizePicker(wideOnTablet) { wideOnTablet = it }
             }
             if (kind == TileKind.ACTION) {
                 SetupSwitchRow("Confirm before running", null, confirmAction, { confirmAction = it })

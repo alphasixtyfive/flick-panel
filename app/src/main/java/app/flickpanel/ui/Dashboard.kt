@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
@@ -107,7 +108,8 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     val weather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val wide = maxWidth >= tabletWidthDp.dp
-        val compactNavigation = maxWidth < 600.dp
+        val compactNavigation = maxWidth < mediumWindowWidthDp.dp
+        val tileColumns = dashboardTileColumns(maxWidth.value, LocalDensity.current.fontScale)
         val cameraColumns = if (maxWidth >= 1100.dp) 4 else if (wide) 3 else 2
         val side = if (wide) panelWidePadding else 20.dp
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
@@ -150,9 +152,11 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 val body = Modifier.fillMaxSize().padding(top = 22.dp).panelEntrance(state.page, state.config.reduceMotion)
                 when (state.page) {
                     Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
-                    Page.ROOMS -> Rooms(state, model, wide, body)
+                    Page.ROOMS -> Rooms(state, model, tileColumns, body)
                     Page.FAVOURITES -> Column(body.verticalScroll(rememberScrollState()).padding(bottom = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(tileGap)) { Favourites(state, model, wide) }
+                        verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                        Favourites(state, model, tileColumns, resizeTiles = !compactNavigation)
+                    }
                 }
             }
         }
@@ -208,7 +212,7 @@ private fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, 
 }
 
 @Composable
-private fun Favourites(state: PanelUi, model: PanelViewModel, wide: Boolean) {
+private fun Favourites(state: PanelUi, model: PanelViewModel, columns: Int, resizeTiles: Boolean) {
     val tiles = remember(state.config.favourites) {
         val headerWeather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
         state.config.favourites.filter { it.showOnHome && it != headerWeather }
@@ -217,7 +221,7 @@ private fun Favourites(state: PanelUi, model: PanelViewModel, wide: Boolean) {
         EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.")
         return
     }
-    FavouritesTileGrid(tiles, state, model, wide)
+    FavouritesTileGrid(tiles, state, model, columns, resizeTiles)
 }
 
 @Composable

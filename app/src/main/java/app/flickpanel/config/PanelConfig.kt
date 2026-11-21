@@ -12,9 +12,11 @@ enum class PanelTheme(val label: String) {
 enum class TileKind(val label: String) {
     TOGGLE("Switch"), VALUE("Value"), SLIDER("Slider"), TREND("Small graph"),
     ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"),
-    APP("Android app"), IMAGE("Image"), TIMER("Countdown"), CHOICE("Selector"), NUMBER("Number control");
+    APP("Android app"), IMAGE("Image"), TIMER("Countdown"), CHOICE("Selector"), NUMBER("Number control"),
+    TASKS("Tasks"), CALENDAR("Calendar");
 
     internal val resizable get() = this != CAMERA && this != WEATHER && this != APP
+    internal val isAgenda get() = this == TASKS || this == CALENDAR
 }
 
 data class TileSpec(
@@ -74,6 +76,8 @@ internal object PanelConfigCodec {
             val kind = TileKind.entries.firstOrNull { it.name == tile.optString("kind") } ?: return@mapNotNull null
             val entity = tile.optString("entity")
                 .takeIf { if (kind == TileKind.APP) validAppTarget(it) else validEntity(it) } ?: return@mapNotNull null
+            if (kind == TileKind.TASKS && !entity.startsWith("todo.") ||
+                kind == TileKind.CALENDAR && !entity.startsWith("calendar.")) return@mapNotNull null
             TileSpec(entity, kind, tile.text("label")?.take(72), tile.text("status")?.takeIf {
                 kind == TileKind.ACTION && validEntity(it) && it.startsWith("timer.")
             }, showOnHome = kind != TileKind.CAMERA || tile.optBoolean("home", true),

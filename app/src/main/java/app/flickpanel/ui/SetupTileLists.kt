@@ -51,7 +51,7 @@ import app.flickpanel.config.TileSpec
 @Composable
 internal fun FavouriteEditor(
     draft: PanelConfig, state: PanelUi, add: () -> Unit, edit: (TileSpec) -> Unit,
-    remove: (TileSpec) -> Unit, move: (String, Int) -> Unit, undo: (() -> Unit)?,
+    resize: (TileSpec) -> Unit, remove: (TileSpec) -> Unit, move: (String, Int) -> Unit, undo: (() -> Unit)?,
 ) {
     val homeTiles = remember(draft.favourites) { draft.favourites.filter { it.showOnHome } }
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding)) {
@@ -82,11 +82,11 @@ internal fun FavouriteEditor(
                                 verticalArrangement = Arrangement.Center) {
                                 Text(state.label(tile), style = MaterialTheme.typography.titleMedium,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(tile.kind.label,
+                                Text(if (tile.wideOnTablet) "${tile.kind.label} · Wide" else tile.kind.label,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
-                        TileOptions(state.label(tile), edit = { edit(tile) }, remove = { remove(tile) })
+                        TileOptions(state.label(tile), tile, edit = { edit(tile) }, resize = { resize(tile) }, remove = { remove(tile) })
                     }
                 }
             }
@@ -95,12 +95,18 @@ internal fun FavouriteEditor(
 }
 
 @Composable
-private fun TileOptions(label: String, edit: () -> Unit, remove: () -> Unit) {
+private fun TileOptions(label: String, tile: TileSpec, edit: () -> Unit, resize: () -> Unit, remove: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) { Icon(Icons.Rounded.MoreVert, "Options for $label") }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(text = { Text("Edit tile") }, onClick = { expanded = false; edit() })
+            if (tile.kind.resizable) {
+                DropdownMenuItem(
+                    text = { Text(if (tile.wideOnTablet) "Make standard" else "Make wide") },
+                    onClick = { expanded = false; resize() },
+                )
+            }
             DropdownMenuItem(text = { Text("Remove tile", color = MaterialTheme.colorScheme.error) },
                 onClick = { expanded = false; remove() })
         }

@@ -23,6 +23,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.time.Instant
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
@@ -157,10 +158,54 @@ internal class HaClient(
         service: String,
         values: JSONObject = JSONObject()
     ) {
+        callEntityService(entity, domain, service, values)
+    }
+
+    private suspend fun callEntityService(
+        entity: String,
+        domain: String,
+        service: String,
+        values: JSONObject,
+        returnResponse: Boolean = false,
+    ): JSONObject {
         require(validEntity(entity) && domain == entity.substringBefore('.'))
         if (_link.value != Link.ONLINE) throw HaProblem("Home Assistant is reconnecting")
-        request("call_service", JSONObject().put("domain", domain).put("service", service)
-            .put("target", JSONObject().put("entity_id", entity)).put("service_data", values))
+        val data = JSONObject().put("domain", domain).put("service", service)
+            .put("target", JSONObject().put("entity_id", entity)).put("service_data", values)
+        if (returnResponse) data.put("return_response", true)
+        return request("call_service", data)
+    }
+
+    suspend fun tasks(entity: String): List<AgendaTask> {
+        val data = JSONObject().put("status", JSONArray(listOf("needs_action", "completed")))
+        val reply = callEntityService(entity, "todo", "get_items", data, returnResponse = true)
+        return decodeAgendaTasks(reply.entityServiceRows(entity, "items"))
+    }
+
+    suspend fun calendar(
+        entity: String, start: Instant, end: Instant, zone: ZoneId = ZoneId.systemDefault(),
+    ): List<AgendaEvent> {
+        require(start < end)
+        val data = JSONObject().put("start_date_time", start.toString()).put("end_date_time", end.toString())
+        val reply = callEntityService(entity, "calendar", "get_events", data, returnResponse = true)
+        return decodeAgendaEvents(reply.entityServiceRows(entity, "events"), zone)
+    }
+
+    suspend fun setTaskCompleted(entity: String, uid: String, completed: Boolean) {
+        require(validTaskUid(uid))
+        if (!_entities.value[entity].let { it?.available == true && it.canUpdateTasks }) {
+            throw HaProblem("This task list does not support completing tasks")
+        }
+        command(entity, "todo", "update_item", JSONObject().put("item", uid)
+            .put("status", if (completed) "completed" else "needs_action"))
+    }
+
+    suspend fun addTask(entity: String, summary: String) {
+        val title = normalizedTaskTitle(summary) ?: throw HaProblem("Enter a task name of up to $MAX_TASK_TITLE_LENGTH characters")
+        if (!_entities.value[entity].let { it?.available == true && it.canAddTasks }) {
+            throw HaProblem("This task list does not support adding tasks")
+        }
+        command(entity, "todo", "add_item", JSONObject().put("item", title))
     }
 
     suspend fun browseMusic(entity: String, folder: MediaChoice?): List<MediaChoice> {
@@ -299,6 +344,10 @@ internal class HaClient(
             }
     }
 }
+
+private fun JSONObject.entityServiceRows(entity: String, field: String): JSONArray =
+    optJSONObject("result")?.optJSONObject("response")?.optJSONObject(entity)?.optJSONArray(field)
+        ?: throw HaProblem("Home Assistant couldn't load this list")
 
 internal fun resolveArtwork(server: HttpUrl, reference: String): HttpUrl? {
     val url = server.resolve(reference) ?: return null

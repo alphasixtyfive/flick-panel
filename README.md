@@ -20,8 +20,10 @@ from other apps.
    **Small graph**. For a dimmable light choose **Slider** or **Switch**. Swipe across a
    brightness tile to set the level, or tap it to turn the light on or off. **Save changes** saves
    the layout.
-   **Image** displays a Home Assistant image entity like a vacuum map. In **Edit tile**,
-   choose **Wide** when you want two columns on a tablet. A Home Assistant template
+   **Image** displays a Home Assistant image entity like a vacuum map. Size previews in
+   **Edit tile** show how **Standard** and **Wide** occupy the grid. The Favourites tile
+   menu can also change the size directly. The grid uses fewer columns in narrower
+   windows and at larger text sizes. A Home Assistant template
    sensor can supply a value or status for an existing tile without running templates on
    the tablet.
 4. Hold **Home** and use the PIN keypad to return to setup. Tap a tile to edit it. Hold and
@@ -63,6 +65,11 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Selector** displays the choices from a Home Assistant select entity. **Number control**
   uses the minimum, maximum and increment from a number entity. For buttons, scenes and
   scripts, **Confirm before running** adds a confirmation step.
+- **Tasks** pins a Home Assistant to-do list. Tap the preview to see the full list,
+  add tasks, or mark them done when the list supports those actions.
+- **Calendar** shows upcoming events for the next seven days, including all-day and
+  ongoing events. Tap the preview for the full agenda. Set either tile to **Wide** to
+  give its preview more room.
 - A camera can link an existing Home Assistant **gate** cover. The live viewer offers
   **Open gate** when that cover is closed and asks for confirmation. The cover's Home
   Assistant automation still controls when and how the gate moves.
@@ -76,7 +83,9 @@ state and actions. The panel loads configured areas after connecting and subscri
 their controls alongside pinned entities. `PanelImages.kt` bounds image memory and decodes
 scaled copies off the UI thread. Concurrent requests for the same image share the
 fetch and decode. Camera previews refresh while visible. Music artwork, idle photos, and
-recent music folders are reused on the same Home Assistant connection.
+recent music folders are reused on the same Home Assistant connection. Agenda cards
+share a rate-limited refresh with their full-list views and retain the last results
+in memory if Home Assistant disconnects.
 
 Live video uses Home Assistant HLS and one Media3 player, as in Flick TV. The player
 is released when the viewer closes. For timings, `adb logcat -s FlickPanelCamera:I`

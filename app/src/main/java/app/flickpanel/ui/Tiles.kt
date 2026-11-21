@@ -62,27 +62,32 @@ private val compactCellHeight = 110.dp
 private val shortcutHeight = 64.dp
 
 @Composable
-internal fun TileGrid(tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean = false) {
-    val rows = remember(tiles, columns, compact) { packRows(tiles, columns, compact) }
+internal fun TileGrid(
+    tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int,
+    compact: Boolean = false, resizeTiles: Boolean = compact,
+) {
+    val rows = remember(tiles, columns, compact, resizeTiles) { packTileRows(tiles, columns, compact, resizeTiles) }
     if (rows.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(tileGap)) {
-        for (row in rows) TileRow(row, state, model, columns, compact)
+        for (row in rows) TileRow(row, state, model, columns, compact, resizeTiles)
     }
 }
 
 @Composable
-internal fun FavouritesTileGrid(tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, wide: Boolean) {
-    if (!wide) {
-        TileGrid(tiles, state, model, columns = 2)
+internal fun FavouritesTileGrid(
+    tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, resizeTiles: Boolean,
+) {
+    if (columns < 4) {
+        TileGrid(tiles, state, model, columns = columns, resizeTiles = resizeTiles)
         return
     }
 
     val (apps, devices) = remember(tiles) { tiles.partition { it.kind == TileKind.APP } }
-    val summary = if (apps.size >= 3) devices.firstOrNull { it.kind == TileKind.TREND } else null
+    val summary = if (apps.size >= 3) devices.firstOrNull { it.kind == TileKind.TREND }?.takeUnless { it.wideOnTablet } else null
     val controls = remember(devices, summary) { devices.filterNot { it == summary } }
     val camera = controls.firstOrNull { it.kind == TileKind.CAMERA }
     val rows = remember(controls, camera) {
-        packRows(controls.filterNot { it.kind == TileKind.CAMERA }, columns = 2, compact = true)
+        packTileRows(controls.filterNot { it.kind == TileKind.CAMERA }, columns = 2, compact = true, resizeTiles = true)
     }
     if (camera != null && rows.size >= 2) {
         val featureRows = rows.take(3)
@@ -113,7 +118,7 @@ internal fun FavouritesTileGrid(tiles: List<TileSpec>, state: PanelUi, model: Pa
 private fun FeaturedCamera(camera: TileSpec, rows: List<List<TileSpec>>, state: PanelUi, model: PanelViewModel) {
     Layout(modifier = Modifier.fillMaxWidth(), content = {
         Column(verticalArrangement = Arrangement.spacedBy(tileGap)) {
-            for (row in rows) TileRow(row, state, model, columns = 2, compact = true)
+            for (row in rows) TileRow(row, state, model, columns = 2, compact = true, resizeTiles = true)
         }
         CameraTile(camera, state, model, Modifier.fillMaxSize())
     }) { children, constraints ->
@@ -129,32 +134,17 @@ private fun FeaturedCamera(camera: TileSpec, rows: List<List<TileSpec>>, state: 
     }
 }
 
-private fun span(tile: TileSpec, compact: Boolean) = when (tile.kind) {
-    TileKind.CAMERA -> 2
-    TileKind.SLIDER, TileKind.CLIMATE, TileKind.MEDIA -> if (!compact || tile.wideOnTablet) 2 else 1
-    else -> if (compact && tile.wideOnTablet) 2 else 1
-}
-
-private fun packRows(tiles: List<TileSpec>, columns: Int, compact: Boolean): List<List<TileSpec>> {
-    val result = mutableListOf<MutableList<TileSpec>>()
-    var used = columns
-    for (tile in tiles) {
-        val width = span(tile, compact)
-        if (used + width > columns) { result.add(mutableListOf()); used = 0 }
-        result.last().add(tile)
-        used += width
-    }
-    return result
-}
-
 @Composable
-private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean) {
+private fun TileRow(
+    row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean, resizeTiles: Boolean,
+) {
     Layout(modifier = Modifier.fillMaxWidth(), content = {
         for (tile in row) key(tile.entity) {
             val minimum = when (tile.kind) {
                 TileKind.APP -> if (compact) shortcutHeight else 76.dp
                 TileKind.CAMERA -> 226.dp
                 TileKind.IMAGE -> if (compact && tile.wideOnTablet) 190.dp else 144.dp
+                TileKind.TASKS, TileKind.CALENDAR -> 154.dp
                 else -> if (compact) compactCellHeight else cellHeight
             }
             val modifier = Modifier.heightIn(min = minimum)
@@ -168,7 +158,7 @@ private fun TileRow(row: List<TileSpec>, state: PanelUi, model: PanelViewModel, 
         var column = 0
         val slots = row.map { tile ->
             val start = cells * column / columns + gap * column
-            column += span(tile, compact)
+            column += tileSpan(tile, columns, compact, resizeTiles)
             val end = cells * column / columns + gap * (column - 1)
             start to (end - start)
         }
@@ -251,6 +241,7 @@ private fun ControlTile(
         TileKind.NUMBER -> NumberTile(label, entity, pending, ready, modifier) { increase ->
             live?.let { model.stepNumber(it, increase) }
         }
+        TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, state, model, modifier)
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, state.link == Link.ONLINE && entity?.available == true, model, modifier)
         TileKind.WEATHER -> Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
             Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {

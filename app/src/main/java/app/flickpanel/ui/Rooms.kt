@@ -19,7 +19,7 @@ import app.flickpanel.PanelViewModel
 import app.flickpanel.ha.Link
 
 @Composable
-internal fun Rooms(state: PanelUi, model: PanelViewModel, wide: Boolean, modifier: Modifier) {
+internal fun Rooms(state: PanelUi, model: PanelViewModel, columns: Int, modifier: Modifier) {
     val sections = state.roomSections
     if (sections.isEmpty()) {
         val loading = state.loadingCatalogue || state.link == Link.CONNECTING
@@ -41,7 +41,6 @@ internal fun Rooms(state: PanelUi, model: PanelViewModel, wide: Boolean, modifie
         return
     }
 
-    val columns = if (wide) 4 else 2
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(bottom = 24.dp),

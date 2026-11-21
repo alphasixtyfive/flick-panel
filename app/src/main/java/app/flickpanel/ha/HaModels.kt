@@ -91,6 +91,8 @@ internal data class Entity(
         "input_number", "number" -> if (numberRange != null) listOf(TileKind.NUMBER, TileKind.VALUE) else listOf(TileKind.VALUE)
         "input_select", "select" -> if (options.isNotEmpty()) listOf(TileKind.CHOICE, TileKind.VALUE) else listOf(TileKind.VALUE)
         "timer" -> listOf(TileKind.TIMER, TileKind.VALUE)
+        "todo" -> listOf(TileKind.TASKS)
+        "calendar" -> listOf(TileKind.CALENDAR)
         "binary_sensor", "input_text", "cover" -> listOf(TileKind.VALUE)
         "input_button", "button", "scene", "script" -> listOf(TileKind.ACTION)
         "camera" -> listOf(TileKind.CAMERA)

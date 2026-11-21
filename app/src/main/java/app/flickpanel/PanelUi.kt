@@ -64,6 +64,7 @@ internal data class PanelUi(
     val camera: String? = null,
     val cameraOpenedAt: Long = 0,
     val musicBrowser: String? = null,
+    val agendaOpen: String? = null,
     val unlocking: Boolean = false,
     val editor: Boolean = false,
     val connectionEditor: Boolean = false,

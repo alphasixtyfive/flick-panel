@@ -141,6 +141,13 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                                 picker = SetupPicker.TILE
                             },
                             edit = editTile,
+                            resize = { selected ->
+                                draft = draft.copy(favourites = draft.favourites.map { tile ->
+                                    if (tile.entity == selected.entity && tile.kind.resizable) {
+                                        tile.copy(wideOnTablet = !tile.wideOnTablet)
+                                    } else tile
+                                })
+                            },
                             remove = { tile ->
                                 val index = draft.favourites.indexOf(tile)
                                 if (index >= 0) {

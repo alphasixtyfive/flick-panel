@@ -140,6 +140,16 @@ class PanelPolicyTest {
         assertEquals(listOf(TileKind.VALUE), Entity("binary_sensor.leak", "off").kinds())
     }
 
+    @Test fun agendaTilesRoundTripAndRequireTheirHomeAssistantDomains() {
+        val tasks = TileSpec("todo.shopping", TileKind.TASKS, wideOnTablet = true)
+        val calendar = TileSpec("calendar.family", TileKind.CALENDAR)
+        val invalid = TileSpec("sensor.power", TileKind.CALENDAR)
+        val config = PanelConfig(favourites = listOf(tasks, calendar, invalid))
+        assertEquals(listOf(tasks, calendar), PanelConfigCodec.decode(PanelConfigCodec.encode(config)).favourites)
+        assertEquals(listOf(TileKind.TASKS), Entity(tasks.entity, "4").kinds())
+        assertEquals(listOf(TileKind.CALENDAR), Entity(calendar.entity, "off").kinds())
+    }
+
     @Test fun countdownKeepsTheFinalSecondVisibleUntilItExpires() {
         assertEquals(listOf(2L, 1L, 0L, 0L), listOf(3_999L, 4_999L, 5_000L, 6_000L).map {
             timerSecondsRemaining(deadline = 5_000L, now = it)

@@ -18,7 +18,9 @@ import app.flickpanel.ha.Link
 import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MediaChoice
 import app.flickpanel.ha.MediaTransport
+import app.flickpanel.ha.canAddTasks
 import app.flickpanel.ha.canBrowseMusic
+import app.flickpanel.ha.canUpdateTasks
 import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.parseServer
 import kotlinx.coroutines.CancellationException
@@ -41,6 +43,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private val store = PanelStore(application)
     private val _ui = MutableStateFlow(PanelUi())
     val ui = _ui.asStateFlow()
+    val agenda = PanelAgenda(viewModelScope)
     private var client: HaClient? = null
     private var linkJob: Job? = null
     private var stateJob: Job? = null
@@ -79,9 +82,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             idleJob?.cancel()
             approachJob?.cancel()
             client?.stop()
+            agenda.pause()
             presence = null
             relock()
-            _ui.update { it.copy(camera = null, musicBrowser = null, pending = emptyMap()) }
+            _ui.update { it.copy(camera = null, musicBrowser = null, agendaOpen = null, pending = emptyMap()) }
         }
     }
 
@@ -92,7 +96,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         idleJob = viewModelScope.launch {
             delay(_ui.value.config.idleSeconds * 1000L)
             val current = _ui.value
-            if (foreground && !current.editor && !current.unlocking && current.camera == null && current.musicBrowser == null &&
+            if (foreground && !current.editor && !current.unlocking && current.camera == null && current.musicBrowser == null && current.agendaOpen == null &&
                 presence != true) _ui.update { it.copy(clock = true) }
         }
     }
@@ -104,7 +108,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun showIdleScreen() {
         val current = _ui.value
-        if (!current.configured || current.editor || current.unlocking || current.camera != null || current.musicBrowser != null) return
+        if (!current.configured || current.editor || current.unlocking || current.camera != null || current.musicBrowser != null || current.agendaOpen != null) return
         idleJob?.cancel()
         _ui.update { it.copy(clock = true) }
     }
@@ -224,6 +228,49 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun closeMusic() { _ui.update { it.copy(musicBrowser = null) }; touch() }
+
+    fun loadAgenda(id: String, force: Boolean = false) {
+        val active = client ?: return
+        val tile = agendaTile(id) ?: return
+        val current = _ui.value
+        if (!foreground || current.link != Link.ONLINE || current.entities[id]?.available != true) return
+        agenda.refresh(active, tile, force)
+    }
+
+    fun openAgenda(id: String) {
+        val current = _ui.value
+        if (agendaTile(id) == null || current.editor || current.unlocking || current.camera != null || current.musicBrowser != null) return
+        idleJob?.cancel()
+        _ui.update { it.copy(agendaOpen = id) }
+        loadAgenda(id)
+    }
+
+    fun closeAgenda() {
+        _ui.update { it.copy(agendaOpen = null) }
+        touch()
+    }
+
+    fun completeTask(id: String, uid: String, completed: Boolean) {
+        val active = taskClient(id) ?: return
+        if (_ui.value.entities[id]?.canUpdateTasks != true) return
+        val tasks = (agenda.states.value[id]?.content as? AgendaContent.Tasks)?.items ?: return
+        if (tasks.none { it.uid == uid && it.completed != completed }) return
+        agenda.changeTasks(active, id) { setTaskCompleted(id, uid, completed) }
+    }
+
+    fun addTask(id: String, summary: String): Boolean {
+        val active = taskClient(id) ?: return false
+        if (_ui.value.entities[id]?.canAddTasks != true) return false
+        return agenda.changeTasks(active, id) { addTask(id, summary) }
+    }
+
+    private fun agendaTile(id: String) = _ui.value.config.favourites.firstOrNull { it.entity == id && it.kind.isAgenda }
+
+    private fun taskClient(id: String): HaClient? {
+        val current = _ui.value
+        return client.takeIf { foreground && current.link == Link.ONLINE && current.agendaOpen == id &&
+            agendaTile(id)?.kind == TileKind.TASKS && current.entities[id]?.available == true }
+    }
 
     suspend fun browseMusic(id: String, folder: MediaChoice?): List<MediaChoice> {
         val key = MusicFolder(id, folder?.type, folder?.id)
@@ -380,6 +427,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         linkJob?.cancel()
         stateJob?.cancel()
         catalogueJob?.cancel()
+        agenda.keep(emptySet())
         client?.stop()
         graphTimes.clear()
         graphRequests.clear()
@@ -430,6 +478,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     private fun updateSelection() {
         val current = _ui.value
+        agenda.keep(current.config.favourites.filter { it.kind.isAgenda }.mapTo(mutableSetOf()) { it.entity })
         val ids = current.config.favourites.filter { it.kind != TileKind.APP }.mapTo(mutableSetOf()) { it.entity }
         current.config.favourites.mapNotNullTo(ids) { it.statusEntity }
         current.config.favourites.mapNotNullTo(ids) { it.cameraGate }

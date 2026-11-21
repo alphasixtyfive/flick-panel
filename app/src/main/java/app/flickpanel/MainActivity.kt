@@ -32,6 +32,7 @@ import app.flickpanel.ui.ConnectionForm
 import app.flickpanel.ui.Dashboard
 import app.flickpanel.ui.EditPanel
 import app.flickpanel.ui.MusicBrowser
+import app.flickpanel.ui.OpenAgenda
 import app.flickpanel.ui.PanelColors
 import app.flickpanel.ui.UnlockEditor
 
@@ -98,8 +99,11 @@ class MainActivity : ComponentActivity() {
                 }
                 if (state.unlocking) UnlockEditor(state, model::unlock, model::relock)
                 if (state.editor) EditPanel(state, model)
+                state.config.favourites.firstOrNull { it.entity == state.agendaOpen && it.kind.isAgenda }?.let { tile ->
+                    OpenAgenda(tile, state, model)
+                }
                 BackHandler(state.configured && state.page != Page.FAVOURITES && !state.clock &&
-                    !state.editor && !state.unlocking && state.camera == null && state.musicBrowser == null) {
+                    !state.editor && !state.unlocking && state.camera == null && state.musicBrowser == null && state.agendaOpen == null) {
                     model.selectPage(Page.FAVOURITES)
                 }
             }
