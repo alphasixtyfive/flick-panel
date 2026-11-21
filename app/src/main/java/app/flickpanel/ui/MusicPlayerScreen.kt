@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -145,13 +146,13 @@ internal fun NowPlaying(
                 Row(Modifier.fillMaxWidth().heightIn(min = bodyHeight), horizontalArrangement = Arrangement.spacedBy(28.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     MusicArtwork(artwork, Modifier.widthIn(max = coverWidth).weight(1f, fill = false).aspectRatio(1f), 76.dp)
-                    PlaybackControls(entity, available, pending, transport, seek, Modifier.weight(1.2f))
+                    PlaybackControls(entity, available, pending, wide, transport, seek, Modifier.weight(1.2f))
                 }
             } else {
                 val coverWidth = (availableHeight * .38f).coerceIn(112.dp, 256.dp)
                 MusicArtwork(artwork, Modifier.align(Alignment.CenterHorizontally).widthIn(max = coverWidth)
                     .fillMaxWidth().aspectRatio(1f), 65.dp)
-                PlaybackControls(entity, available, pending, transport, seek, Modifier.fillMaxWidth())
+                PlaybackControls(entity, available, pending, wide, transport, seek, Modifier.fillMaxWidth())
             }
         }
     }
@@ -171,7 +172,7 @@ internal fun MusicArtwork(artwork: ImageBitmap?, modifier: Modifier, fallbackSiz
 
 @Composable
 private fun PlaybackControls(
-    entity: Entity?, available: Boolean, pending: String?,
+    entity: Entity?, available: Boolean, pending: String?, wide: Boolean,
     transport: (MediaTransport) -> Unit, seek: (Double) -> Unit, modifier: Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -180,11 +181,9 @@ private fun PlaybackControls(
     val features = entity?.mediaFeatures ?: 0L
     val playing = entity?.playingMedia == true
     val ready = available && pending == null
-    val action = if (playing) MediaTransport.PAUSE else MediaTransport.PLAY
     val title = attrs?.text("media_title") ?: if (available) "Nothing playing" else "Player unavailable"
     val artist = attrs?.text("media_artist") ?: attrs?.text("media_album_name")
     val timeline = current?.playbackProgress()
-    val skipColors = IconButtonDefaults.iconButtonColors(contentColor = colors.onSurface)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, style = MaterialTheme.typography.headlineMedium, color = colors.onSurface,
@@ -195,28 +194,54 @@ private fun PlaybackControls(
         if (timeline != null) {
             PlaybackTimeline(timeline, attrs?.text("media_content_id") ?: title, features.hasMediaFeature(MEDIA_SEEK), ready, seek)
         }
-        Row(
-            Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (features.hasMediaFeature(MediaTransport.PREVIOUS.bit)) {
-                IconButton(onClick = { transport(MediaTransport.PREVIOUS) }, enabled = ready,
-                    modifier = Modifier.size(48.dp), colors = skipColors) {
-                    Icon(Icons.Rounded.SkipPrevious, "Previous track", Modifier.size(30.dp))
-                }
+        PlaybackTransport(features, playing, ready, wide, transport)
+    }
+}
+
+@Composable
+private fun PlaybackTransport(
+    features: Long, playing: Boolean, enabled: Boolean, wide: Boolean, transport: (MediaTransport) -> Unit,
+) {
+    val action = if (playing) MediaTransport.PAUSE else MediaTransport.PLAY
+    val canPlayPause = features.hasMediaFeature(action.bit)
+    val canPrevious = features.hasMediaFeature(MediaTransport.PREVIOUS.bit)
+    val canNext = features.hasMediaFeature(MediaTransport.NEXT.bit)
+    if (!canPlayPause && !canPrevious && !canNext) return
+
+    val skipTarget = if (wide) 56.dp else 48.dp
+    val primaryWidth = if (wide) 112.dp else 96.dp
+    val primaryHeight = if (wide) 80.dp else 72.dp
+    val skipColors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(if (wide) 20.dp else 16.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (canPrevious) {
+            IconButton(onClick = { transport(MediaTransport.PREVIOUS) }, enabled = enabled,
+                modifier = Modifier.size(skipTarget), colors = skipColors) {
+                Icon(Icons.Rounded.SkipPrevious, "Previous track", Modifier.size(30.dp))
             }
-            if (features.hasMediaFeature(action.bit)) {
-                FilledIconButton(onClick = { transport(action) }, enabled = ready, modifier = Modifier.size(76.dp, 60.dp)) {
-                    Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        if (playing) "Pause" else "Play", Modifier.size(34.dp))
-                }
+        } else if (canPlayPause && canNext) {
+            Spacer(Modifier.size(skipTarget))
+        }
+        if (canPlayPause) {
+            FilledIconButton(
+                onClick = { transport(action) },
+                enabled = enabled,
+                modifier = Modifier.size(primaryWidth, primaryHeight),
+            ) {
+                Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    if (playing) "Pause" else "Play", Modifier.size(if (wide) 48.dp else 42.dp))
             }
-            if (features.hasMediaFeature(MediaTransport.NEXT.bit)) {
-                IconButton(onClick = { transport(MediaTransport.NEXT) }, enabled = ready,
-                    modifier = Modifier.size(48.dp), colors = skipColors) {
-                    Icon(Icons.Rounded.SkipNext, "Next track", Modifier.size(30.dp))
-                }
+        }
+        if (canNext) {
+            IconButton(onClick = { transport(MediaTransport.NEXT) }, enabled = enabled,
+                modifier = Modifier.size(skipTarget), colors = skipColors) {
+                Icon(Icons.Rounded.SkipNext, "Next track", Modifier.size(30.dp))
             }
+        } else if (canPlayPause && canPrevious) {
+            Spacer(Modifier.size(skipTarget))
         }
     }
 }
