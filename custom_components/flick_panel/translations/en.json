@@ -15,7 +15,7 @@
   },
   "entity": {
     "switch": {
-      "display": {"name": "Panel display"}
+      "display": {"name": "Display"}
     }
   },
   "services": {

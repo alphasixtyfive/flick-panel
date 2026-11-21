@@ -53,11 +53,11 @@ internal fun PanelLinkSettings(state: PanelUi, link: (String) -> Unit, unlink: (
         LinkDetail(device, state.remoteLabel(), Icons.Rounded.Hub)
     }
     SettingsListGroup("Home Assistant") {
-        LinkDetail("Display controls", "Wake, blank, keep awake, adjust brightness or open a saved view",
+        LinkDetail("Flick Panel controls", "Display, screensaver and saved cameras",
             Icons.Rounded.DisplaySettings)
-        LinkDetail("Tablet sensors", "Battery level, charging, charger, battery temperature and display mode",
+        LinkDetail("Tablet sensors", "Battery, power source, display mode and ambient light when available",
             Icons.Rounded.BatteryChargingFull)
-        LinkDetail("Automation action", "Use the tablet’s Mobile App notification action", Icons.Rounded.SettingsRemote)
+        LinkDetail("Home Assistant setup", "Add Flick Panel in Devices & services", Icons.Rounded.SettingsRemote)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (state.remoteState == PanelRemoteState.UNAVAILABLE) {

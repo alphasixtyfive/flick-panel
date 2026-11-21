@@ -116,7 +116,7 @@ Home Assistant before using it in a script or automation.
 
 For native controls, install `custom_components/flick_panel` from this repository in
 Home Assistant and restart Core. Add **Flick Panel** under **Settings → Devices &
-services** and choose the linked tablet. **Panel display** blanks and wakes Flick Panel
+services** and choose the linked tablet. **Display** blanks and wakes Flick Panel
 while it is running. The switch follows the app's reported display mode, and the linked
 Mobile App device holds the tablet's diagnostic sensors. Android controls physical
 display power. Set the tablet's regular keep-awake preference under **Wall display**.
@@ -152,11 +152,12 @@ the blank display. Android manages hardware power and the lock screen separately
 The tablet accepts commands outside PIN-protected setup. Use the underlying Home
 Assistant action to operate devices such as lights and gates.
 
-A linked tablet publishes five diagnostic entities under its Mobile App device:
-battery level, battery charging, charger connected, battery temperature, and
-display mode. The display sensor also reports the selected tab, brightness
-override and effective Wall display setting. Readings update on change while
-the tablet is linked and active. Home Assistant can disable individual entities.
+A linked tablet publishes battery level, charging status, charger connection,
+battery temperature, display mode, and ambient light when the tablet has a light
+sensor. The charger sensor reports the power source. The display sensor reports
+the selected tab, brightness override and effective Wall display setting. Android
+collects these readings while the linked panel is active. Home Assistant can disable
+individual sensors.
 
 ## Data flow
 

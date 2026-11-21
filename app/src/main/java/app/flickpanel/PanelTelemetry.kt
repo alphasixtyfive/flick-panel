@@ -4,6 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.BatteryManager
 import androidx.core.content.ContextCompat
 import app.flickpanel.ha.HaClient
@@ -11,15 +15,20 @@ import app.flickpanel.ha.PanelRemoteState
 import app.flickpanel.ha.PanelSensor
 import app.flickpanel.ha.PanelSensorReading
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.sample
 import kotlin.math.roundToInt
 
 private val sensorRetryDelays = listOf(0L, 1_000L, 2_000L)
@@ -31,7 +40,9 @@ internal suspend fun publishPanelTelemetry(
         if (status != PanelRemoteState.READY) return@collectLatest
         val display = ui.map(PanelUi::displayReport).distinctUntilChanged().map(DisplayReport::reading)
         val published = mutableMapOf<PanelSensor, PanelSensorReading>()
-        combine(batteryReadings(context), display) { battery, screen -> battery + screen }
+        combine(batteryReadings(context), display, ambientLightReadings(context)) { battery, screen, light ->
+            battery + screen + listOfNotNull(light)
+        }
             .conflate()
             .collect { readings ->
                 val changed = readings.filter { published[it.sensor] != it }
@@ -87,6 +98,27 @@ private fun batteryReadings(context: Context) = callbackFlow {
     awaitClose { context.unregisterReceiver(receiver) }
 }.distinctUntilChanged()
 
+@OptIn(FlowPreview::class)
+private fun ambientLightReadings(context: Context): Flow<PanelSensorReading?> {
+    val manager = context.getSystemService(SensorManager::class.java) ?: return flowOf(null)
+    val sensor = manager.getDefaultSensor(Sensor.TYPE_LIGHT) ?: return flowOf(null)
+    return callbackFlow<PanelSensorReading?> {
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val lux = event.values.firstOrNull()?.takeIf { it.isFinite() && it >= 0 } ?: return
+                trySend(PanelSensorReading(PanelSensor.ILLUMINANCE, lux.roundToInt()))
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
+        }
+        if (manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)) {
+            awaitClose { manager.unregisterListener(listener) }
+        } else {
+            close()
+        }
+    }.conflate().sample(10_000).distinctUntilChanged().onStart { emit(null) }
+}
+
 private fun Intent.batterySensors(): List<PanelSensorReading> = buildList {
     val level = getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
     val scale = getIntExtra(BatteryManager.EXTRA_SCALE, 0)
@@ -98,7 +130,17 @@ private fun Intent.batterySensors(): List<PanelSensorReading> = buildList {
         add(PanelSensorReading(PanelSensor.CHARGING, status == BatteryManager.BATTERY_STATUS_CHARGING))
     }
     val plugged = getIntExtra(BatteryManager.EXTRA_PLUGGED, -1)
-    if (plugged >= 0) add(PanelSensorReading(PanelSensor.PLUGGED, plugged != 0))
+    if (plugged >= 0) {
+        val powerSource = when (plugged) {
+            0 -> "battery"
+            BatteryManager.BATTERY_PLUGGED_AC -> "ac"
+            BatteryManager.BATTERY_PLUGGED_USB -> "usb"
+            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "wireless"
+            BatteryManager.BATTERY_PLUGGED_DOCK -> "dock"
+            else -> "external"
+        }
+        add(PanelSensorReading(PanelSensor.PLUGGED, plugged != 0, mapOf("power_source" to powerSource)))
+    }
     val temperature = getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
     if (temperature in -400..1000) add(PanelSensorReading(PanelSensor.TEMPERATURE, temperature / 10.0))
 }
