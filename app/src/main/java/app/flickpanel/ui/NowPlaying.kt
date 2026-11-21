@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -46,6 +47,9 @@ import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.playbackProgress
 import app.flickpanel.ha.text
 
+private val playerWidth = 540.dp
+private val speakerControlInset = 100.dp
+
 @Composable
 internal fun NowPlaying(
     playback: MusicPlayback,
@@ -71,8 +75,14 @@ internal fun NowPlaying(
         contentAlignment = Alignment.Center,
     ) {
         val artworkHeight = (maxHeight * .51f).coerceIn(146.dp, 380.dp)
-        Box(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
-            Column(Modifier.widthIn(max = 540.dp).fillMaxWidth().padding(vertical = 8.dp),
+        val speakerBesidePlayer = volume != null && maxWidth >= playerWidth + speakerControlInset * 2
+        val width = if (speakerBesidePlayer) playerWidth + speakerControlInset * 2 else playerWidth
+        Row(
+            Modifier.widthIn(max = width).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (speakerBesidePlayer) Spacer(Modifier.width(speakerControlInset))
+            Column(Modifier.weight(1f).padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(playback.speaker, Modifier.weight(1f).semantics { heading() },
@@ -102,7 +112,12 @@ internal fun NowPlaying(
                         PlaybackTimeline(timeline, track, playback.features.hasMediaFeature(MEDIA_SEEK), playback.ready, seek)
                     }
                 }
-                PlayerActionRow(playback, browse, transport, volume)
+                PlayerActionRow(playback, browse, transport, if (speakerBesidePlayer) null else volume)
+            }
+            if (speakerBesidePlayer) {
+                Box(Modifier.width(speakerControlInset), contentAlignment = Alignment.CenterEnd) {
+                    PlayerVolumeControl(volume, vertical = true)
+                }
             }
         }
     }
