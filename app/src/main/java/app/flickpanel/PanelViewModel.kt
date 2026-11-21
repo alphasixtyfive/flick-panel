@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelStore
+import app.flickpanel.config.PanelStoreProblem
 import app.flickpanel.config.SavedRemote
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.validPin
@@ -27,6 +28,7 @@ import app.flickpanel.ha.MediaTransport
 import app.flickpanel.ha.PanelCommand
 import app.flickpanel.ha.PanelRegistration
 import app.flickpanel.ha.PanelRemoteState
+import app.flickpanel.ha.PhotoAlbum
 import app.flickpanel.ha.adjacentTemperature
 import app.flickpanel.ha.canAddTasks
 import app.flickpanel.ha.canMoveCover
@@ -43,11 +45,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -65,9 +65,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var telemetryJob: Job? = null
     private var catalogueJob: Job? = null
     private var idleJob: Job? = null
+    private var idleDeadline = 0L
     private var editorTimer: Job? = null
     private var approachJob: Job? = null
-    private val commandJobs = mutableMapOf<String, Job>()
+    private val commands = DeviceCommandQueue(viewModelScope, _ui, { client.takeIf { foreground } }, ::reportFailure)
     private val graphTimes = mutableMapOf<String, Long>()
     private val graphRequests = mutableSetOf<String>()
     private val lowImageMemory = application.getSystemService(ActivityManager::class.java)
@@ -99,33 +100,45 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun visible(value: Boolean) {
+        if (foreground == value) return
         foreground = value
         if (value) {
             client?.start()
             touch()
         } else {
-            idleJob?.cancel()
+            cancelIdle()
+            cancelCatalogueLoad()
             approachJob?.cancel()
-            cancelCommands()
+            commands.cancel()
             client?.stop()
             agenda.pause()
             presence = false
             relock()
-            _ui.update { it.copy(camera = null, musicOpen = null, agendaOpen = null, contentOpen = null,
-                screenBlank = false, pending = emptyMap()) }
+            _ui.update { it.copy(viewer = null, screenBlank = false) }
         }
     }
 
     fun touch() {
-        if (!foreground || !_ui.value.configured || _ui.value.clock || _ui.value.screenBlank) return
-        idleJob?.cancel()
-        if (_ui.value.config.idleSeconds == 0) return
+        val current = _ui.value
+        if (!foreground || !current.showingDashboard || presence || current.config.idleSeconds == 0) return
+        idleDeadline = SystemClock.elapsedRealtime() + current.config.idleSeconds * 1_000L
+        if (idleJob?.isActive == true) return
         idleJob = viewModelScope.launch {
-            delay(_ui.value.config.idleSeconds * 1000L)
-            val current = _ui.value
-            if (foreground && !current.editor && !current.unlocking && !current.hasViewer &&
-                !presence) _ui.update { it.copy(clock = true) }
+            while (true) {
+                val remaining = idleDeadline - SystemClock.elapsedRealtime()
+                if (remaining <= 0L) break
+                delay(remaining)
+            }
+            idleJob = null
+            if (foreground && _ui.value.showingDashboard && !presence) {
+                _ui.update { it.copy(clock = true) }
+            }
         }
+    }
+
+    private fun cancelIdle() {
+        idleJob?.cancel()
+        idleJob = null
     }
 
     fun wake() {
@@ -140,9 +153,8 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun showIdleScreen() {
-        val current = _ui.value
-        if (!current.configured || current.editor || current.unlocking || current.hasViewer || current.screenBlank) return
-        idleJob?.cancel()
+        if (!_ui.value.showingDashboard) return
+        cancelIdle()
         _ui.update { it.copy(clock = true) }
     }
 
@@ -161,20 +173,18 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun showUnlock() {
-        if (_ui.value.configured && !_ui.value.editor) _ui.update { it.copy(unlocking = true, error = null) }
+        if (!_ui.value.showingDashboard) return
+        cancelIdle()
+        _ui.update { it.copy(unlocking = true, error = null) }
     }
 
     fun unlock(pin: String) {
-        if (!_ui.value.unlocking || _ui.value.busy) return
+        if (!_ui.value.unlocking) return
         val epoch = securityEpoch
-        viewModelScope.launch {
-            _ui.update { it.copy(busy = true, error = null) }
-            safely {
-                if (!validPin(pin)) throw HaProblem("Enter your 4 to 8 digit PIN")
-                if (!withContext(Dispatchers.IO) { store.verify(pin) }) throw HaProblem("Incorrect setup PIN")
-                if (epoch == securityEpoch && foreground) openEditor()
-            }
-            _ui.update { it.copy(busy = false) }
+        submitSettingsOperation {
+            if (!validPin(pin)) throw HaProblem("Enter your 4 to 8 digit PIN")
+            if (!withContext(Dispatchers.IO) { store.verify(pin) }) throw HaProblem("Incorrect setup PIN")
+            if (epoch == securityEpoch && foreground) openEditor()
         }
     }
 
@@ -203,98 +213,101 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     fun linkPanel(name: String) {
         val active = client ?: return
         val current = _ui.value
-        if (!foreground || !current.editor || current.busy || current.link != Link.ONLINE ||
+        if (!foreground || !current.editor || current.link != Link.ONLINE ||
             current.remoteName != null && current.remoteState != PanelRemoteState.UNAVAILABLE) return
-        viewModelScope.launch {
-            _ui.update { it.copy(busy = true, error = null) }
-            safely {
-                val label = name.trim()
-                if (label.isEmpty() || label.length > 48 || label.any(Char::isISOControl)) {
-                    throw HaProblem("Enter a tablet name of up to 48 characters")
-                }
-                val device = withContext(Dispatchers.IO) { store.deviceId() }
-                val id = active.registerPanel(PanelRegistration(
-                    device, label, BuildConfig.VERSION_NAME, Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE,
-                ))
-                withContext(Dispatchers.IO) { store.saveRemote(SavedRemote(id, label)) }
-                _ui.update { it.copy(remoteName = label, remoteState = PanelRemoteState.CONNECTING) }
-                bindRemote(active, id)
+        submitSettingsOperation {
+            val label = name.trim()
+            if (label.isEmpty() || label.length > 48 || label.any(Char::isISOControl)) {
+                throw HaProblem("Enter a tablet name of up to 48 characters")
             }
-            _ui.update { it.copy(busy = false) }
+            val device = withContext(Dispatchers.IO) { store.deviceId() }
+            val id = active.registerPanel(PanelRegistration(
+                device, label, BuildConfig.VERSION_NAME, Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE,
+            ))
+            withContext(Dispatchers.IO) { store.saveRemote(SavedRemote(id, label)) }
+            _ui.update { it.copy(remoteName = label, remoteState = PanelRemoteState.CONNECTING) }
+            bindRemote(active, id)
         }
     }
 
     fun unlinkPanel() {
         val current = _ui.value
-        if (!current.editor || current.busy || current.remoteName == null) return
-        viewModelScope.launch {
-            _ui.update { it.copy(busy = true, error = null) }
-            safely {
-                withContext(Dispatchers.IO) { store.clearRemote() }
-                _ui.update { it.copy(remoteName = null, remoteState = PanelRemoteState.DISABLED) }
-                client?.let { bindRemote(it, null) }
-                _ui.update { it.copy(brightnessPercent = null, keepAwakeOverride = null) }
-            }
-            _ui.update { it.copy(busy = false) }
+        if (!current.editor || current.remoteName == null) return
+        submitSettingsOperation {
+            withContext(Dispatchers.IO) { store.clearRemote() }
+            _ui.update { it.copy(
+                remoteName = null, remoteState = PanelRemoteState.DISABLED,
+                brightnessPercent = null, keepAwakeOverride = null,
+            ) }
+            client?.let { bindRemote(it, null) }
         }
     }
 
     fun connect(address: String, token: String, pin: String, confirmation: String) {
         val current = _ui.value
-        if (current.busy || (current.configured && !current.editor)) return
+        if (current.configured && !current.editor) return
         val epoch = securityEpoch
-        viewModelScope.launch {
-            _ui.update { it.copy(busy = true, error = null) }
-            safely {
-                if (!current.configured && (!validPin(pin) || pin != confirmation)) {
-                    throw HaProblem("Enter the same 4 to 8 digit setup PIN twice")
-                }
-                val secret = token.trim()
-                if (secret.length !in 16..4096 || secret.any(Char::isWhitespace)) {
-                    throw HaProblem("Paste a Home Assistant long-lived access token")
-                }
-                val credentials = HaCredentials(parseServer(address), secret)
-                HaClient.validate(credentials)
-                if (epoch != securityEpoch || !foreground) return@safely
-                val remote = withContext(Dispatchers.IO) {
-                    store.connect(credentials, current.config, if (current.configured) null else pin)
-                }
-                _ui.update { it.copy(configured = true, connectionEditor = false, clock = false, error = null) }
-                setupClient(credentials, remote)
-                if (epoch == securityEpoch && foreground) openEditor()
+        submitSettingsOperation {
+            if (!current.configured && (!validPin(pin) || pin != confirmation)) {
+                throw HaProblem("Enter the same 4 to 8 digit setup PIN twice")
             }
-            _ui.update { it.copy(busy = false) }
+            val secret = token.trim()
+            if (secret.length !in 16..4096 || secret.any(Char::isWhitespace)) {
+                throw HaProblem("Paste a Home Assistant long-lived access token")
+            }
+            val credentials = HaCredentials(parseServer(address), secret)
+            HaClient.validate(credentials)
+            if (epoch != securityEpoch || !foreground) return@submitSettingsOperation
+            val remote = withContext(Dispatchers.IO) {
+                store.connect(credentials, current.config, if (current.configured) null else pin)
+            }
+            _ui.update { it.copy(configured = true, connectionEditor = false, clock = false, error = null) }
+            setupClient(credentials, remote)
+            if (epoch == securityEpoch && foreground) openEditor()
         }
     }
 
     fun save(config: PanelConfig) {
-        if (!_ui.value.editor || _ui.value.busy) return
-        viewModelScope.launch {
-            _ui.update { it.copy(busy = true, error = null) }
-            safely {
-                withContext(Dispatchers.IO) { store.save(config) }
-                if (_ui.value.config.presenceEntity != config.presenceEntity) {
-                    approachJob?.cancel()
-                    presence = false
-                }
-                _ui.update { it.copy(layout = it.layout.copy(config = config)) }
-                updatePresence(_ui.value.entities)
-                updateSelection()
-                relock()
+        if (!_ui.value.editor) return
+        submitSettingsOperation {
+            withContext(Dispatchers.IO) { store.save(config) }
+            if (_ui.value.config.presenceEntity != config.presenceEntity) {
+                approachJob?.cancel()
+                presence = false
             }
-            _ui.update { it.copy(busy = false) }
+            _ui.update { it.copy(layout = it.layout.copy(config = config)) }
+            updatePresence(_ui.value.entities)
+            updateSelection()
+            relock()
         }
     }
 
-    fun clearError() { _ui.update { it.copy(error = null) } }
+    private fun submitSettingsOperation(operation: suspend () -> Unit) {
+        if (_ui.value.busy) return
+        _ui.update { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                safely { operation() }
+            } finally {
+                _ui.update { it.copy(busy = false) }
+            }
+        }
+    }
+
+    fun clearError() {
+        _ui.update { it.copy(error = null) }
+    }
+
     fun openCamera(id: String) {
         val current = _ui.value
+        if (!current.showingDashboard) return
         val next = current.showCamera(id, SystemClock.elapsedRealtime())
         if (next === current) return
-        idleJob?.cancel()
+        cancelIdle()
         _ui.value = next
     }
-    fun closeCamera() { _ui.update { it.copy(camera = null) }; touch() }
+
+    fun closeCamera() = closeViewer<PanelViewer.Camera>()
 
     fun openCameraGate(camera: String) {
         val current = _ui.value
@@ -306,30 +319,21 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun openMusic(id: String) {
         val current = _ui.value
-        if (current.editor || current.unlocking || current.screenBlank || current.hasViewer) return
+        if (!current.showingDashboard) return
         if (current.link != Link.ONLINE || current.entities[id]?.available != true ||
             current.config.favourites.none { it.entity == id && it.kind == TileKind.MEDIA }) return
-        idleJob?.cancel()
-        _ui.update { it.copy(musicOpen = id) }
+        openViewer(PanelViewer.Music(id))
     }
 
-    fun closeMusic() {
-        _ui.update { it.copy(musicOpen = null) }
-        touch()
-    }
+    fun closeMusic() = closeViewer<PanelViewer.Music>()
 
     fun openContent(id: String) {
         val current = _ui.value
-        if (current.config.favourites.none { it.entity == id && it.kind.hasContentScreen }) return
-        if (current.editor || current.unlocking || current.screenBlank || current.hasViewer) return
-        idleJob?.cancel()
-        _ui.update { it.copy(contentOpen = id) }
+        if (!current.showingDashboard || current.config.favourites.none { it.entity == id && it.kind.hasContentScreen }) return
+        openViewer(PanelViewer.Content(id))
     }
 
-    fun closeContent() {
-        _ui.update { it.copy(contentOpen = null) }
-        touch()
-    }
+    fun closeContent() = closeViewer<PanelViewer.Content>()
 
     fun loadAgenda(id: String, force: Boolean = false) {
         val active = client ?: return
@@ -340,15 +344,21 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun openAgenda(id: String) {
-        val current = _ui.value
-        if (agendaTile(id) == null || current.editor || current.unlocking || current.hasViewer || current.screenBlank) return
-        idleJob?.cancel()
-        _ui.update { it.copy(agendaOpen = id) }
+        if (!_ui.value.showingDashboard || agendaTile(id) == null) return
+        openViewer(PanelViewer.Agenda(id))
         loadAgenda(id)
     }
 
-    fun closeAgenda() {
-        _ui.update { it.copy(agendaOpen = null) }
+    fun closeAgenda() = closeViewer<PanelViewer.Agenda>()
+
+    private fun openViewer(viewer: PanelViewer) {
+        cancelIdle()
+        _ui.update { it.showViewer(viewer) }
+    }
+
+    private inline fun <reified T : PanelViewer> closeViewer() {
+        if (_ui.value.viewer !is T) return
+        _ui.update { it.copy(viewer = null) }
         touch()
     }
 
@@ -386,7 +396,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val key = MusicFolder(id, folder?.type, folder?.id)
         musicPages[key]?.takeIf { SystemClock.elapsedRealtime() - it.fetchedAt < 120_000 }?.let { return it.choices }
         val active = client ?: throw HaProblem("Home Assistant isn't connected")
-        return active.browseMusic(id, folder).also { choices ->
+        return withContext(Dispatchers.Default) { active.browseMusic(id, folder) }.also { choices ->
             if (client === active) musicPages.put(key, MusicPage(choices, SystemClock.elapsedRealtime()))
         }
     }
@@ -395,12 +405,12 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val entity = _ui.value.entities[id] ?: return
         if (entity.domain != "media_player" || !entity.mediaFeatures.hasMediaFeature(transport.bit)) return
         if (transport == MediaTransport.PREVIOUS || transport == MediaTransport.NEXT) {
-            send(entity, transport.service, pending = "Changing track…")
+            commands.send(entity, transport.service, pending = "Changing track…")
             return
         }
         val play = transport == MediaTransport.PLAY
         if (entity.playingMedia == play) return
-        send(entity, transport.service, pending = if (play) "Starting…" else "Pausing…",
+        commands.send(entity, transport.service, pending = if (play) "Starting…" else "Pausing…",
             matches = { it.available && it.playingMedia == play })
     }
 
@@ -408,20 +418,20 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val entity = _ui.value.entities[id] ?: return
         val duration = entity.playbackProgress()?.duration ?: return
         if (!entity.mediaFeatures.hasMediaFeature(MEDIA_SEEK) || !seconds.isFinite()) return
-        send(entity, "media_seek", JSONObject().put("seek_position", seconds.coerceIn(0.0, duration)),
+        commands.send(entity, "media_seek", JSONObject().put("seek_position", seconds.coerceIn(0.0, duration)),
             pending = "Seeking…")
     }
 
     fun setVolume(entity: Entity, percent: Int) {
         if (entity.domain != "media_player" || !entity.mediaFeatures.hasMediaFeature(MEDIA_VOLUME_SET)) return
         val value = percent.coerceIn(0, 100)
-        send(entity, "volume_set", JSONObject().put("volume_level", value / 100.0), pending = "$value%",
+        commands.send(entity, "volume_set", JSONObject().put("volume_level", value / 100.0), pending = "$value%",
             matches = { it.volumePercent?.let { reported -> abs(reported - value) <= 1 } == true })
     }
 
     fun setSpeakerMuted(entity: Entity, muted: Boolean) {
         if (entity.domain != "media_player" || !entity.mediaFeatures.hasMediaFeature(MEDIA_VOLUME_MUTE)) return
-        send(entity, "volume_mute", JSONObject().put("is_volume_muted", muted),
+        commands.send(entity, "volume_mute", JSONObject().put("is_volume_muted", muted),
             pending = if (muted) "Muting…" else "Unmuting…", matches = { it.volumeMuted == muted })
     }
 
@@ -432,27 +442,27 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             JSONObject().put("media_content_type", media.type).put("media_content_id", media.id))
     }
 
-    fun toggle(entity: Entity, checked: Boolean) = send(entity, if (checked) "turn_on" else "turn_off",
+    fun toggle(entity: Entity, checked: Boolean) = commands.send(entity, if (checked) "turn_on" else "turn_off",
         pending = if (checked) "On" else "Off", matches = { it.state == if (checked) "on" else "off" })
 
     fun dim(entity: Entity, level: Int) {
         val value = level.coerceIn(0, 100)
         if (value == 0) toggle(entity, false)
-        else send(entity, "turn_on", JSONObject().put("brightness_pct", value),
+        else commands.send(entity, "turn_on", JSONObject().put("brightness_pct", value),
             pending = "$value%", matches = { state -> state.brightness?.let { abs(it - value) <= 1 } == true })
     }
 
     fun stepTemperature(id: String, increase: Boolean) {
         val entity = _ui.value.entities[id] ?: return
         val value = entity.adjacentTemperature(increase) ?: return
-        send(entity, "set_temperature", JSONObject().put("temperature", value), pending = "$value°",
+        commands.send(entity, "set_temperature", JSONObject().put("temperature", value), pending = "$value°",
             matches = { abs(it.attributes.optDouble("temperature") - value) < .05 })
     }
 
     fun action(entity: Entity) {
         when (entity.domain) {
-            "button", "input_button" -> send(entity, "press")
-            "scene", "script" -> send(entity, "turn_on")
+            "button", "input_button" -> commands.send(entity, "press")
+            "scene", "script" -> commands.send(entity, "turn_on")
         }
     }
 
@@ -473,13 +483,13 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             CoverAction.CLOSE -> { result -> result.state == "closing" || result.state == "closed" }
             CoverAction.STOP -> null
         }
-        send(cover, action.service, pending = action.progress, matches = matches, interruptPending = action == CoverAction.STOP)
+        commands.send(cover, action.service, pending = action.progress, matches = matches, interruptPending = action == CoverAction.STOP)
     }
 
     fun selectOption(entity: Entity, option: String) {
         val current = _ui.value.entities[entity.id] ?: return
         if (option == current.state || option !in current.options) return
-        send(current, "select_option", JSONObject().put("option", option), pending = option, matches = { it.state == option })
+        commands.send(current, "select_option", JSONObject().put("option", option), pending = option, matches = { it.state == option })
     }
 
     fun stepNumber(entity: Entity, increase: Boolean) {
@@ -487,48 +497,8 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val value = current.numberValue ?: return
         val next = current.numberRange?.adjacent(value, increase) ?: return
         val label = listOf(next.toPlainString(), current.unit).filter(String::isNotEmpty).joinToString(" ")
-        send(current, "set_value", JSONObject().put("value", next.toDouble()), pending = label,
+        commands.send(current, "set_value", JSONObject().put("value", next.toDouble()), pending = label,
             matches = { it.numberValue?.compareTo(next) == 0 })
-    }
-
-    private fun send(
-        entity: Entity, service: String, payload: JSONObject = JSONObject(), pending: String = "Sending…",
-        matches: ((Entity) -> Boolean)? = null, interruptPending: Boolean = false,
-    ) {
-        val active = client ?: return
-        val id = entity.id
-        val current = _ui.value
-        if (!foreground || current.link != Link.ONLINE || current.entities[id]?.available != true ||
-            !interruptPending && id in current.pending) return
-        val previous = commandJobs[id]
-        val command = viewModelScope.launch(start = CoroutineStart.LAZY) {
-            try {
-                safely {
-                    active.command(id, entity.domain, service, payload)
-                    if (matches != null) {
-                        val reported = withTimeoutOrNull(4_500) {
-                            active.entities.first { it[id]?.let(matches) == true }
-                        }
-                        if (reported == null) throw HaProblem("Home Assistant hasn't confirmed the change")
-                    }
-                }
-            } finally {
-                if (commandJobs[id] === coroutineContext[Job]) {
-                    commandJobs.remove(id)
-                    _ui.update { it.copy(pending = it.pending - id) }
-                }
-            }
-        }
-        commandJobs[id] = command
-        _ui.update { it.copy(pending = it.pending + (id to pending)) }
-        if (interruptPending) previous?.cancel()
-        command.start()
-    }
-
-    private fun cancelCommands() {
-        val active = commandJobs.values.toList()
-        commandJobs.clear()
-        active.forEach { it.cancel() }
     }
 
     fun cachedSnapshot(id: String, revision: String = ""): Bitmap? = images.snapshots.cached("$id@$revision")
@@ -541,7 +511,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun cachedArtwork(reference: String): Bitmap? = images.artwork.fresh(reference)
 
-    suspend fun browsePhotos(id: String?) = client?.photoAlbum(id) ?: throw HaProblem("Home Assistant isn't connected")
+    suspend fun browsePhotos(id: String?): PhotoAlbum {
+        val active = client ?: throw HaProblem("Home Assistant isn't connected")
+        return withContext(Dispatchers.Default) { active.photoAlbum(id) }
+    }
 
     suspend fun loadPhoto(id: String): Bitmap? {
         val active = client ?: return null
@@ -572,7 +545,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (graphTimes[id]?.let { now - it < 60_000 } == true || !graphRequests.add(id)) return
         try {
             val values = withContext(Dispatchers.Default) { active.history(id) }
-            if (client === active) {
+            if (client === active && _ui.value.config.favourites.any { it.kind == TileKind.TREND && it.entity == id }) {
                 graphTimes[id] = now
                 _ui.update { it.copy(graphs = it.graphs + (id to values)) }
             }
@@ -587,9 +560,8 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun loadCatalogue() {
         val active = client ?: return
-        if (catalogueJob?.isActive == true || _ui.value.link != Link.ONLINE) return
-        catalogueJob = viewModelScope.launch {
-            _ui.update { it.copy(loadingCatalogue = true) }
+        if (!foreground || catalogueJob != null || _ui.value.link != Link.ONLINE) return
+        val request = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
                 safely {
                     val output = withContext(Dispatchers.Default) { active.catalogue() }
@@ -598,8 +570,23 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
                         updateSelection()
                     }
                 }
-            } finally { _ui.update { it.copy(loadingCatalogue = false) } }
+            } finally {
+                if (catalogueJob === coroutineContext[Job]) {
+                    catalogueJob = null
+                    _ui.update { it.copy(loadingCatalogue = false) }
+                }
+            }
         }
+        catalogueJob = request
+        _ui.update { it.copy(loadingCatalogue = true) }
+        request.start()
+    }
+
+    private fun cancelCatalogueLoad() {
+        val request = catalogueJob ?: return
+        catalogueJob = null
+        request.cancel()
+        _ui.update { it.copy(loadingCatalogue = false) }
     }
 
     private fun setupClient(credentials: HaCredentials, remote: SavedRemote? = null) {
@@ -607,8 +594,8 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         stateJob?.cancel()
         remoteJob?.cancel()
         telemetryJob?.cancel()
-        catalogueJob?.cancel()
-        cancelCommands()
+        cancelCatalogueLoad()
+        commands.cancel()
         agenda.keep(emptySet())
         client?.stop()
         graphTimes.clear()
@@ -621,7 +608,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         roomControlsRequested = _ui.value.page == Page.ROOMS
         _ui.update { it.copy(
             entities = emptyMap(), layout = RoomLayout(it.config), graphs = emptyMap(),
-            pending = emptyMap(), link = Link.CONNECTING, serverAddress = credentials.server.toString(),
+            link = Link.CONNECTING, serverAddress = credentials.server.toString(),
             remoteName = remote?.name,
             brightnessPercent = null,
             keepAwakeOverride = null,
@@ -683,7 +670,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             if (before) touch()
             return
         }
-        if (sensor == null || before || !foreground || !current.canWakeFromIdle) return
+        if (before) return
+        cancelIdle()
+        if (sensor == null || !foreground || !current.canWakeFromIdle) return
         approachJob = viewModelScope.launch {
             delay(400)
             approachJob = null
@@ -700,16 +689,27 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (command is PanelCommand.SetBrightness || command is PanelCommand.KeepAwake) return
         approachJob?.cancel()
         if (next.page == Page.ROOMS && !next.hasViewer && !next.clock && !next.screenBlank) showRoomControls()
-        if (next.hasViewer || next.clock || next.screenBlank) idleJob?.cancel() else touch()
+        if (next.showingDashboard) touch() else cancelIdle()
     }
 
     private fun updateSelection() {
         val current = _ui.value
-        agenda.keep(current.config.favourites.filter { it.kind.isAgenda }.mapTo(mutableSetOf()) { it.entity })
-        val ids = current.config.favourites.filter { it.kind != TileKind.APP }.mapTo(mutableSetOf()) { it.entity }
-        current.config.favourites.mapNotNullTo(ids) { it.statusEntity }
-        current.config.favourites.mapNotNullTo(ids) { it.cameraGate }
-        current.config.favourites.mapNotNullTo(ids) { it.cameraStream }
+        val agendas = mutableSetOf<String>()
+        val trends = mutableSetOf<String>()
+        val ids = mutableSetOf<String>()
+        for (tile in current.config.favourites) {
+            if (tile.kind.isAgenda) agendas += tile.entity
+            if (tile.kind == TileKind.TREND) trends += tile.entity
+            if (tile.kind != TileKind.APP) ids += tile.entity
+            tile.statusEntity?.let(ids::add)
+            tile.cameraGate?.let(ids::add)
+            tile.cameraStream?.let(ids::add)
+        }
+        agenda.keep(agendas)
+        graphTimes.keys.retainAll(trends)
+        if (!trends.containsAll(current.graphs.keys)) {
+            _ui.update { it.copy(graphs = it.graphs.filterKeys(trends::contains)) }
+        }
         if (current.config.roomIds?.isNotEmpty() == true || roomControlsRequested) {
             current.roomSections.forEach { section -> section.tiles.mapTo(ids) { it.entity } }
         }
@@ -720,12 +720,20 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     private suspend inline fun safely(block: () -> Unit) {
-        try { block() }
-        catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) {
-            val message = (error as? HaProblem)?.message ?: (error as? IllegalArgumentException)?.message
-                ?: "Flick Panel couldn't complete this request"
-            _ui.update { it.copy(error = message) }
+        try {
+            block()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            reportFailure(error)
         }
+    }
+
+    private fun reportFailure(error: Exception) {
+        val message = when (error) {
+            is HaProblem, is PanelStoreProblem, is IllegalArgumentException -> error.message
+            else -> null
+        } ?: "Flick Panel couldn't complete this request"
+        _ui.update { it.copy(error = message) }
     }
 }

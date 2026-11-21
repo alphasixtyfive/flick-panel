@@ -36,8 +36,8 @@ internal fun LazyListScope.tileRows(
 @Composable
 internal fun TileRow(
     row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean, resizeTiles: Boolean,
-    shortcutRow: Boolean = false, homeAgenda: Boolean = false,
     modifier: Modifier = Modifier,
+    shortcutRow: Boolean = false, homeAgenda: Boolean = false,
 ) {
     Layout(modifier = modifier.fillMaxWidth(), content = {
         for (tile in row) key(tile.entity) {
@@ -54,8 +54,7 @@ internal fun TileRow(
                 }
                 else -> if (compact) compactCellHeight else cellHeight
             }
-            val modifier = Modifier.heightIn(min = minimum)
-            PanelTile(tile, state, model, modifier, compactHistory = shortcutRow && tile.kind == TileKind.TREND,
+            PanelTile(tile, state, model, Modifier.heightIn(min = minimum), compactHistory = shortcutRow && tile.kind == TileKind.TREND,
                 expandedAgenda = homeAgenda)
         }
     }) { children, constraints ->

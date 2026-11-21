@@ -4,6 +4,7 @@ import app.flickpanel.ha.HaClient
 import app.flickpanel.ha.HaCredentials
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.MediaChoice
+import app.flickpanel.ha.decodeHistory
 import app.flickpanel.ha.parseServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -17,6 +18,7 @@ import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -124,9 +126,39 @@ class HaSessionTest {
             } finally { client.stop() }
         }
     }
+
+    @Test fun reconnectsIfAnAcknowledgedSubscriptionNeverSendsItsSnapshot() = runBlocking {
+        val fixture = FakeHome(omitFirstSnapshot = true)
+        MockWebServer().use { server ->
+            server.dispatcher = fixture
+            server.start()
+            val address = parseServer(server.url("/").newBuilder().host("127.0.0.1").build().toString())
+            val client = HaClient(HaCredentials(address, "test-fixture-token"), this)
+            try {
+                client.select(setOf("sensor.power"))
+                client.start()
+                withTimeout(15_000) { client.link.first { it == Link.ONLINE } }
+                assertEquals(2, fixture.connections.get())
+                assertEquals("840", client.entities.value.getValue("sensor.power").state)
+            } finally {
+                client.stop()
+            }
+        }
+    }
+
+    @Test fun historyStaysBoundedAndKeepsTheEntireTimeRange() {
+        val rows = JSONArray((319 downTo 1).map { point ->
+            JSONObject().put("s", point.toString()).put("lu", point)
+        })
+        val points = decodeHistory(rows)
+        assertEquals(160, points.size)
+        assertEquals(1_000L, points.first().time)
+        assertEquals(319_000L, points.last().time)
+        assertEquals(points.sortedBy { it.time }, points)
+    }
 }
 
-private class FakeHome : Dispatcher() {
+private class FakeHome(private val omitFirstSnapshot: Boolean = false) : Dispatcher() {
     val connections = AtomicInteger()
 
     override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
@@ -161,6 +193,7 @@ private class FakeHome : Dispatcher() {
                         val ids = message.getJSONArray("entity_ids").toString()
                         subscription = id
                         result()
+                        if (omitFirstSnapshot && connections.get() == 1) return
                         val light = if (ids.contains("light.lamp")) """"light.lamp":{"s":"off"},""" else ""
                         webSocket.send("""{"id":$id,"type":"event","event":{"a":{$light"sensor.power":{"s":"840","a":{"unit_of_measurement":"W"}}}}}""")
                     }

@@ -34,14 +34,18 @@ internal data class MapColours(
     val localRoad: Color, val mainRoad: Color, val label: Color, val pin: Color,
 )
 
+private val darkMap = MapColours(
+    Color(0xff192f40), Color(0xff29353e), Color(0xff607484), Color(0xff31493d),
+    Color(0xff60717d), Color(0xffc0ab7d), Color(0xfff1f5f9), Color(0xff74c1ff),
+)
+private val lightMap = MapColours(
+    Color(0xffb8d9e8), Color(0xffe8e7dc), Color(0xff6e8187), Color(0xffc6dac0),
+    Color(0xffa7a397), Color(0xff917951), Color(0xff24323a), Color(0xff155ca3),
+)
+
 @Composable
-internal fun mapColours(): MapColours = if (MaterialTheme.colorScheme.surface.luminance() < .45f) {
-    MapColours(Color(0xff192f40), Color(0xff29353e), Color(0xff607484), Color(0xff31493d),
-        Color(0xff60717d), Color(0xffc0ab7d), Color(0xfff1f5f9), Color(0xff74c1ff))
-} else {
-    MapColours(Color(0xffb8d9e8), Color(0xffe8e7dc), Color(0xff6e8187), Color(0xffc6dac0),
-        Color(0xffa7a397), Color(0xff917951), Color(0xff24323a), Color(0xff155ca3))
-}
+internal fun mapColours(): MapColours =
+    if (MaterialTheme.colorScheme.surface.luminance() < .45f) darkMap else lightMap
 
 @Composable
 internal fun PersonMapCanvas(
@@ -79,7 +83,6 @@ internal fun PersonMapCanvas(
         val scale = viewport.scale(size.height)
         val marker = viewport.screenPoint(location.mapPoint(), center, scale)
         val origin = center - Offset(viewport.centre.x * scale.x, viewport.centre.y * scale.y)
-        drawRect(colours.water)
         drawWorld(map, colours, origin, scale)
         val close = viewport.latitudeSpan <= .24f
         if (detail != null && close) {

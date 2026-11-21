@@ -12,6 +12,18 @@ import app.flickpanel.ha.PanelRemoteState
 
 internal enum class Page(val label: String) { FAVOURITES("Favourites"), ROOMS("Rooms"), CAMERAS("Cameras") }
 
+internal sealed interface PanelViewer {
+    val id: String
+
+    data class Camera(override val id: String, val openedAt: Long) : PanelViewer
+    data class Music(override val id: String) : PanelViewer
+    data class Agenda(override val id: String) : PanelViewer
+    data class Content(override val id: String) : PanelViewer
+}
+
+private val whitespace = Regex("\\s+")
+private val emptyMessages = setOf("on", "off", "none", "No reminders")
+
 internal data class PanelUi(
     val loading: Boolean = true,
     val configured: Boolean = false,
@@ -25,11 +37,7 @@ internal data class PanelUi(
     val screenBlank: Boolean = false,
     val brightnessPercent: Int? = null,
     val keepAwakeOverride: Boolean? = null,
-    val camera: String? = null,
-    val cameraOpenedAt: Long = 0,
-    val musicOpen: String? = null,
-    val agendaOpen: String? = null,
-    val contentOpen: String? = null,
+    val viewer: PanelViewer? = null,
     val unlocking: Boolean = false,
     val editor: Boolean = false,
     val connectionEditor: Boolean = false,
@@ -44,7 +52,13 @@ internal data class PanelUi(
     val catalogue get() = layout.catalogue
     val roomSections get() = layout.sections
     val keepsDisplayAwake get() = keepAwakeOverride ?: config.wallMode
-    val hasViewer get() = camera != null || musicOpen != null || agendaOpen != null || contentOpen != null
+    val camera get() = (viewer as? PanelViewer.Camera)?.id
+    val cameraOpenedAt get() = (viewer as? PanelViewer.Camera)?.openedAt ?: 0L
+    val musicOpen get() = (viewer as? PanelViewer.Music)?.id
+    val agendaOpen get() = (viewer as? PanelViewer.Agenda)?.id
+    val contentOpen get() = (viewer as? PanelViewer.Content)?.id
+    val hasViewer get() = viewer != null
+    val showingDashboard get() = configured && !clock && !screenBlank && !editor && !unlocking && !hasViewer
     val canWakeFromIdle get() = configured && (clock || screenBlank) && !editor && !unlocking && !hasViewer
 
     fun entity(id: String) = entities[id] ?: catalogue.entity(id)
@@ -60,20 +74,20 @@ internal data class PanelUi(
 
     fun showCamera(id: String, openedAt: Long): PanelUi {
         if (camera == id || config.favourites.none { it.entity == id && it.kind == TileKind.CAMERA }) return this
-        return closeViewer().copy(camera = id, cameraOpenedAt = openedAt, screenBlank = false, clock = false)
+        return showViewer(PanelViewer.Camera(id, openedAt))
     }
 
-    private fun closeViewer(): PanelUi = if (hasViewer) {
-        copy(camera = null, cameraOpenedAt = 0L, musicOpen = null, agendaOpen = null, contentOpen = null)
-    } else this
+    fun showViewer(viewer: PanelViewer): PanelUi = copy(viewer = viewer, screenBlank = false, clock = false)
+
+    private fun closeViewer(): PanelUi = if (hasViewer) copy(viewer = null) else this
 
     private fun openTile(id: String, openedAt: Long): PanelUi {
         val kind = config.favourites.firstOrNull { it.entity == id }?.kind ?: return this
         return when {
             kind == TileKind.CAMERA -> showCamera(id, openedAt)
-            kind == TileKind.MEDIA -> closeViewer().copy(clock = false, screenBlank = false, musicOpen = id)
-            kind.isAgenda -> closeViewer().copy(clock = false, screenBlank = false, agendaOpen = id)
-            kind.hasContentScreen -> closeViewer().copy(clock = false, screenBlank = false, contentOpen = id)
+            kind == TileKind.MEDIA -> showViewer(PanelViewer.Music(id))
+            kind.isAgenda -> showViewer(PanelViewer.Agenda(id))
+            kind.hasContentScreen -> showViewer(PanelViewer.Content(id))
             else -> this
         }
     }
@@ -94,8 +108,8 @@ internal data class PanelUi(
     }
 
     val message: String? get() = if (link != Link.ONLINE) null else config.messageEntity?.let(entities::get)
-        ?.takeIf { it.available && it.state !in setOf("on", "off", "none", "No reminders") }
-        ?.state?.replace(Regex("\\s+"), " ")?.trim()?.take(120)?.takeIf(String::isNotEmpty)
+        ?.takeIf { it.available && it.state !in emptyMessages }
+        ?.state?.replace(whitespace, " ")?.trim()?.take(120)?.takeIf(String::isNotEmpty)
 
     fun activeHomeBadges(): List<ActiveHomeBadge> {
         if (link != Link.ONLINE) return emptyList()

@@ -19,13 +19,26 @@ class PanelRemotePolicyTest {
 
     @Test
     fun blankingClosesMediaAndWakeReturnsToHome() {
-        val gallery = linked.copy(page = Page.CAMERAS, camera = "camera.gate")
+        val gallery = linked.copy(page = Page.CAMERAS).showCamera("camera.gate", 99)
         val blank = gallery.remoteCommand(PanelCommand.Sleep, 100)
         assertTrue(blank.screenBlank)
         assertNull(blank.camera)
         val awake = blank.remoteCommand(PanelCommand.Wake, 101)
         assertFalse(awake.screenBlank)
         assertEquals(Page.FAVOURITES, awake.page)
+    }
+
+    @Test
+    fun openingAnotherViewerReplacesTheCameraAndClearsItsOpeningTime() {
+        val music = TileSpec("media_player.kitchen", TileKind.MEDIA)
+        val gallery = linked.copy(layout = RoomLayout(linked.config.copy(favourites = linked.config.favourites + music)))
+            .showCamera("camera.gate", 10)
+        val player = gallery.remoteCommand(PanelCommand.OpenTile(music.entity), 11)
+        assertEquals(PanelViewer.Music(music.entity), player.viewer)
+        assertNull(player.camera)
+        assertEquals(0L, player.cameraOpenedAt)
+        assertFalse(player.showingDashboard)
+        assertTrue(player.remoteCommand(PanelCommand.CloseViewer, 12).showingDashboard)
     }
 
     @Test

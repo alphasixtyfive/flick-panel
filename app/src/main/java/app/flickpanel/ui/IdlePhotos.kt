@@ -32,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,6 +55,11 @@ import kotlinx.coroutines.isActive
 
 private const val photoIntervalMillis = 25_000L
 private const val albumRetryMillis = 60_000L
+private val photoShade = Brush.verticalGradient(
+    0f to Color(0x99000000), 0.28f to Color(0x99000000),
+    0.42f to Color(0xa3000000), 0.74f to Color(0x99000000),
+    1f to Color(0x40000000),
+)
 
 @Composable
 internal fun IdlePhotos(
@@ -90,22 +96,19 @@ internal fun IdlePhotos(
             }
         }
     }
-    Crossfade(photo, modifier, animationSpec = tween(if (reduceMotion) 0 else 400), label = "Idle photo") { bitmap ->
-        if (bitmap != null) {
-            Box(Modifier.fillMaxSize()) {
+    Box(modifier) {
+        Crossfade(photo, Modifier.fillMaxSize(), animationSpec = tween(if (reduceMotion) 0 else 400),
+            label = "Idle photo") { bitmap ->
+            if (bitmap != null) {
                 Image(
                     bitmap = remember(bitmap) { bitmap.asImageBitmap() },
                     contentDescription = null,
-                    modifier = Modifier.matchParentSize(),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                 )
-                Box(Modifier.matchParentSize().background(Brush.verticalGradient(
-                    0f to Color(0x99000000), 0.28f to Color(0x99000000),
-                    0.42f to Color(0xa3000000), 0.74f to Color(0x99000000),
-                    1f to Color(0x40000000),
-                )))
             }
         }
+        if (photo != null) Box(Modifier.matchParentSize().background(photoShade))
     }
 }
 
@@ -120,7 +123,7 @@ internal fun PhotoAlbumPicker(
     val current = path.lastOrNull()
     var album by remember(current) { mutableStateOf<PhotoAlbum?>(null) }
     var failed by remember(current) { mutableStateOf(false) }
-    var retry by remember(current) { mutableStateOf(0) }
+    var retry by remember(current) { mutableIntStateOf(0) }
     LaunchedEffect(current, retry) {
         failed = false
         album = photoRequest { browse(current?.id) }

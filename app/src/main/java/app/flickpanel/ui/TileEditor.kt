@@ -127,11 +127,12 @@ internal fun EntityPicker(
         }
     }
     val matches = remember(available, filter, query, source) {
-        val words = query.trim().lowercase().split(searchWords).filter(String::isNotEmpty)
+        val search = query.trim()
+        val words = search.lowercase().split(searchWords).filter(String::isNotEmpty)
         available.mapNotNull { (entry, searchable) ->
             val include = source != SetupPicker.TILE ||
                 filter.shows(entry.entity.domain) && (!entry.diagnostic || words.isNotEmpty())
-            val explicitlyRequested = query.trim().equals(entry.entity.id, ignoreCase = true)
+            val explicitlyRequested = search.equals(entry.entity.id, ignoreCase = true)
             entry.takeIf { include && (entry.visible || explicitlyRequested) && words.all { word -> searchable.contains(word) } }
         }
     }

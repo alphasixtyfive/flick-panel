@@ -9,6 +9,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CancellationException
 
 @Composable
@@ -17,8 +20,10 @@ internal fun rememberPanelImage(
 ): ImageBitmap? {
     if (reference == null) return null
     var bitmap by remember(reference, cached) { mutableStateOf(cached(reference)) }
-    LaunchedEffect(reference, load) {
-        if (bitmap == null) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(reference, load, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (bitmap != null) return@repeatOnLifecycle
             bitmap = try {
                 load(reference)
             } catch (cancelled: CancellationException) {

@@ -70,7 +70,7 @@ internal fun FavouriteEditor(
     }
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding)) {
         FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            FilledTonalButton(onClick = add, enabled = draft.favourites.size < 48, modifier = Modifier.heightIn(min = 48.dp)) {
+            FilledTonalButton(onClick = add, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(Icons.Rounded.Add, null, Modifier.padding(end = 7.dp))
                 Text("Add tile")
             }
@@ -143,9 +143,11 @@ internal fun RoomSetup(
     val rooms = state.catalogue.rooms
     val selectedRooms = remember(draft, state.catalogue) { RoomLayout(draft, state.catalogue).selectedRooms }
     val chosen = remember(selectedRooms) { selectedRooms.map(Area::id) }
-    val groups = remember(rooms, chosen, search) {
+    val positions = remember(chosen) { chosen.withIndex().associate { (index, id) -> id to index } }
+    val unselectedRooms = remember(rooms, positions) { rooms.filterNot { it.id in positions } }
+    val groups = remember(selectedRooms, unselectedRooms, search) {
         val query = search.trim()
-        listOf("On this panel" to selectedRooms, "Available rooms" to rooms.filterNot { it.id in chosen })
+        listOf("On this panel" to selectedRooms, "Available rooms" to unselectedRooms)
             .map { (title, choices) -> title to choices.filter { it.name.contains(query, ignoreCase = true) } }
             .filter { (_, choices) -> choices.isNotEmpty() }
     }
@@ -165,12 +167,12 @@ internal fun RoomSetup(
                             style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                     }
                     items(choices, key = Area::id) { room ->
-                        val position = chosen.indexOf(room.id)
+                        val position = positions[room.id] ?: -1
                         val selected = position >= 0
                         Surface(
                             selected = selected,
                             onClick = { update(draft.copy(roomIds = if (selected) chosen - room.id else chosen + room.id)) },
-                            enabled = selected || chosen.size < 48, shape = MaterialTheme.shapes.medium,
+                            shape = MaterialTheme.shapes.medium,
                             color = if (selected) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent,
                         ) {
                             Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
@@ -210,32 +212,29 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
             Text("Star a camera to pin it to Favourites.", Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onClick = {
-                val missing = cameras.filter { it.id !in saved }.take(48 - draft.favourites.size)
+                val missing = cameras.filter { it.id !in saved }
                 update(draft.copy(favourites = draft.favourites + missing.map { TileSpec(it.id, TileKind.CAMERA, showOnHome = false) }))
-            }, enabled = draft.favourites.size < 48 && cameras.any { it.id !in saved }) { Text("Select all") }
+            }, enabled = cameras.any { it.id !in saved }) { Text("Select all") }
         }
         if (state.loadingCatalogue) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
         else if (cameras.isEmpty()) Text("No cameras available")
         else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
             items(cameras, key = { it.id }) { camera ->
                 val tile = saved[camera.id]
-                val canAdd = draft.favourites.size < 48
                 val name = tile?.label ?: camera.name
                 val inGallery = {
                     val next = if (tile != null) draft.favourites - tile
-                    else if (canAdd) draft.favourites + TileSpec(camera.id, TileKind.CAMERA, showOnHome = false)
-                    else draft.favourites
+                    else draft.favourites + TileSpec(camera.id, TileKind.CAMERA, showOnHome = false)
                     update(draft.copy(favourites = next))
                 }
                 val featured = tile?.showOnHome == true
                 Row(Modifier.fillMaxWidth().heightIn(min = 58.dp), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f).heightIn(min = 58.dp)
                         .clip(MaterialTheme.shapes.medium)
-                        .toggleable(tile != null, enabled = tile != null || canAdd, role = Role.Checkbox,
-                            onValueChange = { inGallery() })
+                        .toggleable(tile != null, role = Role.Checkbox, onValueChange = { inGallery() })
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = tile != null, onCheckedChange = null, enabled = tile != null || canAdd)
+                        Checkbox(checked = tile != null, onCheckedChange = null)
                         Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
@@ -244,7 +243,7 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
                             if (it.entity == tile.entity) it.copy(showOnHome = !featured) else it
                         } else draft.favourites + TileSpec(camera.id, TileKind.CAMERA)
                         update(draft.copy(favourites = next))
-                    }, enabled = tile != null || canAdd) {
+                    }) {
                         Icon(if (featured) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                             if (featured) "Remove $name from Home" else "Show $name on Home",
                             tint = if (featured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)

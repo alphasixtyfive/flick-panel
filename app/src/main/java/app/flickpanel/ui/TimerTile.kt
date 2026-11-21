@@ -13,9 +13,13 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.text
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.time.Instant
 
 internal data class TimerReadout(val label: String, val progress: Float? = null)
@@ -59,12 +63,15 @@ internal fun timerReadout(timer: Entity?): TimerReadout {
 @Composable
 private fun activeSecondsRemaining(deadline: Long): Long {
     var remaining by remember(deadline) { mutableLongStateOf(timerSecondsRemaining(deadline, System.currentTimeMillis())) }
-    LaunchedEffect(deadline) {
-        while (true) {
-            val now = System.currentTimeMillis()
-            remaining = timerSecondsRemaining(deadline, now)
-            if (remaining == 0L) break
-            delay((deadline - now) % 1_000 + 1)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(deadline, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                val now = System.currentTimeMillis()
+                remaining = timerSecondsRemaining(deadline, now)
+                if (remaining == 0L) break
+                delay((deadline - now) % 1_000 + 1)
+            }
         }
     }
     return remaining

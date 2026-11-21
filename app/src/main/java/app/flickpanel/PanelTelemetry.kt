@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
+private val sensorRetryDelays = listOf(0L, 1_000L, 2_000L)
+
 internal suspend fun publishPanelTelemetry(
     context: Context, client: HaClient, webhookId: String, ui: StateFlow<PanelUi>,
 ) {
@@ -34,7 +36,8 @@ internal suspend fun publishPanelTelemetry(
             .collect { readings ->
                 val changed = readings.filter { published[it.sensor] != it }
                 if (changed.isEmpty()) return@collect
-                for (attempt in 0..2) {
+                for (pause in sensorRetryDelays) {
+                    delay(pause)
                     try {
                         client.publishPanelSensors(webhookId, changed)
                         changed.associateByTo(published, PanelSensorReading::sensor)
@@ -42,7 +45,7 @@ internal suspend fun publishPanelTelemetry(
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
-                        if (attempt < 2) delay(1_000L shl attempt)
+                        // Keep unacknowledged readings eligible for retry.
                     }
                 }
             }
@@ -61,11 +64,13 @@ private fun PanelUi.displayReport(): DisplayReport {
     val mode = when {
         screenBlank -> "blank"
         clock -> "clock"
-        camera != null -> "camera"
-        musicOpen != null -> "music"
-        agendaOpen != null -> "agenda"
-        contentOpen != null -> "content"
-        else -> "dashboard"
+        else -> when (viewer) {
+            is PanelViewer.Camera -> "camera"
+            is PanelViewer.Music -> "music"
+            is PanelViewer.Agenda -> "agenda"
+            is PanelViewer.Content -> "content"
+            null -> "dashboard"
+        }
     }
     return DisplayReport(mode, page, brightnessPercent, keepsDisplayAwake)
 }

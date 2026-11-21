@@ -1,5 +1,6 @@
 package app.flickpanel
 
+import android.app.ActivityManager
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -12,41 +13,41 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.flickpanel.ui.OfflineMapAssets
 import app.flickpanel.ui.PanelScreen
 
 class MainActivity : ComponentActivity() {
     private val model by viewModels<PanelViewModel>()
+    private val offlineMaps = lazy(LazyThreadSafetyMode.NONE) {
+        val lowMemory = getSystemService(ActivityManager::class.java)
+            ?.let { it.isLowRamDevice || it.memoryClass <= 128 } == true
+        OfflineMapAssets(assets, retainDetail = !lowMemory)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val systemBars = WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
         setContent {
             val state by model.ui.collectAsStateWithLifecycle()
-            val wall = state.keepsDisplayAwake && state.configured
-            val hasPhotos = state.config.idleAlbum != null
-            val blank = state.screenBlank
-            val level = state.brightnessPercent?.div(100f)
-            LaunchedEffect(state.configured, state.clock, wall, hasPhotos, blank, level) {
-                if (wall || blank) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val keepScreenOn = state.screenBlank || state.configured && state.keepsDisplayAwake
+            val brightness = state.windowBrightness()
+            LaunchedEffect(keepScreenOn) {
+                if (keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                val brightness = when {
-                    blank -> 0f
-                    wall && state.clock -> {
-                        val idleMaximum = if (hasPhotos) .22f else .13f
-                        minOf(level ?: idleMaximum, idleMaximum)
-                    }
-                    else -> level ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-                }
+            }
+            LaunchedEffect(brightness) {
                 if (window.attributes.screenBrightness != brightness) {
                     window.attributes = window.attributes.apply { screenBrightness = brightness }
                 }
-                WindowCompat.getInsetsController(window, window.decorView).apply {
-                    systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                    if (state.configured) hide(WindowInsetsCompat.Type.systemBars())
-                    else show(WindowInsetsCompat.Type.systemBars())
-                }
             }
-            PanelScreen(state, model)
+            LaunchedEffect(state.configured) {
+                val types = WindowInsetsCompat.Type.systemBars()
+                if (state.configured) systemBars.hide(types) else systemBars.show(types)
+            }
+            PanelScreen(state, model) { offlineMaps.value }
         }
     }
 
@@ -57,6 +58,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         model.visible(false)
+        if (offlineMaps.isInitialized()) offlineMaps.value.clear()
         super.onStop()
     }
 
@@ -64,4 +66,14 @@ class MainActivity : ComponentActivity() {
         super.onUserInteraction()
         model.touch()
     }
+}
+
+private fun PanelUi.windowBrightness(): Float {
+    if (screenBlank) return 0f
+    val level = brightnessPercent?.div(100f)
+    if (configured && clock && keepsDisplayAwake) {
+        val idleMaximum = if (config.idleAlbum == null) .13f else .22f
+        return minOf(level ?: idleMaximum, idleMaximum)
+    }
+    return level ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 }

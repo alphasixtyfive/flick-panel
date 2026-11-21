@@ -1,7 +1,6 @@
 package app.flickpanel.ha
 
 import app.flickpanel.config.TileKind
-import app.flickpanel.config.validEntity
 import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlin.math.roundToInt
@@ -44,10 +43,10 @@ internal data class Entity(
     val state: String,
     val attributes: JSONObject = JSONObject()
 ) {
-    val domain get() = id.substringBefore('.')
+    val domain = id.substringBefore('.')
     val name get() = attributes.text("friendly_name") ?: id.substringAfter('.').replace('_', ' ')
         .replaceFirstChar { it.uppercase() }
-    val available get() = state.isNotBlank() && state !in setOf("unavailable", "unknown")
+    val available get() = state.isNotBlank() && state != "unavailable" && state != "unknown"
     val unit get() = attributes.text("unit_of_measurement").orEmpty()
     val mediaFeatures get() = attributes.optLong("supported_features")
     val playingMedia get() = state == "playing" || state == "buffering"
@@ -85,7 +84,10 @@ internal data class Entity(
         "light" -> {
             val modes = attributes.optJSONArray("supported_color_modes")
             val dimmable = brightness != null && state != "off" ||
-                (0 until (modes?.length() ?: 0)).any { modes?.optString(it) !in setOf("", "onoff", "unknown") }
+                (0 until (modes?.length() ?: 0)).any { index ->
+                    val mode = modes?.optString(index).orEmpty()
+                    mode.isNotEmpty() && mode != "onoff" && mode != "unknown"
+                }
             if (dimmable) listOf(TileKind.SLIDER, TileKind.TOGGLE) else listOf(TileKind.TOGGLE)
         }
         "switch", "input_boolean" -> listOf(TileKind.TOGGLE)
@@ -257,7 +259,7 @@ internal data class Entry(val entity: Entity, val area: String?, val diagnostic:
 internal data class Catalogue(val entries: List<Entry> = emptyList(), val areas: List<Area> = emptyList()) {
     private val byId = entries.associateBy { it.entity.id }
     private val byRoom = entries.asSequence()
-        .filter { it.area != null && it.visible && !it.diagnostic && it.entity.domain in setOf("light", "climate") }
+        .filter { it.area != null && it.visible && !it.diagnostic && (it.entity.domain == "light" || it.entity.domain == "climate") }
         .sortedBy { it.entity.domain != "light" }
         .groupBy { it.area }
     val rooms = areas.filter { it.id in byRoom }
@@ -271,50 +273,3 @@ internal data class GraphPoint(val time: Long, val value: Double)
 
 internal fun JSONObject.text(key: String): String? =
     if (isNull(key)) null else optString(key).takeIf { it.isNotBlank() }
-
-internal fun reduceEntities(
-    previous: Map<String, Entity>, event: JSONObject, selected: Set<String>, initial: Boolean
-): Map<String, Entity> {
-    val before = if (initial) emptyMap() else previous
-    var updated: MutableMap<String, Entity>? = null
-    fun edit() = updated ?: before.toMutableMap().also { updated = it }
-
-    if (before.keys.any { it !in selected }) edit().keys.retainAll(selected)
-    event.optJSONObject("a")?.let { added ->
-        for (id in added.keys()) {
-            if (id !in selected || !validEntity(id)) continue
-            val record = added.optJSONObject(id) ?: continue
-            edit()[id] = Entity(id, record.optString("s"), record.optJSONObject("a") ?: JSONObject())
-        }
-    }
-    val removed = event.optJSONArray("r")
-    if (removed != null) for (index in 0 until removed.length()) {
-        val id = removed.optString(index)
-        if (id in (updated ?: before)) edit().remove(id)
-    }
-    event.optJSONObject("c")?.let { changes ->
-        for (id in changes.keys()) {
-            val current = (updated ?: before)[id] ?: continue
-            val change = changes.optJSONObject(id) ?: continue
-            val positive = change.optJSONObject("+")
-            val state = positive?.optString("s", current.state) ?: current.state
-            val attributes = patchAttributes(current.attributes, positive?.optJSONObject("a"),
-                change.optJSONObject("-")?.optJSONArray("a"))
-            if (state != current.state || attributes !== current.attributes) {
-                edit()[id] = current.copy(state = state, attributes = attributes)
-            }
-        }
-    }
-    return updated ?: before
-}
-
-private fun patchAttributes(before: JSONObject, added: JSONObject?, removed: JSONArray?): JSONObject {
-    val changesValue = added?.keys()?.asSequence()?.any { key -> !before.has(key) || before.opt(key) != added.opt(key) } == true
-    val removesValue = removed != null && (0 until removed.length()).any { before.has(removed.optString(it)) }
-    if (!changesValue && !removesValue) return before
-    return JSONObject().apply {
-        for (key in before.keys()) put(key, before.get(key))
-        if (added != null) for (key in added.keys()) put(key, added.get(key))
-        if (removed != null) for (index in 0 until removed.length()) remove(removed.optString(index))
-    }
-}

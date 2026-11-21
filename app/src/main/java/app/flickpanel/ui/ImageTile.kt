@@ -21,24 +21,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.PanelViewModel
 import kotlinx.coroutines.CancellationException
 
 @Composable
 internal fun ImageTile(id: String, title: String, state: String?, available: Boolean, model: PanelViewModel, modifier: Modifier) {
     val revision = state.orEmpty().take(120)
-    var bitmap by remember(id) { mutableStateOf<Bitmap?>(model.cachedSnapshot(id, revision)) }
-    var failed by remember(id, revision) { mutableStateOf(false) }
-    LaunchedEffect(id, revision, available) {
-        if (!available) return@LaunchedEffect
-        try {
-            val loaded = model.snapshot(id, revision)
-            if (loaded != null) bitmap = loaded
-            failed = loaded == null
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            failed = true
+    var bitmap by remember(model, id) { mutableStateOf<Bitmap?>(model.cachedSnapshot(id, revision)) }
+    var failed by remember(model, id, revision) { mutableStateOf(false) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    if (available) LaunchedEffect(model, id, revision, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            try {
+                val loaded = model.snapshot(id, revision)
+                if (loaded != null) bitmap = loaded
+                failed = loaded == null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                failed = true
+            }
         }
     }
 

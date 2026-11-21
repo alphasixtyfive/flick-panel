@@ -5,6 +5,8 @@ import json
 import struct
 from pathlib import Path
 
+from asset_output import open_asset
+
 
 def features(root, layer):
     return json.loads((root / f"{layer}.geojson").read_text(encoding="utf-8"))["features"]
@@ -63,8 +65,7 @@ def main():
                         default=Path("app/src/main/assets/offline_map/world.fpm"))
     arguments = parser.parse_args()
 
-    arguments.output.parent.mkdir(parents=True, exist_ok=True)
-    with arguments.output.open("wb") as output:
+    with open_asset(arguments.output) as output:
         output.write(b"FPM1")
         write_layer(output, features(arguments.geojson, "ne_50m_admin_0_countries"))
         write_layer(output, features(arguments.geojson, "ne_50m_lakes"))

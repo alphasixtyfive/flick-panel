@@ -28,77 +28,63 @@ import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
 import app.flickpanel.ha.Entity
 
+private sealed class SetupDestination(val title: String, val allowsSaving: Boolean = false) {
+    data class Panel(val page: PanelPage) : SetupDestination(page.label, allowsSaving = !page.readOnly)
+    data class Room(val area: Area) : SetupDestination(area.name, allowsSaving = true)
+    data class Picker(val source: SetupPicker) : SetupDestination(source.title)
+    data class Format(val tile: TileFormat) : SetupDestination(if (tile.current == null) "Configure tile" else "Edit tile")
+    data class Badge(val badge: HomeBadge) : SetupDestination("Warning badge")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     var draft by remember(state.config) { mutableStateOf(state.config) }
     var section by remember { mutableStateOf(SetupSection.FAVOURITES) }
-    var picker by remember { mutableStateOf<SetupPicker?>(null) }
-    var format by remember { mutableStateOf<TileFormat?>(null) }
-    var room by remember { mutableStateOf<Area?>(null) }
-    var badge by remember { mutableStateOf<HomeBadge?>(null) }
-    var panelPage by remember { mutableStateOf<PanelPage?>(null) }
+    var destinations by remember { mutableStateOf(emptyList<SetupDestination>()) }
     var choosingPhotos by remember { mutableStateOf(false) }
     var confirmingDiscard by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
     var removed by remember { mutableStateOf<Pair<Int, TileSpec>?>(null) }
     val editorPages = rememberSaveableStateHolder()
-    val activePicker = picker
-    val activeFormat = format
-    val activeRoom = room
-    val activeBadge = badge
-    val adding = activePicker == SetupPicker.TILE || activePicker == SetupPicker.APP
+    val current = destinations.lastOrNull()
     val dirty = draft != state.config
+    fun navigateTo(destination: SetupDestination) { destinations = destinations + destination }
+    fun backToPrevious() { destinations = destinations.dropLast(1) }
+    fun choose(source: SetupPicker) {
+        search = ""
+        navigateTo(SetupDestination.Picker(source))
+    }
     val editTile: (TileSpec) -> Unit = { tile ->
         val entity = state.entity(tile.entity) ?: Entity(tile.entity, "")
-        format = TileFormat(entity, tile, (entity.kinds() + tile.kind).distinct())
+        navigateTo(SetupDestination.Format(TileFormat(entity, tile, (entity.kinds() + tile.kind).distinct())))
     }
     val finish = {
         if (!state.busy) {
             if (dirty) confirmingDiscard = true else model.relock()
         }
     }
-    val detailTitle = when {
-        state.connectionEditor -> "Connection"
-        activeFormat != null -> if (activeFormat.current == null) "Configure tile" else "Edit tile"
-        activePicker != null -> activePicker.title
-        activeBadge != null -> "Warning badge"
-        activeRoom != null -> activeRoom.name
-        else -> panelPage?.label
-    }
+    val detailTitle = if (state.connectionEditor) "Connection" else current?.title
 
     SetupLayout(
         theme = draft.theme,
         highContrast = draft.highContrast,
         reduceMotion = draft.reduceMotion,
-        destination = activeFormat?.entity?.id ?: activePicker ?: activeRoom?.id ?: activeBadge?.entity ?: detailTitle ?: section,
+        destination = if (state.connectionEditor) "connection" else current ?: section,
         section = section,
         openSection = {
-            format = null
-            picker = null
-            badge = null
-            panelPage = null
-            room = null
+            destinations = emptyList()
             model.cancelConnectionChange()
             section = it
         },
         detailTitle = detailTitle,
-        showSave = dirty && activeFormat == null && activePicker == null && activeBadge == null &&
-            !state.connectionEditor && panelPage?.readOnly != true,
+        showSave = dirty && !state.connectionEditor && current?.allowsSaving != false,
         busy = state.busy,
         back = {
             if (!state.busy) {
                 when {
-                    activeFormat != null -> format = null
-                    activePicker != null -> picker = null
-                    activeBadge != null -> badge = null
                     state.connectionEditor -> model.cancelConnectionChange()
-                    activeRoom != null -> room = null
-                    panelPage != null -> panelPage = when (panelPage) {
-                        PanelPage.REMOTE_CONTROL, PanelPage.HOME_BADGES -> PanelPage.HOME_ASSISTANT
-                        PanelPage.FONT_LICENCE -> PanelPage.ABOUT
-                        else -> null
-                    }
+                    current != null -> backToPrevious()
                     else -> finish()
                 }
             }
@@ -106,82 +92,83 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
         close = finish,
         save = { model.save(draft) },
     ) {
-        when {
-            state.connectionEditor -> ConnectionForm(state, model::connect)
-            activeFormat != null -> FormatPanel(activeFormat, state) { spec ->
-                val current = activeFormat.current
+        if (state.connectionEditor) {
+            ConnectionForm(state, model::connect)
+        } else when (current) {
+            is SetupDestination.Format -> FormatPanel(current.tile, state) { spec ->
+                val original = current.tile.current
                 val tiles = draft.favourites
-                draft = draft.copy(favourites = if (current == null) tiles + spec
-                    else tiles.map { if (it.entity == current.entity) spec else it })
-                format = null
-                picker = null
+                draft = draft.copy(favourites = if (original == null) tiles + spec
+                    else tiles.map { if (it.entity == original.entity) spec else it })
+                destinations = destinations.dropLast(if (original == null) 2 else 1)
             }
-            adding -> Column {
-                SingleChoiceSegmentedButtonRow(Modifier.padding(horizontal = setupPadding)
-                    .widthIn(max = 360.dp).fillMaxWidth()) {
-                    val sources = listOf(SetupPicker.TILE to "Home Assistant", SetupPicker.APP to "Android apps")
-                    sources.forEachIndexed { index, (source, label) ->
-                        SegmentedButton(
-                            selected = activePicker == source,
-                            onClick = { picker = source },
-                            shape = SegmentedButtonDefaults.itemShape(index, sources.size),
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        ) { Text(label) }
+            is SetupDestination.Picker -> when (val source = current.source) {
+                SetupPicker.TILE, SetupPicker.APP -> Column {
+                    SingleChoiceSegmentedButtonRow(Modifier.padding(horizontal = setupPadding)
+                        .widthIn(max = 360.dp).fillMaxWidth()) {
+                        val sources = listOf(SetupPicker.TILE to "Home Assistant", SetupPicker.APP to "Android apps")
+                        sources.forEachIndexed { index, (option, label) ->
+                            SegmentedButton(
+                                selected = source == option,
+                                onClick = { destinations = destinations.dropLast(1) + SetupDestination.Picker(option) },
+                                shape = SegmentedButtonDefaults.itemShape(index, sources.size),
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) { Text(label) }
+                        }
+                    }
+                    if (source == SetupPicker.APP) {
+                        val added = remember(draft.favourites) { draft.favourites.mapNotNull { it.appPackage }.toSet() }
+                        AppPicker(added) { tile ->
+                            draft = draft.copy(favourites = draft.favourites + tile)
+                            backToPrevious()
+                        }
+                    } else {
+                        editorPages.SaveableStateProvider("device-picker") {
+                            EntityPicker(source, draft, state, search, { search = it }, model::loadCatalogue) { entity ->
+                                val featured = entity.domain != "camera" ||
+                                    draft.favourites.none { it.kind == TileKind.CAMERA && it.showOnHome }
+                                navigateTo(SetupDestination.Format(TileFormat(entity, null, entity.kinds(), featured)))
+                            }
+                        }
                     }
                 }
-                if (activePicker == SetupPicker.APP) {
-                    val added = remember(draft.favourites) { draft.favourites.mapNotNull { it.appPackage }.toSet() }
-                    AppPicker(added) { tile ->
-                        draft = draft.copy(favourites = draft.favourites + tile)
-                        picker = null
-                    }
-                } else {
-                    editorPages.SaveableStateProvider("device-picker") {
-                        EntityPicker(SetupPicker.TILE, draft, state, search, { search = it }, model::loadCatalogue) { entity ->
-                            val featured = entity.domain != "camera" ||
-                                draft.favourites.none { it.kind == TileKind.CAMERA && it.showOnHome }
-                            format = TileFormat(entity, null, entity.kinds(), featured)
+                SetupPicker.MESSAGE, SetupPicker.PRESENCE, SetupPicker.BADGE -> EntityPicker(
+                    source, draft, state, search, { search = it }, model::loadCatalogue,
+                ) { entity ->
+                    backToPrevious()
+                    when (source) {
+                        SetupPicker.MESSAGE -> draft = draft.copy(messageEntity = entity.id)
+                        SetupPicker.PRESENCE -> draft = draft.copy(presenceEntity = entity.id)
+                        else -> {
+                            val states = if (entity.domain == "sensor") emptyList() else listOf("on")
+                            navigateTo(SetupDestination.Badge(HomeBadge(entity.id, null, states)))
                         }
                     }
                 }
             }
-            activePicker != null -> EntityPicker(activePicker, draft, state, search, { search = it }, model::loadCatalogue) { entity ->
-                draft = when (activePicker) {
-                    SetupPicker.MESSAGE -> draft.copy(messageEntity = entity.id)
-                    SetupPicker.PRESENCE -> draft.copy(presenceEntity = entity.id)
-                    SetupPicker.BADGE -> {
-                        val states = if (entity.domain == "sensor") emptyList() else listOf("on")
-                        badge = HomeBadge(entity.id, null, states)
-                        draft
-                    }
-                    else -> draft
-                }
-                picker = null
-            }
-            activeBadge != null -> WarningBadgeEditor(activeBadge, state) { saved ->
+            is SetupDestination.Badge -> WarningBadgeEditor(current.badge, state) { saved ->
                 val existing = draft.homeBadges
                 val next = if (existing.none { it.entity == saved.entity }) existing + saved
                     else existing.map { if (it.entity == saved.entity) saved else it }
                 draft = draft.copy(homeBadges = next)
-                badge = null
+                backToPrevious()
             }
-            activeRoom != null -> RoomControlsEditor(
-                room = activeRoom,
+            is SetupDestination.Room -> RoomControlsEditor(
+                room = current.area,
                 draft = draft,
                 state = state,
-                update = { controls -> draft = draft.copy(roomTiles = draft.roomTiles + (activeRoom.id to controls)) },
-                reset = { draft = draft.copy(roomTiles = draft.roomTiles - activeRoom.id) },
+                update = { controls -> draft = draft.copy(roomTiles = draft.roomTiles + (current.area.id to controls)) },
+                reset = { draft = draft.copy(roomTiles = draft.roomTiles - current.area.id) },
             )
-            else -> editorPages.SaveableStateProvider(section.name) {
+            is SetupDestination.Panel, null -> editorPages.SaveableStateProvider(section.name) {
                 Column(Modifier.fillMaxWidth()) {
                     ErrorText(state.error, Modifier.padding(horizontal = setupPadding))
                     when (section) {
                         SetupSection.FAVOURITES -> FavouriteEditor(
                             draft, state,
                             add = {
-                                search = ""
                                 editorPages.removeState("device-picker")
-                                picker = SetupPicker.TILE
+                                choose(SetupPicker.TILE)
                             },
                             edit = editTile,
                             resize = { selected ->
@@ -211,7 +198,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                             undo = removed?.let { (index, tile) ->
                                 {
                                     val tiles = draft.favourites.toMutableList()
-                                    if (tiles.size < 48 && tiles.none { it.entity == tile.entity }) {
+                                    if (tiles.none { it.entity == tile.entity }) {
                                         tiles.add(index.coerceIn(0, tiles.size), tile)
                                         draft = draft.copy(favourites = tiles)
                                     }
@@ -219,19 +206,19 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                                 }
                             },
                         )
-                        SetupSection.ROOMS -> RoomSetup(draft, state, customize = { room = it }) { draft = it }
+                        SetupSection.ROOMS -> RoomSetup(draft, state, customize = { navigateTo(SetupDestination.Room(it)) }) { draft = it }
                         SetupSection.CAMERAS -> CameraSetup(draft, state, editTile) { draft = it }
                         SetupSection.PANEL -> PanelSettings(
-                            page = panelPage,
+                            page = (current as? SetupDestination.Panel)?.page,
                             draft = draft,
                             state = state,
-                            open = { panelPage = it },
+                            open = { navigateTo(SetupDestination.Panel(it)) },
                             change = { draft = it },
                             choosePhotos = { choosingPhotos = true },
-                            chooseMessage = { search = ""; picker = SetupPicker.MESSAGE },
-                            choosePresence = { search = ""; picker = SetupPicker.PRESENCE },
-                            chooseBadge = { search = ""; picker = SetupPicker.BADGE },
-                            editBadge = { badge = it },
+                            chooseMessage = { choose(SetupPicker.MESSAGE) },
+                            choosePresence = { choose(SetupPicker.PRESENCE) },
+                            chooseBadge = { choose(SetupPicker.BADGE) },
+                            editBadge = { navigateTo(SetupDestination.Badge(it)) },
                             changeConnection = model::changeConnection,
                             linkPanel = model::linkPanel,
                             unlinkPanel = model::unlinkPanel,

@@ -51,8 +51,10 @@ internal fun RoomControlsEditor(
     update: (List<RoomTilePreference>) -> Unit, reset: () -> Unit,
 ) {
     val controls = remember(room, draft, state.catalogue) { RoomLayout(draft, state.catalogue).controls(room) }
-    val preferences = controls.map { it.preference }
-    val (hidden, visible) = controls.filter { it.tile != null }.partition { it.preference.hidden }
+    val preferences = remember(controls) { controls.map { it.preference } }
+    val (visible, hidden) = remember(controls) {
+        controls.filter { it.tile != null }.partition { !it.preference.hidden }
+    }
     val custom = room.id in draft.roomTiles
     fun edit(preference: RoomTilePreference) {
         update(preferences.map { if (it.entity == preference.entity) preference else it })

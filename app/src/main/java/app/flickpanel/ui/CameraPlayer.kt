@@ -1,6 +1,7 @@
 package app.flickpanel.ui
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Build
 import android.util.Log
 import android.view.LayoutInflater
@@ -54,17 +55,7 @@ internal fun CameraPlayer(
     val reportError by rememberUpdatedState(onError)
 
     LifecycleStartEffect(stream, transport) {
-        val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
-        if (Build.DEVICE.equals("TB128FU", ignoreCase = true)) {
-            // This Lenovo decoder can stall on HEVC streams that advertise a level above its capabilities.
-            renderers.forceDisableMediaCodecAsynchronousQueueing()
-            renderers.setMediaCodecSelector { mimeType, secure, tunneling ->
-                val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, secure, tunneling)
-                if (mimeType == MimeTypes.VIDEO_H265) decoders.sortedBy { !it.softwareOnly } else decoders
-            }
-        }
-        val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(10_000, 20_000, 500, 1_500).build()
-        val active = ExoPlayer.Builder(context, renderers).setLoadControl(loadControl).build()
+        val active = createCameraPlayer(context, stream, transport)
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() = reportFirstFrame()
 
@@ -88,11 +79,6 @@ internal fun CameraPlayer(
                 }
             }
         }
-        val source = HlsMediaSource.Factory(OkHttpDataSource.Factory(transport))
-        active.volume = 0f
-        active.trackSelectionParameters = active.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
-        active.setMediaSource(source.createMediaSource(MediaItem.fromUri(stream.toString())))
         active.addListener(listener)
         player = active
         active.prepare()
@@ -114,4 +100,26 @@ internal fun CameraPlayer(
         onRelease = { it.player = null },
         modifier = modifier,
     )
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+private fun createCameraPlayer(context: Context, stream: HttpUrl, transport: OkHttpClient): ExoPlayer {
+    val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+    if (Build.DEVICE.equals("TB128FU", ignoreCase = true)) {
+        // This Lenovo decoder can stall on HEVC streams above its advertised level.
+        renderers.forceDisableMediaCodecAsynchronousQueueing()
+        renderers.setMediaCodecSelector { mimeType, secure, tunneling ->
+            val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, secure, tunneling)
+            if (mimeType == MimeTypes.VIDEO_H265) decoders.sortedBy { !it.softwareOnly } else decoders
+        }
+    }
+    val buffer = DefaultLoadControl.Builder().setBufferDurationsMs(10_000, 20_000, 500, 1_500).build()
+    val source = HlsMediaSource.Factory(OkHttpDataSource.Factory(transport))
+        .createMediaSource(MediaItem.fromUri(stream.toString()))
+    return ExoPlayer.Builder(context, renderers).setLoadControl(buffer).build().apply {
+        volume = 0f
+        trackSelectionParameters = trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
+        setMediaSource(source)
+    }
 }

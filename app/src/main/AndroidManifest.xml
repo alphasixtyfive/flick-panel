@@ -9,6 +9,7 @@
     </queries>
     <application
         android:allowBackup="false"
+        android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/flick_launcher"
         android:roundIcon="@mipmap/flick_launcher"

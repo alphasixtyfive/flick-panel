@@ -19,6 +19,8 @@ import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
+import app.flickpanel.ha.Entity
+import app.flickpanel.ha.GraphPoint
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.personPicture
 import app.flickpanel.ha.readContent
@@ -34,18 +36,40 @@ internal fun PanelTile(
     tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
     compactHistory: Boolean = false, expandedAgenda: Boolean = false,
 ) {
-    val label = state.label(tile)
-    val entity = state.entity(tile.entity)
-    val live = state.entities[tile.entity]
-    val pending = state.pending[tile.entity]
-    val online = state.link == Link.ONLINE
+    if (tile.kind == TileKind.CAMERA) {
+        CameraTile(tile, state, model, modifier)
+        return
+    }
+    TileContent(
+        tile = tile,
+        label = state.label(tile),
+        entity = state.entity(tile.entity),
+        live = state.entities[tile.entity],
+        status = tile.statusEntity?.let(state.entities::get),
+        pending = state.pending[tile.entity],
+        link = state.link,
+        history = state.graphs[tile.entity],
+        reduceMotion = state.config.reduceMotion,
+        model = model,
+        modifier = modifier,
+        compactHistory = compactHistory,
+        expandedAgenda = expandedAgenda,
+    )
+}
+
+@Composable
+private fun TileContent(
+    tile: TileSpec, label: String, entity: Entity?, live: Entity?, status: Entity?, pending: String?,
+    link: Link, history: List<GraphPoint>?, reduceMotion: Boolean, model: PanelViewModel,
+    modifier: Modifier, compactHistory: Boolean, expandedAgenda: Boolean,
+) {
+    val online = link == Link.ONLINE
     val available = online && live?.available == true
     val ready = available && pending == null
     when (tile.kind) {
         TileKind.TOGGLE, TileKind.ACTION -> {
             val on = entity?.state == "on"
-            ToggleActionTile(tile, label, on, tile.statusEntity?.let(state.entities::get), pending, available,
-                state.config.reduceMotion, modifier) {
+            ToggleActionTile(tile, label, on, status, pending, available, reduceMotion, modifier) {
                 live?.let { if (tile.kind == TileKind.ACTION) model.action(it) else model.toggle(it, !on) }
             }
         }
@@ -76,10 +100,10 @@ internal fun PanelTile(
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
         TileKind.TIMER -> TimerTile(label, entity, modifier)
         TileKind.GLANCE -> GlanceTile(label, entity, available, modifier)
-        TileKind.VALUE, TileKind.TREND -> ValueTile(tile, label, entity, state.link, state.graphs[tile.entity],
+        TileKind.VALUE, TileKind.TREND -> ValueTile(tile, label, entity, link, history,
             model::loadGraph, modifier, compactHistory)
         TileKind.APP -> AppTile(tile, modifier)
-        TileKind.CAMERA -> CameraTile(tile, state, model, modifier)
+        TileKind.CAMERA -> Unit
     }
 }
 

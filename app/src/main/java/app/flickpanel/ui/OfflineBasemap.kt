@@ -1,12 +1,16 @@
 package app.flickpanel.ui
 
 import android.content.res.AssetManager
+import androidx.annotation.MainThread
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import java.io.DataInputStream
 import java.io.IOException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 
 internal data class BasemapPlace(val point: Offset, val rank: Int, val name: String)
 
@@ -22,11 +26,44 @@ internal data class OfflineDetail(val cells: List<DetailCell>, val roadNames: Li
 internal data class DetailCell(val bounds: Rect, val layers: List<Path>)
 internal enum class DetailLayer(val closed: Boolean = false) { PARK(true), WATER(true), RIVER, LOCAL_ROAD, MAIN_ROAD }
 
-internal fun loadOfflineBasemap(assets: AssetManager): OfflineBasemap =
+@MainThread
+internal class OfflineMapAssets(private val assets: AssetManager, private val retainDetail: Boolean) {
+    var cachedBasemap: OfflineBasemap? = null
+        private set
+    private var recentDetail: Pair<OfflineRegion, OfflineDetail>? = null
+    private var generation = 0
+
+    fun cachedDetail(region: OfflineRegion): OfflineDetail? =
+        recentDetail?.takeIf { it.first == region }?.second
+
+    suspend fun basemap(): OfflineBasemap {
+        cachedBasemap?.let { return it }
+        val started = generation
+        val map = withContext(Dispatchers.IO) { readOfflineBasemap(assets) { ensureActive() } }
+        if (generation == started) cachedBasemap = map
+        return map
+    }
+
+    suspend fun detail(region: OfflineRegion): OfflineDetail {
+        cachedDetail(region)?.let { return it }
+        val started = generation
+        val map = withContext(Dispatchers.IO) { readOfflineDetail(assets, region) { ensureActive() } }
+        if (retainDetail && generation == started) recentDetail = region to map
+        return map
+    }
+
+    fun clear() {
+        generation++
+        cachedBasemap = null
+        recentDetail = null
+    }
+}
+
+private fun readOfflineBasemap(assets: AssetManager, checkActive: () -> Unit): OfflineBasemap =
     DataInputStream(assets.open("offline_map/world.fpm").buffered()).use { input ->
         if (input.readInt() != 0x46504d31) throw IOException("Unsupported bundled map format")
-        val countries = input.readLayer()
-        val lakes = input.readLayer()
+        val countries = input.readLayer(checkActive)
+        val lakes = input.readLayer(checkActive)
         val places = List(input.readCount(2_000)) {
             val point = input.readPoint()
             val rank = input.readUnsignedByte()
@@ -39,11 +76,12 @@ internal fun loadOfflineBasemap(assets: AssetManager): OfflineBasemap =
         OfflineBasemap(countries, lakes, places, offlineRegions(assets))
     }
 
-private fun DataInputStream.readLayer(): Path {
+private fun DataInputStream.readLayer(checkActive: () -> Unit): Path {
     var totalPoints = 0
     return Path().apply {
         fillType = PathFillType.EvenOdd
         repeat(readCount(5_000)) {
+            checkActive()
             val points = readCount(250_000, minimum = 3)
             totalPoints += points
             if (totalPoints > 250_000) throw IOException("Bundled map layer is too large")
@@ -76,13 +114,15 @@ private fun offlineRegions(assets: AssetManager): List<OfflineRegion> =
         }
     }
 
-internal fun loadOfflineDetail(assets: AssetManager, region: OfflineRegion): OfflineDetail =
+private fun readOfflineDetail(assets: AssetManager, region: OfflineRegion, checkActive: () -> Unit): OfflineDetail =
     DataInputStream(assets.open(region.asset).buffered()).use { input ->
         if (input.readDetailHeader() != region.bounds) throw IOException("Unexpected bundled map bounds")
         val cells = List(input.readCount(512)) {
-            DetailCell(input.readDetailBounds(), DetailLayer.entries.map { input.readDetailLayer(it.closed) })
+            val bounds = input.readDetailBounds()
+            DetailCell(bounds, DetailLayer.entries.map { input.readDetailLayer(it.closed, checkActive) })
         }
         val roads = List(input.readCount(60_000)) {
+            checkActive()
             val point = input.readDetailPoint()
             val length = input.readUnsignedShort()
             if (length !in 1..160) throw IOException("Invalid road name")
@@ -107,8 +147,9 @@ private fun DataInputStream.readDetailBounds(): Rect {
 private fun DataInputStream.readDetailPoint(): Offset =
     Offset(readCount(36_000_000) / 100_000f, readCount(18_000_000) / 100_000f)
 
-private fun DataInputStream.readDetailLayer(closed: Boolean) = Path().apply {
+private fun DataInputStream.readDetailLayer(closed: Boolean, checkActive: () -> Unit) = Path().apply {
     repeat(readCount(70_000)) {
+        checkActive()
         val count = readCount(100_000, minimum = if (closed) 3 else 2)
         val first = readDetailPoint()
         moveTo(first.x, first.y)

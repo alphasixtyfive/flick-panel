@@ -6,6 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.AgendaState
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
@@ -16,6 +19,7 @@ import app.flickpanel.ha.canUpdateTasks
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
 
 @Composable
 internal fun AgendaTile(
@@ -41,11 +45,13 @@ internal fun OpenAgenda(tile: TileSpec, panel: PanelUi, model: PanelViewModel) {
 private fun agendaState(id: String, online: Boolean, model: PanelViewModel): AgendaState {
     val updates = remember(model, id) { model.agenda.states.map { it[id] }.distinctUntilChanged() }
     val state by updates.collectAsStateWithLifecycle(initialValue = model.agenda.cached(id))
-    LaunchedEffect(id, online) {
-        if (!online) return@LaunchedEffect
-        while (true) {
-            model.loadAgenda(id)
-            delay(60_000)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    if (online) LaunchedEffect(model, id, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                model.loadAgenda(id)
+                delay(60_000)
+            }
         }
     }
     return state ?: AgendaState()

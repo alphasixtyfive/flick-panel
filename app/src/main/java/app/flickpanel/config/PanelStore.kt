@@ -32,6 +32,9 @@ private const val PIN_HASH = "pin_hash"
 private const val PIN_FAILURES = "pin_failures"
 private const val PIN_WAIT = "pin_wait"
 private const val TOKEN_CIPHER = "AES/GCM/NoPadding"
+private const val CONNECTION_KEY = "flick_panel_connection"
+
+internal class PanelStoreProblem(message: String) : Exception(message)
 
 internal data class SavedPanel(
     val configured: Boolean, val config: PanelConfig, val credentials: HaCredentials?, val remote: SavedRemote?,
@@ -57,6 +60,7 @@ internal fun restoreSavedPanel(
 
 internal class PanelStore(context: Context) {
     private val prefs = context.getSharedPreferences("panel", Context.MODE_PRIVATE)
+    private val keys by lazy { KeyStore.getInstance("AndroidKeyStore").apply { load(null) } }
 
     @Synchronized
     fun read(): SavedPanel {
@@ -92,7 +96,7 @@ internal class PanelStore(context: Context) {
                 .remove(PIN_FAILURES)
                 .remove(PIN_WAIT)
         }
-        check(edit.commit()) { "Couldn't save the connection" }
+        edit.saveOrThrow("Couldn't save the connection")
         return remote
     }
 
@@ -106,23 +110,22 @@ internal class PanelStore(context: Context) {
     fun deviceId(): String {
         prefs.getString(DEVICE_ID, null)?.let { return it }
         val id = UUID.randomUUID().toString()
-        check(prefs.edit().putString(DEVICE_ID, id).commit()) { "Couldn't save the tablet ID" }
+        prefs.edit().putString(DEVICE_ID, id).saveOrThrow("Couldn't save the tablet ID")
         return id
     }
 
     @Synchronized
     fun saveRemote(registration: SavedRemote) {
-        val server = prefs.getString(SERVER, null) ?: error("Connect Home Assistant first")
+        val server = prefs.getString(SERVER, null) ?: throw PanelStoreProblem("Connect Home Assistant first")
         val edit = prefs.edit().putString(REMOTE_NAME, registration.name)
         writeSecret(edit, REMOTE_IV, REMOTE_DATA, remoteBinding(server), registration.webhookId)
-        check(edit.commit()) { "Couldn't save remote control" }
+        edit.saveOrThrow("Couldn't save remote control")
     }
 
     @Synchronized
     fun clearRemote() {
-        check(prefs.edit().remove(REMOTE_IV).remove(REMOTE_DATA).remove(REMOTE_NAME).commit()) {
-            "Couldn't unlink remote control"
-        }
+        prefs.edit().remove(REMOTE_IV).remove(REMOTE_DATA).remove(REMOTE_NAME)
+            .saveOrThrow("Couldn't unlink remote control")
     }
 
     private fun remoteBinding(server: String) = "$server#panel-remote"
@@ -130,48 +133,50 @@ internal class PanelStore(context: Context) {
     private fun readSecret(ivKey: String, dataKey: String, binding: String): String? = runCatching {
         val iv = prefs.getString(ivKey, null)?.let(::decode) ?: return null
         val data = prefs.getString(dataKey, null)?.let(::decode) ?: return null
+        val key = existingKey() ?: return null
         val cipher = Cipher.getInstance(TOKEN_CIPHER)
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
+        cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
         cipher.updateAAD(binding.toByteArray())
         cipher.doFinal(data).toString(Charsets.UTF_8)
     }.getOrNull()
 
     private fun writeSecret(edit: SharedPreferences.Editor, ivKey: String, dataKey: String, binding: String, value: String) {
         val cipher = Cipher.getInstance(TOKEN_CIPHER)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
+        cipher.init(Cipher.ENCRYPT_MODE, existingKey() ?: createKey())
         cipher.updateAAD(binding.toByteArray())
         edit.putString(ivKey, encode(cipher.iv)).putString(dataKey, encode(cipher.doFinal(value.toByteArray())))
     }
 
     @Synchronized
     fun save(config: PanelConfig) {
-        check(prefs.edit().putString(LAYOUT, PanelConfigCodec.encode(config)).commit()) { "Couldn't save the layout" }
+        prefs.edit().putString(LAYOUT, PanelConfigCodec.encode(config)).saveOrThrow("Couldn't save the layout")
     }
 
     @Synchronized
     fun verify(pin: String): Boolean {
         val now = System.currentTimeMillis()
-        check(prefs.getLong(PIN_WAIT, 0) <= now) { "Too many attempts. Try again in a minute." }
+        if (prefs.getLong(PIN_WAIT, 0) > now) throw PanelStoreProblem("Too many attempts. Try again in a minute.")
         val salt = prefs.getString(PIN_SALT, null) ?: return false
         val hash = prefs.getString(PIN_HASH, null) ?: return false
         val correct = validPin(pin) && MessageDigest.isEqual(derive(pin, decode(salt)), decode(hash))
         val failures = if (correct) 0 else prefs.getInt(PIN_FAILURES, 0) + 1
         val delay = failures >= 5
-        check(prefs.edit().putInt(PIN_FAILURES, if (delay) 0 else failures)
-            .putLong(PIN_WAIT, if (delay) now + 60_000 else 0).commit()) { "Couldn't verify the PIN" }
+        prefs.edit().putInt(PIN_FAILURES, if (delay) 0 else failures)
+            .putLong(PIN_WAIT, if (delay) now + 60_000 else 0).saveOrThrow("Couldn't verify the PIN")
         return correct
     }
 
-    private fun key(): SecretKey {
-        val name = "flick_panel_connection"
-        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (store.getKey(name, null) as? SecretKey)?.let { return it }
-        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
-            init(KeyGenParameterSpec.Builder(name, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256).build())
-        }.generateKey()
+    private fun existingKey() = keys.getKey(CONNECTION_KEY, null) as? SecretKey
+
+    private fun createKey(): SecretKey = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
+        init(KeyGenParameterSpec.Builder(CONNECTION_KEY, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256).build())
+    }.generateKey()
+
+    private fun SharedPreferences.Editor.saveOrThrow(message: String) {
+        if (!commit()) throw PanelStoreProblem(message)
     }
 
     private fun derive(pin: String, salt: ByteArray): ByteArray {

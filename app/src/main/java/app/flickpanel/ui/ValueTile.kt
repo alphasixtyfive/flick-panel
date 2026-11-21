@@ -13,6 +13,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -23,6 +24,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
@@ -41,13 +45,16 @@ internal fun ValueTile(
     val colors = MaterialTheme.colorScheme
     val trend = tile.kind == TileKind.TREND
     val points = if (trend) history.orEmpty() else emptyList()
-    if (trend && link == Link.ONLINE) LaunchedEffect(tile.entity, loadHistory) {
-        while (isActive) {
-            loadHistory(tile.entity)
-            delay(60_000)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    if (trend && link == Link.ONLINE) LaunchedEffect(tile.entity, loadHistory, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                loadHistory(tile.entity)
+                delay(60_000)
+            }
         }
     }
-    val value = displayValue(entity)
+    val value = remember(entity) { displayValue(entity) }
     Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
         if (compactHistory) {
             Row(

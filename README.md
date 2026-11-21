@@ -151,11 +151,13 @@ the tablet is linked and active. Home Assistant can disable individual entities.
 
 ## Data flow
 
-`ha` owns the authenticated connection and entity capabilities. `config` stores the
-versioned tablet layout and local setup. `RoomLayout.kt` resolves configured areas into room
-sections. `ui/Tiles.kt` arranges the dashboard grid, and `ui/PanelTile.kt` dispatches to
-individual tile implementations. Home Assistant owns device
-state and actions. The panel loads areas when configured or when Rooms is opened.
+`ha` owns the Home Assistant protocol. `HaConnection.kt` manages the WebSocket lifecycle
+and waits for the first entity snapshot before reporting the connection as online.
+`config` owns the layout codec and local storage. `RoomLayout.kt` resolves configured
+areas into room sections, and `PanelUi.kt` holds the dashboard and its active viewer.
+`DeviceCommandQueue.kt` tracks one pending command per entity and confirms changes
+against the state Home Assistant sends back. Home Assistant owns device state and
+actions. The panel loads areas when configured or when Rooms is opened.
 Switching tabs reuses the room subscription. Timestamp-only updates reuse the current
 entity snapshot. Favourites and Rooms compose rows as they approach the viewport. Camera
 previews and graph refreshes follow those rows. `PanelImages.kt` bounds

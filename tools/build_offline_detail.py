@@ -6,6 +6,8 @@ import struct
 from collections import defaultdict
 from pathlib import Path
 
+from asset_output import open_asset
+
 SCALE = 100_000
 CELL = 4_000
 PARK, WATER, RIVER, LOCAL_ROAD, MAIN_ROAD = range(5)
@@ -74,7 +76,7 @@ def pack_region(source, output, coverage):
 
     south, west, north, east = coverage
     first, last = coordinate(north, west), coordinate(south, east)
-    with output.open("wb") as target:
+    with open_asset(output) as target:
         target.write(struct.pack(">4s4iI", b"FPD1", *first, *last, len(areas)))
         for layers in areas.values():
             target.write(struct.pack(">4i", *bounds([point for layer in layers for line in layer for point in line])))
@@ -98,7 +100,6 @@ def main():
     parser.add_argument("sources", type=Path, help="Directory containing london.json and varna.json Overpass exports")
     parser.add_argument("--output", type=Path, default=Path("app/src/main/assets/offline_map"))
     args = parser.parse_args()
-    args.output.mkdir(parents=True, exist_ok=True)
     for region, coverage in REGIONS.items():
         pack_region(args.sources / f"{region}.json", args.output / f"{region}.fpd", coverage)
 

@@ -8,6 +8,7 @@ import app.flickpanel.config.roomTileLimit
 import app.flickpanel.ha.Area
 import app.flickpanel.ha.Catalogue
 import app.flickpanel.ha.Entity
+import app.flickpanel.ha.Entry
 
 internal data class RoomSection(val area: Area, val tiles: List<TileSpec>)
 
@@ -51,29 +52,40 @@ internal data class RoomLayout(
     fun controls(area: Area): List<RoomControl> {
         val saved = config.roomTiles[area.id]
         val savedIds = saved.orEmpty().mapTo(hashSetOf(), RoomTilePreference::entity)
-        val candidates = catalogue.room(area.id).map { it.entity }
+        val devices = catalogue.room(area.id).associateBy({ it.entity.id }, Entry::entity)
+        val savedCount = savedIds.count(devices::containsKey)
+        val discovered = devices.values.asSequence()
+            .filterNot { it.id in savedIds }
             .sortedWith(compareBy({ it.domain != "light" }, { it.id !in favourites }))
-        val existing = candidates.filter { it.id in savedIds }
-        val discovered = candidates.filterNot { it.id in savedIds }.take((roomTileLimit - existing.size).coerceAtLeast(0))
-        val devices = (existing + discovered).associateBy(Entity::id)
-        val newControls = discovered.map { device ->
-            val tile = roomTile(area, device, favourites[device.id])
-            RoomTilePreference(device.id, lightFormat = tile.kind.takeIf { device.domain == "light" },
-                hidden = saved != null)
-        }
-        return (saved.orEmpty() + newControls).map { preference ->
-            val device = devices[preference.entity]
-                ?.takeIf { config.showRoomHeating || it.domain != "climate" }
-            if (device == null) return@map RoomControl(preference, null)
-            val default = roomTile(area, device, favourites[device.id])
-            val canDim = TileKind.SLIDER in device.kinds()
-            val kind = when (preference.lightFormat) {
-                TileKind.SLIDER -> if (canDim) TileKind.SLIDER else TileKind.TOGGLE
-                TileKind.TOGGLE -> if (device.domain == "light") TileKind.TOGGLE else default.kind
-                else -> default.kind
+            .take((roomTileLimit - savedCount).coerceAtLeast(0))
+        return buildList {
+            for (preference in saved.orEmpty()) {
+                val device = devices[preference.entity]
+                val tile = device?.let { roomTile(area, it, favourites[it.id]) }
+                add(roomControl(preference, device, tile))
             }
-            RoomControl(preference, default.copy(kind = kind, wideOnTablet = preference.wideOnTablet), canDim)
+            for (device in discovered) {
+                val tile = roomTile(area, device, favourites[device.id])
+                val preference = RoomTilePreference(
+                    device.id, lightFormat = tile.kind.takeIf { device.domain == "light" }, hidden = saved != null,
+                )
+                add(roomControl(preference, device, tile))
+            }
         }
+    }
+
+    private fun roomControl(preference: RoomTilePreference, device: Entity?, tile: TileSpec?): RoomControl {
+        if (device == null || tile == null || !config.showRoomHeating && device.domain == "climate") {
+            return RoomControl(preference, null)
+        }
+        val light = device.domain == "light"
+        val canDim = light && TileKind.SLIDER in device.kinds()
+        val kind = when (preference.lightFormat) {
+            TileKind.SLIDER -> if (canDim) TileKind.SLIDER else TileKind.TOGGLE
+            TileKind.TOGGLE -> if (light) TileKind.TOGGLE else tile.kind
+            else -> tile.kind
+        }
+        return RoomControl(preference, tile.copy(kind = kind, wideOnTablet = preference.wideOnTablet), canDim)
     }
 
     private fun roomTile(area: Area, device: Entity, favourite: TileSpec?): TileSpec {

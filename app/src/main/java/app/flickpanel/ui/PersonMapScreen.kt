@@ -32,13 +32,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.ha.PersonLocation
 import java.io.IOException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 internal enum class MapCredits(val label: String, val link: String) {
     NATURAL_EARTH("Made with Natural Earth", "https://www.naturalearthdata.com/about/terms-of-use/"),
@@ -46,44 +46,56 @@ internal enum class MapCredits(val label: String, val link: String) {
 }
 
 @Composable
-internal fun PersonMapScreen(title: String, location: PersonLocation?, close: () -> Unit, status: String? = null) {
+internal fun PersonMapScreen(
+    maps: OfflineMapAssets, title: String, location: PersonLocation?, close: () -> Unit, status: String? = null,
+) {
     val colours = mapColours()
     Box(Modifier.fillMaxSize().background(colours.water), contentAlignment = Alignment.Center) {
         if (location == null) {
             EmptyState("Location unavailable", null)
             MapViewerControls(title, status, close)
         } else {
-            LoadPersonMap(title, status, location, colours, close)
+            LoadPersonMap(maps, title, status, location, colours, close)
         }
     }
 }
 
 @Composable
-private fun LoadPersonMap(title: String, status: String?, location: PersonLocation, colours: MapColours, close: () -> Unit) {
-    val assets = LocalContext.current.assets
-    var basemap by remember(assets) { mutableStateOf<OfflineBasemap?>(null) }
-    var failed by remember(assets) { mutableStateOf(false) }
-    LaunchedEffect(assets) {
-        try {
-            basemap = withContext(Dispatchers.IO) { loadOfflineBasemap(assets) }
-        } catch (_: IOException) {
-            failed = true
+private fun LoadPersonMap(
+    maps: OfflineMapAssets, title: String, status: String?, location: PersonLocation, colours: MapColours, close: () -> Unit,
+) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var basemap by remember(maps) { mutableStateOf(maps.cachedBasemap) }
+    var failed by remember(maps) { mutableStateOf(false) }
+    LaunchedEffect(maps, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (basemap != null) return@repeatOnLifecycle
+            failed = false
+            try {
+                basemap = maps.basemap()
+            } catch (_: IOException) {
+                failed = true
+            }
         }
     }
 
     val map = basemap
     val pin = location.mapPoint()
     val region = map?.regions?.firstOrNull { it.bounds.contains(pin) }
-    var detail by remember(region) { mutableStateOf<OfflineDetail?>(null) }
-    var detailReady by remember(region) { mutableStateOf(region == null) }
-    LaunchedEffect(region) {
-        if (region != null) {
-            detail = try {
-                withContext(Dispatchers.IO) { loadOfflineDetail(assets, region) }
-            } catch (_: IOException) {
-                null
+    val cachedDetail = remember(maps, region) { region?.let(maps::cachedDetail) }
+    var detail by remember(maps, region) { mutableStateOf(cachedDetail) }
+    var detailReady by remember(maps, region) { mutableStateOf(region == null || cachedDetail != null) }
+    LaunchedEffect(maps, region, lifecycle) {
+        if (region == null) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (!detailReady) {
+                detail = try {
+                    maps.detail(region)
+                } catch (_: IOException) {
+                    null
+                }
+                detailReady = true
             }
-            detailReady = true
         }
     }
 

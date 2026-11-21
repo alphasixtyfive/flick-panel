@@ -59,6 +59,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import okhttp3.HttpUrl
+import okhttp3.OkHttpClient
 import kotlin.math.abs
 
 @Composable
@@ -135,19 +136,23 @@ internal enum class CameraStatus(val label: String) {
     val buffering get() = this == CONNECTING || this == RECONNECTING
 }
 
+private data class CameraStream(val url: HttpUrl, val transport: OkHttpClient)
+
 @Composable
 internal fun CameraViewer(
     id: String, label: String?, canStream: Boolean, openedAt: Long, gateId: String?, state: PanelUi, model: PanelViewModel,
     streamCamera: String = id,
 ) {
-    var url by remember(streamCamera) { mutableStateOf<HttpUrl?>(null) }
-    var status by remember(streamCamera) { mutableStateOf(if (canStream) CameraStatus.CONNECTING else CameraStatus.STILL) }
-    var videoAspect by remember(streamCamera) { mutableStateOf<Float?>(null) }
-    var firstFrame by remember(streamCamera) { mutableStateOf(false) }
+    var stream by remember(streamCamera, canStream) { mutableStateOf<CameraStream?>(null) }
+    var status by remember(streamCamera, canStream) {
+        mutableStateOf(if (canStream) CameraStatus.CONNECTING else CameraStatus.STILL)
+    }
+    var videoAspect by remember(streamCamera, canStream) { mutableStateOf<Float?>(null) }
+    var firstFrame by remember(streamCamera, canStream) { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     fun playbackFailed() {
-        url = null
+        stream = null
         firstFrame = false
         status = CameraStatus.UNAVAILABLE
     }
@@ -159,7 +164,8 @@ internal fun CameraViewer(
             firstFrame = false
             if (!canStream) return@repeatOnLifecycle
             try {
-                url = model.stream(streamCamera)
+                val transport = model.videoTransport()
+                stream = CameraStream(model.stream(streamCamera), transport)
                 Log.i("FlickPanelCamera", "hls_url_ms=${SystemClock.elapsedRealtime() - openedAt}")
                 awaitCancellation()
             } catch (cancelled: CancellationException) {
@@ -167,17 +173,17 @@ internal fun CameraViewer(
             } catch (_: Exception) {
                 playbackFailed()
             } finally {
-                url = null
+                stream = null
             }
         }
     }
 
-    val stream = url
-    LaunchedEffect(stream, status, lifecycle) {
-        if (stream != null && status.buffering) {
+    val activeStream = stream
+    LaunchedEffect(activeStream, status, lifecycle) {
+        if (activeStream != null && status.buffering) {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 delay(15_000)
-                if (url == stream && status.buffering) playbackFailed()
+                if (stream === activeStream && status.buffering) playbackFailed()
             }
         }
     }
@@ -185,8 +191,8 @@ internal fun CameraViewer(
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
         val viewportAspect = maxWidth.value / maxHeight.value
         val fillVideo = videoAspect?.let { abs(viewportAspect / it - 1f) < .10f } == true
-        if (stream != null) {
-            CameraPlayer(stream, model.videoTransport(), fillVideo, Modifier.matchParentSize(),
+        if (activeStream != null) {
+            CameraPlayer(activeStream.url, activeStream.transport, fillVideo, Modifier.matchParentSize(),
                 onAspectRatio = { videoAspect = it },
                 onFirstFrame = {
                     if (!firstFrame) {

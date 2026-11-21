@@ -69,6 +69,14 @@ class PanelPolicyTest {
         assertNull(parsed.presenceEntity)
     }
 
+    @Test fun configurationKeepsEverySavedCameraAndRoom() {
+        val config = PanelConfig(
+            favourites = List(60) { TileSpec("camera.feed_$it", TileKind.CAMERA, showOnHome = false) },
+            roomIds = List(60) { "area_$it" },
+        )
+        assertEquals(config, PanelConfigCodec.decode(PanelConfigCodec.encode(config)))
+    }
+
     @Test fun pinUsesOnlyAsciiDigitsAndPreservesLeadingZeros() {
         assertTrue(validPin("0012"))
         assertTrue(validPin("01234567"))

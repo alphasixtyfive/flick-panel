@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import app.flickpanel.Page
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
+import app.flickpanel.PanelViewer
 import app.flickpanel.config.TileKind
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.PersonLocation
@@ -33,7 +34,7 @@ import app.flickpanel.ha.personStatus
 import app.flickpanel.ha.readContent
 
 @Composable
-internal fun PanelScreen(state: PanelUi, model: PanelViewModel) {
+internal fun PanelScreen(state: PanelUi, model: PanelViewModel, offlineMaps: () -> OfflineMapAssets) {
     PanelColors(state.config.theme, state.config.highContrast) {
         val snacks = remember { SnackbarHostState() }
         val dashboard = rememberSaveableStateHolder()
@@ -44,10 +45,11 @@ internal fun PanelScreen(state: PanelUi, model: PanelViewModel) {
                 model.clearError()
             }
         }
-        val camera = state.camera
-        val music = state.musicOpen
-        val agenda = state.config.favourites.firstOrNull { it.entity == state.agendaOpen && it.kind.isAgenda }
-        val content = state.config.favourites.firstOrNull { it.entity == state.contentOpen && it.kind.hasContentScreen }
+        val viewer = state.viewer
+        val tiles = state.config.favourites
+        val tile = remember(tiles, viewer?.id) {
+            viewer?.let { open -> tiles.firstOrNull { it.entity == open.id } }
+        }
         when {
             state.editor -> EditPanel(state, model)
             state.screenBlank -> {
@@ -57,37 +59,38 @@ internal fun PanelScreen(state: PanelUi, model: PanelViewModel) {
                 ))
                 BackHandler(onBack = model::wake)
             }
-            camera != null -> {
-                val tile = state.config.favourites.firstOrNull { it.entity == camera }
+            viewer is PanelViewer.Camera -> {
+                val camera = viewer.id
                 val title = tile?.let(state::label)
                 val streamCamera = tile?.cameraStream?.takeIf { state.entities[it]?.available == true } ?: camera
                 val features = state.entity(streamCamera)?.attributes?.optLong("supported_features", -1L) ?: -1L
                 Box(Modifier.fillMaxSize()) {
                     key(camera) {
-                        CameraViewer(camera, title, canStream = features and 2L != 0L, openedAt = state.cameraOpenedAt,
+                        CameraViewer(camera, title, canStream = features and 2L != 0L, openedAt = viewer.openedAt,
                             gateId = tile?.cameraGate, state = state, model = model, streamCamera = streamCamera)
                     }
                     SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
                 }
                 BackHandler(onBack = model::closeCamera)
             }
-            music != null -> Box(Modifier.fillMaxSize()) {
-                MusicPlayerScreen(music, state, model)
+            viewer is PanelViewer.Music -> Box(Modifier.fillMaxSize()) {
+                MusicPlayerScreen(viewer.id, state, model)
                 SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
             }
-            agenda != null -> {
-                OpenAgenda(agenda, state, model)
+            viewer is PanelViewer.Agenda && tile?.kind?.isAgenda == true -> {
+                OpenAgenda(tile, state, model)
                 BackHandler(onBack = model::closeAgenda)
             }
-            content != null -> {
-                val title = state.label(content)
-                when (content.kind) {
+            viewer is PanelViewer.Content && tile?.kind?.hasContentScreen == true -> {
+                val title = state.label(tile)
+                when (tile.kind) {
                     TileKind.PERSON -> {
-                        val live = state.entities[content.entity]?.takeIf { state.link == Link.ONLINE }
-                        PersonMapScreen(title, live?.let(PersonLocation::from), close = model::closeContent, status = live?.personStatus())
+                        val live = state.entities[tile.entity]?.takeIf { state.link == Link.ONLINE }
+                        PersonMapScreen(offlineMaps(), title, live?.let(PersonLocation::from),
+                            close = model::closeContent, status = live?.personStatus())
                     }
                     TileKind.READER -> ReaderScreen(title,
-                        readContent(state.entity(content.entity), content.readerAttribute), model::closeContent)
+                        readContent(state.entity(tile.entity), tile.readerAttribute), model::closeContent)
                     else -> Unit
                 }
                 BackHandler(onBack = model::closeContent)

@@ -97,7 +97,8 @@ internal fun AppPicker(added: Set<String>, choose: (TileSpec) -> Unit) {
             return@Column
         }
         val results = remember(available, added, query) {
-            available.filter { it.packageName !in added && it.label.contains(query.trim(), ignoreCase = true) }
+            val search = query.trim()
+            available.filter { it.packageName !in added && it.label.contains(search, ignoreCase = true) }
         }
         if (results.isEmpty()) Text("No matching apps", Modifier.padding(vertical = 14.dp))
         LazyColumn(Modifier.fillMaxWidth().padding(top = 8.dp)) {

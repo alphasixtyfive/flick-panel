@@ -12,7 +12,7 @@ import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-private const val RESPONSE_TIMEOUT_MS = 8_000L
+internal const val RESPONSE_TIMEOUT_MS = 8_000L
 private const val MAX_MESSAGE_CHARS = 12_000_000
 private const val MAX_QUEUED_CHARS = 24_000_000L
 

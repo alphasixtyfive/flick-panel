@@ -11,6 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -27,7 +29,12 @@ internal class PanelImages(parent: CoroutineScope, lowMemory: Boolean) {
     val photos = ImageCache(scope, byteLimit = (if (lowMemory) 6 else 12) * MiB,
         maxEdge = if (lowMemory) 1200 else 2000, lifetimeMillis = 15 * 60_000)
 
-    fun close() { job.cancel() }
+    fun close() {
+        job.cancel()
+        snapshots.clear()
+        artwork.clear()
+        photos.clear()
+    }
 }
 
 internal class ImageCache(
@@ -47,6 +54,8 @@ internal class ImageCache(
         ?.takeIf { SystemClock.elapsedRealtime() - it.fetchedAt < lifetimeMillis }
         ?.bitmap
 
+    fun clear() = images.evictAll()
+
     suspend fun load(key: String, decodeEdge: Int = maxEdge, fetch: suspend () -> ByteArray?): Bitmap? {
         fresh(key)?.let { return it }
         return requests.load(key) {
@@ -54,6 +63,7 @@ internal class ImageCache(
                 fresh(key)?.let { return@withPermit it }
                 val data = fetch() ?: return@withPermit null
                 val bitmap = decodePanelImage(data, minOf(maxEdge, decodeEdge)) ?: return@withPermit null
+                currentCoroutineContext().ensureActive()
                 images.put(key, CachedImage(bitmap, SystemClock.elapsedRealtime()))
                 bitmap
             }
