@@ -9,7 +9,6 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
@@ -37,15 +36,16 @@ internal fun LazyListScope.tileRows(
 @Composable
 internal fun TileRow(
     row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean, resizeTiles: Boolean,
-    shortcutRow: Boolean = false, homeAgenda: Boolean = false, minPersonHeight: Dp = personTileHeight,
+    shortcutRow: Boolean = false, homeAgenda: Boolean = false,
+    modifier: Modifier = Modifier,
 ) {
-    Layout(modifier = Modifier.fillMaxWidth(), content = {
+    Layout(modifier = modifier.fillMaxWidth(), content = {
         for (tile in row) key(tile.entity) {
             val minimum = when (tile.kind) {
                 TileKind.APP -> if (compact) shortcutHeight else 76.dp
                 TileKind.TREND -> if (shortcutRow) shortcutHeight else if (compact) compactCellHeight else cellHeight
                 TileKind.CAMERA -> 142.dp
-                TileKind.PERSON -> minPersonHeight
+                TileKind.PERSON -> personTileHeight
                 TileKind.IMAGE -> if (compact && tile.wideOnTablet) 190.dp else 144.dp
                 TileKind.TASKS, TileKind.CALENDAR -> when {
                     homeAgenda -> homeAgendaHeight
@@ -69,7 +69,8 @@ internal fun TileRow(
             val end = cells * column / columns + gap * (column - 1)
             start to (end - start)
         }
-        val height = constraints.constrainHeight(children.indices.maxOf { children[it].minIntrinsicHeight(slots[it].second) })
+        val height = if (constraints.hasFixedHeight) constraints.maxHeight else
+            constraints.constrainHeight(children.indices.maxOf { children[it].minIntrinsicHeight(slots[it].second) })
         val measured = children.mapIndexed { index, child -> child.measure(Constraints.fixed(slots[index].second, height)) }
         layout(width, height) {
             measured.forEachIndexed { index, child -> child.placeRelative(slots[index].first, 0) }

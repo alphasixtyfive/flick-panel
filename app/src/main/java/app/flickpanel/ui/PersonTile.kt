@@ -47,7 +47,7 @@ internal fun PersonTile(
         color = colors.surfaceContainer,
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -63,7 +63,7 @@ internal fun PersonTile(
 @Composable
 private fun PersonAvatar(name: String, avatar: ImageBitmap?) {
     val colors = MaterialTheme.colorScheme
-    Surface(Modifier.size(56.dp).clearAndSetSemantics {}, shape = CircleShape,
+    Surface(Modifier.size(48.dp).clearAndSetSemantics {}, shape = CircleShape,
         color = colors.secondaryContainer, contentColor = colors.onSecondaryContainer) {
         if (avatar != null) {
             Image(avatar, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)

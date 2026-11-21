@@ -1,111 +1,108 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
+import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
-
-private val overviewCameraHeight = 154.dp
-private val overviewPersonHeight = (overviewCameraHeight + homeAgendaHeight - tileGap) / 3
 
 @Composable
 internal fun Favourites(
-    groups: HomeTileGroups, state: PanelUi, model: PanelViewModel, modifier: Modifier, showReadings: Boolean,
+    tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, modifier: Modifier, showReadings: Boolean,
 ) {
     val badges = state.activeHomeBadges()
-    if (!groups.hasTiles && badges.isEmpty()) {
-        Column(modifier) { EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.") }
-        return
-    }
-
-    val columns = groups.columns
-    val compact = groups.compact
-    val resizable = groups.resizeTiles
-    val firstCameraRow = groups.cameras.firstOrNull()
-    val peopleBesideCameras = if (compact && firstCameraRow?.size == 2) groups.people.take(3) else emptyList()
-    val agendaBesideCameras = groups.agenda.singleOrNull()?.takeIf {
-        peopleBesideCameras.size == 3 && groups.agendaColumns == 2
-    }
-    val remainingPeople = remember(groups.people, peopleBesideCameras, columns, compact, resizable) {
-        packTileRows(groups.people.drop(peopleBesideCameras.size).flatten(), columns, compact, resizable)
-    }
-    val hasReadings = showReadings && groups.readings.isNotEmpty()
-    val scroll = key(hasReadings) { rememberLazyListState() }
-    LazyColumn(
-        modifier = modifier,
-        state = scroll,
-        contentPadding = PaddingValues(bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(tileGap),
-    ) {
-        if (badges.isNotEmpty()) item(key = "home-warnings") { HomeWarnings(badges) }
-        if (hasReadings) item(key = "home-readings") {
-            HomeGlanceReadings(groups.readings, state)
+    Column(modifier.padding(bottom = 12.dp)) {
+        if (badges.isNotEmpty()) HomeWarnings(badges)
+        if (tiles.isEmpty() && badges.isEmpty()) {
+            EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.")
         }
-        tileRows(groups.controls, state, model, columns, compact, resizable)
-        if (firstCameraRow != null && peopleBesideCameras.isNotEmpty()) {
-            item(key = "home-glance", contentType = "home-glance") {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(tileGap)) {
-                        val peopleHeight = personTileHeight * peopleBesideCameras.size + tileGap * (peopleBesideCameras.size - 1)
-                        HomeCameraRow(
-                            firstCameraRow, columns, state, model,
-                            previewHeight = if (agendaBesideCameras == null) maxOf(186.dp, peopleHeight) else overviewCameraHeight,
-                        )
-                        if (agendaBesideCameras != null) {
-                            TileRow(agendaBesideCameras, state, model, groups.agendaColumns, compact, resizable, homeAgenda = true)
-                        }
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(tileGap)) {
-                        for (row in peopleBesideCameras) {
-                            TileRow(row, state, model, groups.peopleColumns, compact, resizable,
-                                minPersonHeight = if (agendaBesideCameras != null) overviewPersonHeight else personTileHeight)
-                        }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val fontScale = LocalDensity.current.fontScale
+            val height = maxHeight
+            val groups = remember(tiles, columns) {
+                homeTileGroups(tiles, columns, compact = columns == 4, resizeTiles = true)
+            }
+            val gates = if (columns == 4) {
+                tiles.asSequence().filter { it.kind == TileKind.COVER && state.entity(it.entity)?.isGate == true }
+                    .map(TileSpec::entity).toSet()
+            } else emptySet()
+            val pages = remember(groups, showReadings, height, fontScale, gates) {
+                homePages(homeBands(groups, fontScale, height, showReadings, gates), height)
+            }
+            if (pages.isEmpty()) return@BoxWithConstraints
+            var requestedPage by rememberSaveable { mutableIntStateOf(0) }
+            val current = requestedPage.coerceIn(pages.indices)
+            LaunchedEffect(pages.size) { requestedPage = current }
+            val showPager = pages.size > 1
+            val boardHeight = if (showPager) (height - homePagerHeight).coerceAtLeast(0.dp) else height
+            Column(Modifier.fillMaxSize()) {
+                Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                    for (band in pages[current]) key(band.lanes.first().first().tiles.first().entity) {
+                        FavouriteBand(band, minOf(band.height, boardHeight), groups, state, model)
                     }
                 }
+                if (showPager) FavouritesPager(current, pages.size) { requestedPage = it }
             }
         }
-        val cameraRows = if (peopleBesideCameras.isEmpty()) groups.cameras else groups.cameras.drop(1)
-        items(cameraRows, key = { "home-cameras:" + it.first().entity }, contentType = { "home-cameras" }) { cameras ->
-            HomeCameraRow(cameras, columns, state, model)
-        }
-        if (agendaBesideCameras == null) {
-            val agendaColumns = if (compact) columns else groups.agendaColumns
-            tileRows(groups.agenda, state, model, agendaColumns, compact, resizable, homeAgenda = true)
-        }
-        tileRows(remainingPeople, state, model, columns, compact, resizable)
-        tileRows(groups.shortcuts.chunked(columns), state, model, columns, compact, resizable,
-            shortcutRow = true)
-        tileRows(groups.history, state, model, columns, compact, resizable)
     }
 }
 
 @Composable
-private fun HomeCameraRow(
-    cameras: List<TileSpec>,
-    columns: Int,
-    state: PanelUi,
-    model: PanelViewModel,
-    previewHeight: Dp = if (columns > 1) 142.dp else 180.dp,
+private fun FavouriteBand(
+    band: HomeBand, height: Dp, groups: HomeTileGroups, state: PanelUi, model: PanelViewModel,
 ) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
-        for (camera in cameras) {
-            CameraTile(camera, state, model, Modifier.weight(1f).height(previewHeight))
+    Row(Modifier.fillMaxWidth().height(height), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
+        for (lane in band.lanes) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                for (row in lane) {
+                    TileRow(row.tiles, state, model, row.columns, groups.compact, groups.resizeTiles,
+                        shortcutRow = row.shortcuts, homeAgenda = row.expandedAgenda, modifier = Modifier.height(row.height))
+                }
+            }
         }
-        if (columns > 1 && cameras.size == 1) Spacer(Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun FavouritesPager(page: Int, count: Int, select: (Int) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(homePagerHeight),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+    ) {
+        FilledTonalIconButton(onClick = { select(page - 1) }, enabled = page > 0) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Previous favourites page")
+        }
+        Text("${page + 1} of $count", style = MaterialTheme.typography.labelLarge)
+        FilledTonalIconButton(onClick = { select(page + 1) }, enabled = page + 1 < count) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Next favourites page")
+        }
     }
 }

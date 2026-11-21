@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -90,7 +91,7 @@ private fun GateToggleTile(
         color = if (isOpen) colors.primaryContainer else colors.surfaceContainer,
         contentColor = if (isOpen) colors.onPrimaryContainer else colors.onSurface,
     ) {
-        Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxSize().padding(tileContentPadding), verticalArrangement = Arrangement.SpaceBetween) {
             val accent = if (isOpen) colors.onPrimaryContainer else colors.primary
             ControlTileTitle(label, Icons.Rounded.Fence, accent)
             if (action != null) TileValue(status, maxLines = 2)

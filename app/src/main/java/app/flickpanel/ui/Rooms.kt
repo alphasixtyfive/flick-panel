@@ -13,22 +13,21 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,11 +58,12 @@ internal fun Rooms(
     val roomScroll = rememberSaveableStateHolder()
     if (selected == null) {
         val loading = state.loadingCatalogue || state.link == Link.CONNECTING
-        val needsSelection = state.config.roomIds?.isEmpty() == true
-        val canConfigure = !loading && state.link == Link.ONLINE && (needsSelection || state.catalogue.rooms.isNotEmpty())
+        val hasRooms = state.catalogue.rooms.isNotEmpty()
+        val needsSelection = hasRooms && state.layout.selectedRooms.isEmpty()
+        val canConfigure = !loading && state.link == Link.ONLINE && hasRooms
         val title = when {
-            needsSelection -> "No rooms selected"
             loading -> "Finding rooms…"
+            needsSelection -> "No rooms selected"
             else -> "No rooms to show"
         }
         val note = when {
@@ -134,7 +133,7 @@ internal fun Rooms(
 @Composable
 private fun RoomList(rooms: List<Area>, selected: String, selectRoom: (String) -> Unit, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
-    val scroll = rememberLazyListState(rooms.indexOfFirst { it.id == selected }.coerceAtLeast(0))
+    val scroll = rememberLazyListState()
     LazyColumn(
         modifier.selectableGroup(),
         state = scroll,
@@ -162,37 +161,28 @@ private fun RoomList(rooms: List<Area>, selected: String, selectRoom: (String) -
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RoomPicker(rooms: List<Area>, room: Area, selectRoom: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
-        FilledTonalButton(
-            onClick = { expanded = true },
-            modifier = Modifier.heightIn(min = 48.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 12.dp),
-        ) {
-            Text(room.name, Modifier.weight(1f, fill = false).padding(end = 8.dp),
-                style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Choose room", modifier = Modifier.size(24.dp))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false },
-            modifier = Modifier.widthIn(min = 180.dp, max = 320.dp).selectableGroup()) {
-            for (choice in rooms) {
-                val active = choice.id == room.id
-                DropdownMenuItem(
-                    text = { Text(choice.name, style = MaterialTheme.typography.bodyLarge) },
-                    onClick = {
-                        expanded = false
-                        selectRoom(choice.id)
-                    },
-                    modifier = Modifier.semantics { selected = active },
-                    leadingIcon = {
-                        Box(Modifier.size(24.dp)) {
-                            if (active) Icon(Icons.Rounded.Check, contentDescription = null)
-                        }
-                    },
-                )
-            }
+    FilledTonalButton(
+        onClick = { expanded = true },
+        modifier = Modifier.heightIn(min = 48.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 12.dp),
+    ) {
+        Text(room.name, Modifier.weight(1f, fill = false).padding(end = 8.dp),
+            style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Choose room", modifier = Modifier.size(24.dp))
+    }
+    if (expanded) {
+        ModalBottomSheet(onDismissRequest = { expanded = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Text("Choose room", Modifier.padding(start = 32.dp, bottom = 12.dp).semantics { heading() },
+                style = MaterialTheme.typography.headlineSmall)
+            RoomList(rooms, room.id, {
+                selectRoom(it)
+                expanded = false
+            }, Modifier.fillMaxWidth().heightIn(max = 360.dp).padding(horizontal = 16.dp))
         }
     }
 }

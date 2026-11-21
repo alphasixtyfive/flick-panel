@@ -1,13 +1,11 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.BatteryStd
@@ -43,11 +41,11 @@ internal fun GlanceTile(label: String, entity: Entity?, available: Boolean, modi
 
 @Composable
 internal fun HomeGlanceReadings(
-    tiles: List<TileSpec>, state: PanelUi, modifier: Modifier = Modifier, alignEnd: Boolean = false,
+    tiles: List<TileSpec>, state: PanelUi, modifier: Modifier = Modifier,
 ) {
-    Box(modifier, contentAlignment = if (alignEnd) Alignment.CenterEnd else Alignment.CenterStart) {
+    Box(modifier, contentAlignment = Alignment.CenterEnd) {
         Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp)) {
+            Row(Modifier.padding(horizontal = 4.dp)) {
                 for (tile in tiles) key(tile.entity) {
                     val available = state.link == Link.ONLINE && state.entities[tile.entity]?.available == true
                     GlanceValue(state.label(tile), state.entity(tile.entity), available)

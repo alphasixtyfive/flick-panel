@@ -53,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
+import app.flickpanel.RoomLayout
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
@@ -134,56 +135,61 @@ private fun TileOptions(label: String, tile: TileSpec, edit: () -> Unit, resize:
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RoomSetup(
     draft: PanelConfig, state: PanelUi, customize: (Area) -> Unit, update: (PanelConfig) -> Unit,
 ) {
     var search by remember { mutableStateOf("") }
     val rooms = state.catalogue.rooms
-    val chosen = remember(draft.roomIds, rooms) { draft.roomIds ?: rooms.map { it.id } }
-    val visible = remember(rooms, chosen, search) {
-        val byId = rooms.associateBy { it.id }
-        (chosen.mapNotNull(byId::get) + rooms.filterNot { it.id in chosen })
-            .filter { it.name.contains(search.trim(), ignoreCase = true) }
+    val selectedRooms = remember(draft, state.catalogue) { RoomLayout(draft, state.catalogue).selectedRooms }
+    val chosen = remember(selectedRooms) { selectedRooms.map(Area::id) }
+    val groups = remember(rooms, chosen, search) {
+        val query = search.trim()
+        listOf("On this panel" to selectedRooms, "Available rooms" to rooms.filterNot { it.id in chosen })
+            .map { (title, choices) -> title to choices.filter { it.name.contains(query, ignoreCase = true) } }
+            .filter { (_, choices) -> choices.isNotEmpty() }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (rooms.isNotEmpty()) SetupSearchField(search, { search = it }, "Find a room", Modifier.fillMaxWidth())
         SetupSwitchRow("Heating controls", null, draft.showRoomHeating) { update(draft.copy(showRoomHeating = it)) }
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { update(draft.copy(roomIds = null)) }, enabled = draft.roomIds != null) { Text("Show all") }
-            TextButton(onClick = { update(draft.copy(roomIds = emptyList())) }, enabled = chosen.isNotEmpty()) { Text("Clear selection") }
-        }
         if (state.loadingCatalogue) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
         else if (rooms.isEmpty()) Text("No rooms available")
-        else if (visible.isEmpty()) Text("No matching rooms", Modifier.padding(horizontal = 16.dp),
+        else if (groups.isEmpty()) Text("No matching rooms", Modifier.padding(horizontal = 16.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         else {
             LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
-                items(visible, key = { it.id }) { room ->
-                    val position = chosen.indexOf(room.id)
-                    val selected = position >= 0
-                    val toggle = {
-                        val next = if (selected) chosen - room.id else chosen + room.id
-                        update(draft.copy(roomIds = next))
+                for ((title, choices) in groups) {
+                    item(key = title) {
+                        Text(title, Modifier.padding(start = 16.dp, top = 10.dp, bottom = 4.dp).semantics { heading() },
+                            style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                     }
-                    Surface(selected = selected, onClick = toggle, enabled = selected || chosen.size < 48,
-                        shape = MaterialTheme.shapes.medium, color = Color.Transparent) {
-                        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(end = 16.dp))
-                            Text(room.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            if (selected) ReorderGrip(room.name, position > 0, position < chosen.lastIndex) { delta ->
-                                val next = chosen.toMutableList()
-                                if (position + delta in next.indices) {
-                                    java.util.Collections.swap(next, position, position + delta)
-                                    update(draft.copy(roomIds = next))
+                    items(choices, key = Area::id) { room ->
+                        val position = chosen.indexOf(room.id)
+                        val selected = position >= 0
+                        Surface(
+                            selected = selected,
+                            onClick = { update(draft.copy(roomIds = if (selected) chosen - room.id else chosen + room.id)) },
+                            enabled = selected || chosen.size < 48, shape = MaterialTheme.shapes.medium,
+                            color = if (selected) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent,
+                        ) {
+                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(end = 16.dp))
+                                Text(room.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                if (selected) {
+                                    ReorderGrip(room.name, position > 0, position < chosen.lastIndex) { delta ->
+                                        val next = chosen.toMutableList()
+                                        if (position + delta in next.indices) {
+                                            java.util.Collections.swap(next, position, position + delta)
+                                            update(draft.copy(roomIds = next))
+                                        }
+                                    }
+                                    IconButton(onClick = { customize(room) }) {
+                                        Icon(Icons.Rounded.Edit, "Customize ${room.name}")
+                                    }
                                 }
-                            }
-                            if (selected) IconButton(onClick = { customize(room) }) {
-                                Icon(Icons.Rounded.Edit, "Customize ${room.name}")
                             }
                         }
                     }

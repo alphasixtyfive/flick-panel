@@ -4,6 +4,7 @@ import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelConfigCodec
 import app.flickpanel.config.RoomTilePreference
 import app.flickpanel.config.TileKind
+import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
 import app.flickpanel.ha.Catalogue
 import app.flickpanel.ha.Entity
@@ -51,7 +52,7 @@ class RoomLayoutTest {
             } + Entry(other, hallway.id, diagnostic = false, visible = true),
             areas = listOf(kitchen, hallway),
         )
-        val config = PanelConfig(roomTiles = mapOf(kitchen.id to listOf(
+        val config = PanelConfig(roomIds = listOf(kitchen.id, hallway.id), roomTiles = mapOf(kitchen.id to listOf(
             RoomTilePreference(dimmable.id, TileKind.SLIDER, wideOnTablet = true),
             RoomTilePreference(hidden.id, hidden = true),
             RoomTilePreference(ordinary.id, TileKind.SLIDER),
@@ -88,5 +89,25 @@ class RoomLayoutTest {
         assertTrue(layout.sections.single().tiles.isEmpty())
         assertEquals(listOf(existing.entity, fresh.id), layout.controls(kitchen).map { it.preference.entity })
         assertTrue(layout.controls(kitchen).all { it.preference.hidden })
+    }
+
+    @Test
+    fun roomsStartWithAreasOfPinnedControlsAndPreserveAnExplicitSelection() {
+        val kitchen = Area("kitchen", "Kitchen")
+        val hall = Area("hall", "Hallway")
+        val dining = Area("dining", "Dining room")
+        val kitchenLight = Entity("light.island", "off")
+        val catalogue = Catalogue(
+            entries = listOf(
+                Entry(kitchenLight, kitchen.id, diagnostic = false, visible = true),
+                Entry(Entity("light.hall", "off"), hall.id, diagnostic = false, visible = true),
+                Entry(Entity("light.dining", "off"), dining.id, diagnostic = false, visible = true),
+            ),
+            areas = listOf(hall, kitchen, dining),
+        )
+        val config = PanelConfig(favourites = listOf(TileSpec(kitchenLight.id, TileKind.TOGGLE)))
+        assertEquals(listOf(kitchen), RoomLayout(config, catalogue).selectedRooms)
+        assertTrue(RoomLayout(catalogue = catalogue).selectedRooms.isEmpty())
+        assertEquals(listOf(dining, hall), RoomLayout(config.copy(roomIds = listOf(dining.id, hall.id)), catalogue).selectedRooms)
     }
 }

@@ -2,9 +2,6 @@ package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -30,27 +27,29 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ActiveHomeBadge
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun HomeWarnings(badges: List<ActiveHomeBadge>) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     val dark = MaterialTheme.colorScheme.surface.luminance() < .45f
     val container = if (dark) Color(0xff48391e) else Color(0xffffedc2)
     val content = if (dark) Color(0xffffdfa0) else Color(0xff533800)
-    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (badge in badges) {
-            AssistChip(
-                onClick = { open = badge.entity.id },
-                label = { Text(badge.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                leadingIcon = { Icon(Icons.Rounded.WarningAmber, null, Modifier.size(20.dp)) },
-                colors = AssistChipDefaults.assistChipColors(containerColor = container, labelColor = content,
-                    leadingIconContentColor = content),
-                border = null,
-            )
-        }
-    }
+    val single = badges.singleOrNull()
+    AssistChip(
+        onClick = { open = single?.entity?.id ?: "" },
+        label = { Text(single?.label ?: "${badges.size} alerts", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        leadingIcon = { Icon(Icons.Rounded.WarningAmber, null, Modifier.size(20.dp)) },
+        colors = AssistChipDefaults.assistChipColors(containerColor = container, labelColor = content,
+            leadingIconContentColor = content),
+        border = null,
+    )
     val selected = badges.firstOrNull { it.entity.id == open }
-    if (selected != null) {
+    if (open == "") {
+        AlertDialog(onDismissRequest = { open = null }, title = { Text("Home alerts") }, text = {
+            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                for (badge in badges) TextButton(onClick = { open = badge.entity.id }) { Text(badge.label) }
+            }
+        }, confirmButton = { TextButton(onClick = { open = null }) { Text("Done") } })
+    } else if (selected != null) {
         val close = { open = null }
         AlertDialog(onDismissRequest = close, title = { Text(selected.label) }, text = {
             Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),

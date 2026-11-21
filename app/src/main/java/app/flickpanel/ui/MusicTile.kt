@@ -33,13 +33,12 @@ internal fun MusicTile(label: String, entity: Entity?, available: Boolean, model
         modifier = modifier.semantics { if (active != null) onClick(label = "Open music player", action = null) },
         shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
-        Row(Modifier.fillMaxSize().padding(tileContentPadding), horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            MusicArtwork(cover, Modifier.size(54.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                TileTitle(label, maxLines = 1)
-                TileStatus(detail, maxLines = 1)
+        Column(Modifier.fillMaxSize().padding(tileContentPadding), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
+                MusicArtwork(cover, Modifier.size(tileIconSize))
             }
+            TileStatus(detail)
         }
     }
 }

@@ -25,13 +25,22 @@ internal data class RoomLayout(
         config.favourites.filter { it.showOnHome }.associateBy(TileSpec::entity)
     }
 
+    val selectedRooms: List<Area> by lazy {
+        val available = catalogue.rooms.associateBy(Area::id)
+        val saved = config.roomIds
+        val ids = saved ?: buildList {
+            for (tile in config.favourites) {
+                if (tile.showOnHome && (tile.entity.startsWith("light.") || tile.kind == TileKind.CLIMATE)) {
+                    catalogue.areaOf(tile.entity)?.let(::add)
+                }
+            }
+            addAll(config.roomTiles.keys)
+        }
+        ids.distinct().mapNotNull(available::get)
+    }
+
     val sections: List<RoomSection> by lazy {
-        val available = catalogue.rooms
-        val rooms = config.roomIds?.let { ids ->
-            val byId = available.associateBy(Area::id)
-            ids.mapNotNull(byId::get)
-        } ?: available
-        rooms.mapNotNull { area ->
+        selectedRooms.mapNotNull { area ->
             val tiles = controls(area).mapNotNull { control ->
                 control.tile.takeUnless { control.preference.hidden }
             }

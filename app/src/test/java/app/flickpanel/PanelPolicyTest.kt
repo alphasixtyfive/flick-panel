@@ -218,7 +218,7 @@ class PanelPolicyTest {
             "friendly_name":"Kitchen pendant","supported_color_modes":["brightness"]
         }"""))
         val catalogue = Catalogue(listOf(Entry(dimmer, kitchen.id, diagnostic = false, visible = true)), listOf(kitchen))
-        val state = RoomLayout(catalogue = catalogue)
+        val state = RoomLayout(config = PanelConfig(roomIds = listOf(kitchen.id)), catalogue = catalogue)
         assertEquals(TileSpec(dimmer.id, TileKind.TOGGLE, "Pendant"), state.sections.single().tiles.single())
         val pinned = state.copy(config = PanelConfig(favourites = listOf(TileSpec(dimmer.id, TileKind.SLIDER, "Main light"))))
         assertEquals(TileSpec(dimmer.id, TileKind.SLIDER, "Main light"), pinned.sections.single().tiles.single())

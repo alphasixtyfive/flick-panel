@@ -1,9 +1,11 @@
 # Flick Panel
 
-Flick Panel is a native Android wall dashboard for Home Assistant. Favourites contains the
-tiles pinned on this tablet. Rooms uses Home Assistant areas to show lighting and thermostat
-controls for the selected room. The **Rooms** section in setup chooses which areas
-this tablet displays, their order, and whether heating controls appear. Select the
+Flick Panel is a native Android wall dashboard for Home Assistant. Favourites fits the
+pinned tiles into the available space. Page arrows appear if the tiles need another
+screen. Rooms uses Home Assistant areas to show lighting and thermostat controls.
+Before you choose rooms, the panel suggests areas of pinned lights and thermostats.
+The **Rooms** section in setup chooses individual areas, their order, and whether
+heating controls appear. Select the
 edit icon beside a room to hide or reorder its controls, choose Standard or Wide,
 and switch between Switch and Dimmer on dimmable lights. Use **Use automatic layout**
 to return to the Home Assistant area defaults. Save changes to apply the layout.
@@ -70,8 +72,10 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Selector** displays the choices from a Home Assistant select entity. **Number control**
   uses the minimum, maximum and increment from a number entity. For buttons, scenes and
   scripts, **Confirm before running** adds a confirmation step.
-- **Compact reading** puts readings such as temperature and humidity in a short strip
-  on Favourites. The tile shows an icon and a value, and TalkBack reads the tile name.
+- **Compact reading** puts readings such as temperature and humidity on Favourites.
+  Hold **Home**, enter the setup PIN, then open an item under **Favourites → Readings**
+  to edit it. To add a reading, use **Add tile**, choose the Home Assistant sensor and
+  select **Compact reading**. TalkBack reads the tile name and value.
 - **Tasks** previews open items on Favourites. Open the tile for the checklist.
   Tap a row to check it off, use **Add item**, or expand **Completed** to restore an item.
   The app offers the actions supported by the list in Home Assistant.
