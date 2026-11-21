@@ -20,6 +20,7 @@ import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
+import app.flickpanel.ha.Area
 import app.flickpanel.ha.Entity
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,6 +30,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     var section by remember { mutableStateOf(SetupSection.FAVOURITES) }
     var picker by remember { mutableStateOf<SetupPicker?>(null) }
     var format by remember { mutableStateOf<TileFormat?>(null) }
+    var room by remember { mutableStateOf<Area?>(null) }
     var panelPage by remember { mutableStateOf<PanelPage?>(null) }
     var choosingPhotos by remember { mutableStateOf(false) }
     var confirmingDiscard by remember { mutableStateOf(false) }
@@ -37,6 +39,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     val editorPages = rememberSaveableStateHolder()
     val activePicker = picker
     val activeFormat = format
+    val activeRoom = room
     val adding = activePicker == SetupPicker.TILE || activePicker == SetupPicker.APP
     val dirty = draft != state.config
     val editTile: (TileSpec) -> Unit = { tile ->
@@ -52,6 +55,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
         state.connectionEditor -> "Connection"
         activeFormat != null -> if (activeFormat.current == null) "Add tile" else "Edit tile"
         activePicker != null -> activePicker.title
+        activeRoom != null -> activeRoom.name
         else -> panelPage?.label
     }
 
@@ -59,12 +63,13 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
         theme = draft.theme,
         highContrast = draft.highContrast,
         reduceMotion = draft.reduceMotion,
-        destination = activeFormat?.entity?.id ?: activePicker ?: detailTitle ?: section,
+        destination = activeFormat?.entity?.id ?: activePicker ?: activeRoom?.id ?: detailTitle ?: section,
         section = section,
         openSection = {
             format = null
             picker = null
             panelPage = null
+            room = null
             model.cancelConnectionChange()
             section = it
         },
@@ -78,6 +83,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                     activeFormat != null -> format = null
                     activePicker != null -> picker = null
                     state.connectionEditor -> model.cancelConnectionChange()
+                    activeRoom != null -> room = null
                     panelPage != null -> panelPage = if (panelPage == PanelPage.REMOTE_CONTROL) PanelPage.HOME_ASSISTANT else null
                     else -> finish()
                 }
@@ -127,6 +133,13 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                 }
                 picker = null
             }
+            activeRoom != null -> RoomControlsEditor(
+                room = activeRoom,
+                draft = draft,
+                state = state,
+                update = { controls -> draft = draft.copy(roomTiles = draft.roomTiles + (activeRoom.id to controls)) },
+                reset = { draft = draft.copy(roomTiles = draft.roomTiles - activeRoom.id) },
+            )
             else -> editorPages.SaveableStateProvider(section.name) {
                 Column(Modifier.fillMaxWidth()) {
                     ErrorText(state.error, Modifier.padding(horizontal = setupPadding))
@@ -174,7 +187,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                                 }
                             },
                         )
-                        SetupSection.ROOMS -> RoomSetup(draft, state) { draft = it }
+                        SetupSection.ROOMS -> RoomSetup(draft, state, customize = { room = it }) { draft = it }
                         SetupSection.CAMERAS -> CameraSetup(draft, state, editTile) { draft = it }
                         SetupSection.PANEL -> PanelSettings(
                             page = panelPage,

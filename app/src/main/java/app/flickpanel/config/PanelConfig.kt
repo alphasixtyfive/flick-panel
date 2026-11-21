@@ -35,6 +35,13 @@ data class TileSpec(
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
 
+internal data class RoomTilePreference(
+    val entity: String,
+    val lightFormat: TileKind? = null,
+    val wideOnTablet: Boolean = false,
+    val hidden: Boolean = false,
+)
+
 internal data class PanelConfig(
     val favourites: List<TileSpec> = emptyList(),
     val theme: PanelTheme = PanelTheme.SLATE,
@@ -44,6 +51,7 @@ internal data class PanelConfig(
     val wallMode: Boolean = true,
     val roomIds: List<String>? = null,
     val showRoomHeating: Boolean = true,
+    val roomTiles: Map<String, List<RoomTilePreference>> = emptyMap(),
     val highContrast: Boolean = false,
     val reduceMotion: Boolean = false,
     internal val idleAlbum: PhotoFolder? = null
@@ -70,6 +78,16 @@ internal object PanelConfigCodec {
         .put("reduceMotion", config.reduceMotion)
         .put("rooms", config.roomIds?.let(::JSONArray))
         .put("roomHeating", config.showRoomHeating)
+        .put("roomTiles", config.roomTiles.takeIf { it.isNotEmpty() }?.let { rooms ->
+            JSONObject(rooms.mapValues { (_, controls) ->
+                JSONArray(controls.map { control ->
+                    JSONObject().put("entity", control.entity).put("format", control.lightFormat?.name).apply {
+                        if (control.wideOnTablet) put("wide", true)
+                        if (control.hidden) put("hidden", true)
+                    }
+                })
+            })
+        })
         .put("idleAlbum", config.idleAlbum?.let { JSONObject().put("id", it.id).put("title", it.title) })
         .toString()
 
@@ -108,6 +126,7 @@ internal object PanelConfigCodec {
             highContrast = obj.optBoolean("highContrast"),
             reduceMotion = obj.optBoolean("reduceMotion"),
             showRoomHeating = obj.optBoolean("roomHeating", true),
+            roomTiles = decodeRoomTiles(obj.optJSONObject("roomTiles")),
             roomIds = obj.optJSONArray("rooms")?.let { areas ->
                 (0 until areas.length()).mapNotNull { areas.optString(it).takeIf(::validAreaId) }.distinct().take(48)
             },
@@ -118,9 +137,32 @@ internal object PanelConfigCodec {
         )
     }
 
+    private fun decodeRoomTiles(rooms: JSONObject?): Map<String, List<RoomTilePreference>> = buildMap {
+        if (rooms == null) return@buildMap
+        for (id in rooms.keys()) {
+            if (!validAreaId(id)) continue
+            val controls = rooms.optJSONArray(id) ?: continue
+            val preferences = (0 until controls.length()).mapNotNull { index ->
+                val control = controls.optJSONObject(index) ?: return@mapNotNull null
+                val entity = control.optString("entity").takeIf(::validEntity) ?: return@mapNotNull null
+                val light = entity.startsWith("light.")
+                if (!light && !entity.startsWith("climate.")) return@mapNotNull null
+                val lightFormat = if (light) when (control.optString("format")) {
+                    TileKind.TOGGLE.name -> TileKind.TOGGLE
+                    TileKind.SLIDER.name -> TileKind.SLIDER
+                    else -> null
+                } else null
+                RoomTilePreference(entity, lightFormat, control.optBoolean("wide"), control.optBoolean("hidden"))
+            }.distinctBy(RoomTilePreference::entity)
+            if (preferences.isNotEmpty()) put(id, preferences)
+        }
+    }
+
     private fun JSONObject.text(key: String): String? =
         if (isNull(key)) null else optString(key).takeIf(String::isNotBlank)
 }
+
+internal const val roomTileLimit = 32
 
 private val entityPattern = Regex("[a-z0-9_]+\\.[a-z0-9_]+")
 internal fun validEntity(entity: String): Boolean = entity.length <= 255 && entityPattern.matches(entity)

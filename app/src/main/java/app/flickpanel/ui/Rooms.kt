@@ -57,7 +57,10 @@ internal fun Rooms(
 
     val rooms = remember(sections) { sections.map { it.area } }
     BoxWithConstraints(modifier) {
-        val gridColumns = roomTileColumns(maxWidth.value, LocalDensity.current.fontScale, columns, selected.tiles.size)
+        val slots = remember(selected, columns) {
+            selected.tiles.sumOf { tileSpan(it, columns, compact = columns >= 4, resizeTiles = true) }
+        }
+        val gridColumns = roomTileColumns(maxWidth.value, LocalDensity.current.fontScale, columns, slots)
         val compact = gridColumns >= 4
         val rows = remember(selected, gridColumns, compact) {
             packTileRows(selected.tiles, gridColumns, compact, resizeTiles = true)
@@ -76,7 +79,11 @@ internal fun Rooms(
                     contentPadding = PaddingValues(bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(tileGap),
                 ) {
-                    tileRows(rows, state, model, gridColumns, compact, resizeTiles = true, keyPrefix = "room-tile:")
+                    if (rows.isEmpty()) {
+                        item { EmptyState("No controls shown", "Hold Rooms to change this layout.") }
+                    } else {
+                        tileRows(rows, state, model, gridColumns, compact, resizeTiles = true, keyPrefix = "room-tile:")
+                    }
                 }
             }
         }

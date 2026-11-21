@@ -3,7 +3,6 @@ package app.flickpanel
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
-import app.flickpanel.ha.Area
 import app.flickpanel.ha.Catalogue
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.GraphPoint
@@ -12,47 +11,6 @@ import app.flickpanel.ha.PanelCommand
 import app.flickpanel.ha.PanelRemoteState
 
 internal enum class Page(val label: String) { FAVOURITES("Favourites"), ROOMS("Rooms"), CAMERAS("Cameras") }
-
-internal data class RoomSection(val area: Area, val tiles: List<TileSpec>)
-
-internal data class RoomLayout(
-    val config: PanelConfig = PanelConfig(),
-    val catalogue: Catalogue = Catalogue()
-) {
-    val sections: List<RoomSection> by lazy {
-        val available = catalogue.rooms
-        val rooms = config.roomIds?.let { ids ->
-            val byId = available.associateBy(Area::id)
-            ids.mapNotNull(byId::get)
-        } ?: available
-        val pinned = config.favourites.filter { it.showOnHome }.associateBy(TileSpec::entity)
-        rooms.mapNotNull { area ->
-            val tiles = catalogue.room(area.id)
-                .filter { config.showRoomHeating || it.entity.domain != "climate" }
-                .sortedWith(compareBy({ it.entity.domain != "light" }, { it.entity.id !in pinned }))
-                .take(32)
-                .map { entry -> roomTile(area, entry.entity, pinned[entry.entity.id]) }
-            if (tiles.isEmpty()) null else RoomSection(area, tiles)
-        }
-    }
-
-    private fun roomTile(area: Area, device: Entity, favourite: TileSpec?): TileSpec {
-        val kind = when {
-            device.domain == "climate" -> TileKind.CLIMATE
-            favourite?.kind == TileKind.SLIDER && TileKind.SLIDER in device.kinds() -> TileKind.SLIDER
-            else -> TileKind.TOGGLE
-        }
-        val name = device.name
-        val prefix = "${area.name} "
-        val label = favourite?.label ?: when {
-            kind == TileKind.CLIMATE && name.equals(area.name, ignoreCase = true) -> "Heating"
-            name.startsWith(prefix, ignoreCase = true) -> name.drop(prefix.length)
-                .trimStart().replaceFirstChar { it.uppercase() }.ifBlank { name }
-            else -> null
-        }
-        return TileSpec(device.id, kind, label)
-    }
-}
 
 internal data class PanelUi(
     val loading: Boolean = true,

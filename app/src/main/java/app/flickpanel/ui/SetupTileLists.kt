@@ -52,6 +52,7 @@ import app.flickpanel.PanelUi
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
+import app.flickpanel.ha.Area
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -121,7 +122,9 @@ private fun TileOptions(label: String, tile: TileSpec, edit: () -> Unit, resize:
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun RoomSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig) -> Unit) {
+internal fun RoomSetup(
+    draft: PanelConfig, state: PanelUi, customize: (Area) -> Unit, update: (PanelConfig) -> Unit,
+) {
     var search by remember { mutableStateOf("") }
     val rooms = state.catalogue.rooms
     val chosen = draft.roomIds ?: rooms.map { it.id }
@@ -162,6 +165,9 @@ internal fun RoomSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig)
                                     java.util.Collections.swap(next, position, position + delta)
                                     update(draft.copy(roomIds = next))
                                 }
+                            }
+                            if (selected) IconButton(onClick = { customize(room) }) {
+                                Icon(Icons.Rounded.Edit, "Customize ${room.name}")
                             }
                         }
                     }
@@ -232,7 +238,7 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
 }
 
 @Composable
-private fun ReorderGrip(label: String, before: Boolean, after: Boolean, reorder: (Int) -> Unit) {
+internal fun ReorderGrip(label: String, before: Boolean, after: Boolean, reorder: (Int) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val latest by rememberUpdatedState(reorder)
     Box {

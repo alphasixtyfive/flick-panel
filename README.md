@@ -3,7 +3,11 @@
 Flick Panel is a native Android wall dashboard for Home Assistant. Favourites contains the
 tiles pinned on this tablet. Rooms uses Home Assistant areas to show lighting and thermostat
 controls for the selected room. The **Rooms** section in setup chooses which areas
-this tablet displays, their order, and whether heating controls appear. Cameras
+this tablet displays, their order, and whether heating controls appear. Select the
+edit icon beside a room to hide or reorder its controls, choose Standard or Wide,
+and switch between Switch and Dimmer on dimmable lights. Use **Use automatic layout**
+to return to the Home Assistant area defaults. Save changes to apply the layout.
+Cameras
 shows pinned previews and opens one full-screen feed at a time.
 In setup, use **Cameras** to choose gallery feeds, edit their settings and star the
 ones you want on Home. On wider tablets, the camera pair sits beside a two-by-two
