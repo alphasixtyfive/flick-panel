@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -14,22 +15,24 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryScrollableTabRow
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +42,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -140,6 +144,10 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val tileColumns = dashboardTileColumns(maxWidth.value, fontScale)
         val cameraColumns = minOf(tileColumns, if (maxWidth >= 1100.dp) 4 else if (wide) 3 else 2)
         val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
+        val readings = remember(state.config.favourites, tileColumns) {
+            if (tileColumns == 4) state.config.favourites.filter { it.showOnHome && it.kind == TileKind.GLANCE }
+            else emptyList()
+        }
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
                 "Home",
@@ -166,13 +174,24 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
             }
             if (status != null) Text(status, style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            DashboardNavigation(state.page, short, model::selectPage)
+            Row(
+                Modifier.fillMaxWidth().padding(top = if (short) 4.dp else 10.dp)
+                    .heightIn(min = if (readings.isNotEmpty()) 70.dp else if (short) 48.dp else 56.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                DashboardNavigation(state.page, short, model::selectPage, Modifier.weight(1f))
+                if (state.page == Page.FAVOURITES && readings.isNotEmpty()) {
+                    HomeGlanceReadings(readings, state, Modifier.weight(1f), alignEnd = true)
+                }
+            }
             key(state.page) {
                 val body = Modifier.fillMaxSize().padding(top = if (short) 10.dp else 16.dp)
                 when (state.page) {
                     Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
                     Page.ROOMS -> Rooms(state, model, tileColumns, roomId, { roomId = it }, body)
-                    Page.FAVOURITES -> Favourites(state, model, tileColumns, resizeTiles = !compact, modifier = body)
+                    Page.FAVOURITES -> Favourites(state, model, tileColumns, resizeTiles = !compact, modifier = body,
+                        showReadings = readings.isEmpty())
                 }
             }
         }
@@ -236,49 +255,43 @@ private fun HeaderClock(wide: Boolean, showIdleScreen: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page) -> Unit) {
+internal fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page) -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
     val tabLabel = if (short) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium
-    val tabs: @Composable () -> Unit = {
+    val labelInset = 12.dp
+    val scroll = rememberScrollState()
+    LaunchedEffect(current) {
+        if (current == Page.FAVOURITES) scroll.scrollTo(0)
+    }
+    Row(
+        modifier.offset(x = -labelInset).horizontalScroll(scroll).selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         for (page in Page.entries) {
             val selected = current == page
-            Tab(
-                selected = selected,
-                onClick = { selectPage(page) },
-                selectedContentColor = colors.primary,
-                unselectedContentColor = colors.onSurfaceVariant,
-                modifier = Modifier.heightIn(min = if (short) 48.dp else 56.dp),
+            Box(
+                Modifier.clip(CircleShape).selectable(selected, role = Role.Tab, onClick = { selectPage(page) })
+                    .background(if (selected) colors.secondaryContainer else Color.Transparent)
+                    .heightIn(min = if (short) 48.dp else 56.dp).padding(horizontal = labelInset, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(page.label, Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
-                    style = tabLabel, fontWeight = if (selected) FontWeight.SemiBold else tabLabel.fontWeight,
-                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(page.label, style = tabLabel, color = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant,
+                    fontWeight = if (selected) FontWeight.SemiBold else tabLabel.fontWeight, maxLines = 1)
             }
-        }
-    }
-    BoxWithConstraints(
-        Modifier.padding(top = if (short) 4.dp else 10.dp).widthIn(max = 420.dp).fillMaxWidth(),
-    ) {
-        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-        if (maxWidth < 284.dp * fontScale) {
-            PrimaryScrollableTabRow(
-                selectedTabIndex = current.ordinal, edgePadding = 0.dp,
-                containerColor = Color.Transparent, contentColor = colors.primary,
-                indicator = {}, divider = {}, tabs = tabs,
-            )
-        } else {
-            PrimaryTabRow(
-                selectedTabIndex = current.ordinal,
-                containerColor = Color.Transparent, contentColor = colors.primary,
-                indicator = {}, divider = {}, tabs = tabs,
-            )
         }
     }
 }
 
 @Composable
-private fun Favourites(state: PanelUi, model: PanelViewModel, columns: Int, resizeTiles: Boolean, modifier: Modifier) {
+private fun Favourites(
+    state: PanelUi,
+    model: PanelViewModel,
+    columns: Int,
+    resizeTiles: Boolean,
+    modifier: Modifier,
+    showReadings: Boolean,
+) {
     val tiles = remember(state.config.favourites) {
         val headerWeather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
         state.config.favourites.filter { it.showOnHome && it != headerWeather }
@@ -288,7 +301,7 @@ private fun Favourites(state: PanelUi, model: PanelViewModel, columns: Int, resi
         Column(modifier) { EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.") }
         return
     }
-    FavouritesTileGrid(tiles, state, model, columns, resizeTiles, modifier, badges)
+    FavouritesTileGrid(tiles, state, model, columns, resizeTiles, modifier, badges, showReadings)
 }
 
 @Composable
@@ -310,10 +323,11 @@ private fun CameraGallery(state: PanelUi, model: PanelViewModel, columns: Int, m
 }
 
 @Composable
-internal fun EmptyState(title: String, note: String?) {
+internal fun EmptyState(title: String, note: String?, action: @Composable (() -> Unit)? = null) {
     Column(Modifier.fillMaxWidth().padding(vertical = 42.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(7.dp)) {
         Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         note?.let { Text(it, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        action?.invoke()
     }
 }

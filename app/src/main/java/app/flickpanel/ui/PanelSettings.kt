@@ -1,17 +1,20 @@
 package app.flickpanel.ui
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -22,11 +25,7 @@ import androidx.compose.material.icons.rounded.DisplaySettings
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SettingsRemote
-import androidx.compose.material.icons.rounded.WarningAmber
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -47,13 +46,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
-import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.HomeBadge
+import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelTheme
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.PanelRemoteState
@@ -63,7 +65,6 @@ internal enum class PanelPage(val label: String) {
     HOME_BADGES("Warning badges"),
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PanelSettings(
     page: PanelPage?, draft: PanelConfig, state: PanelUi, open: (PanelPage) -> Unit, change: (PanelConfig) -> Unit,
@@ -73,11 +74,15 @@ internal fun PanelSettings(
 ) {
     val context = LocalContext.current
     val album = draft.idleAlbum?.title ?: "Clock only"
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = setupPadding, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        Modifier.widthIn(max = 780.dp).fillMaxWidth().verticalScroll(rememberScrollState())
+            .padding(start = setupPadding, end = setupPadding, top = 12.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
         when (page) {
-            null -> {
-                SettingLink("Display", "$album · ${idleDelay(draft.idleSeconds)}", { open(PanelPage.DISPLAY) }, Icons.Rounded.DisplaySettings)
+            null -> SettingsListGroup {
+                SettingLink("Display", "$album · ${idleDelay(draft.idleSeconds)}",
+                    { open(PanelPage.DISPLAY) }, Icons.Rounded.DisplaySettings)
                 SettingLink("Appearance", draft.theme.label, { open(PanelPage.APPEARANCE) }, Icons.Rounded.Palette)
                 val connection = when (state.link) {
                     Link.ONLINE -> "Connected"
@@ -86,53 +91,49 @@ internal fun PanelSettings(
                     Link.OFFLINE -> "Offline"
                 }
                 SettingLink("Home Assistant", connection, { open(PanelPage.HOME_ASSISTANT) }, Icons.Rounded.Hub)
-                SettingLink("Android Home app", "Return from other apps with the Home gesture", { openHomeAppSettings(context) }, Icons.Rounded.Home)
+                SettingLink("Android Home app", "Return from other apps with the Home gesture",
+                    { openHomeAppSettings(context) }, Icons.Rounded.Home)
             }
-            PanelPage.DISPLAY -> {
-                SettingLink("Idle photos", album, choosePhotos, clear = draft.idleAlbum?.let { { change(draft.copy(idleAlbum = null)) } })
-                var open by remember { mutableStateOf(false) }
-                Box {
-                    SettingLink("Show idle screen after", idleDelay(draft.idleSeconds), { open = true }, Icons.Rounded.Schedule)
-                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                        for (seconds in (listOf(0, 15, 30, 60, 120, 300, 600, 900) + draft.idleSeconds).distinct().sorted()) {
-                            DropdownMenuItem(
-                                text = { Text(idleDelay(seconds)) },
-                                leadingIcon = { RadioButton(selected = draft.idleSeconds == seconds, onClick = null) },
-                                onClick = { open = false; change(draft.copy(idleSeconds = seconds)) },
-                            )
-                        }
-                    }
-                }
+            PanelPage.DISPLAY -> SettingsListGroup {
+                SettingLink("Idle photos", album, choosePhotos,
+                    clear = draft.idleAlbum?.let { { change(draft.copy(idleAlbum = null)) } })
+                IdleDelaySetting(draft.idleSeconds) { change(draft.copy(idleSeconds = it)) }
                 SetupSwitchRow("Wall display", "Keep the display on and dim the idle screen", draft.wallMode) {
                     change(draft.copy(wallMode = it))
                 }
             }
             PanelPage.APPEARANCE -> {
-                Text("Colour scheme", Modifier.padding(bottom = 3.dp), style = MaterialTheme.typography.titleMedium)
-                FlowRow(maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (theme in PanelTheme.entries) {
-                        ThemeChoice(theme, draft.theme == theme, draft.highContrast, Modifier.weight(1f)) {
-                            change(draft.copy(theme = theme))
+                SettingsListGroup("Colour scheme") {
+                    Column(Modifier.selectableGroup()) {
+                        for (theme in PanelTheme.entries) {
+                            ThemeChoice(theme, draft.theme == theme, draft.highContrast) {
+                                change(draft.copy(theme = theme))
+                            }
                         }
                     }
                 }
-                SetupSwitchRow("Higher contrast", "Stronger text and control outlines", draft.highContrast) {
-                    change(draft.copy(highContrast = it))
-                }
-                SetupSwitchRow("Reduce motion", "Skip page fades and tile movement", draft.reduceMotion) {
-                    change(draft.copy(reduceMotion = it))
+                SettingsListGroup("Accessibility") {
+                    SetupSwitchRow("Higher contrast", "Stronger text and control outlines", draft.highContrast) {
+                        change(draft.copy(highContrast = it))
+                    }
+                    SetupSwitchRow("Reduce motion", "Skip page fades and tile movement", draft.reduceMotion) {
+                        change(draft.copy(reduceMotion = it))
+                    }
                 }
             }
             PanelPage.HOME_ASSISTANT -> {
-                SettingLink("Remote control", state.remoteLabel(), { open(PanelPage.REMOTE_CONTROL) }, Icons.Rounded.SettingsRemote)
-                SettingLink("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", chooseMessage,
-                    clear = draft.messageEntity?.let { { change(draft.copy(messageEntity = null)) } })
-                SettingLink("Warning badges", if (draft.homeBadges.isEmpty()) "Show active alerts on Home" else null,
-                    { open(PanelPage.HOME_BADGES) }, Icons.Rounded.WarningAmber)
-                SettingLink("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", choosePresence,
-                    clear = draft.presenceEntity?.let { { change(draft.copy(presenceEntity = null)) } })
-                SettingLink("Home Assistant connection", state.serverAddress, changeConnection, Icons.Rounded.Hub)
+                SettingsListGroup {
+                    SettingLink("Home Assistant connection", state.serverAddress, changeConnection)
+                    SettingLink("Remote control", state.remoteLabel(), { open(PanelPage.REMOTE_CONTROL) })
+                }
+                SettingsListGroup("Favourites") {
+                    SettingLink("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", chooseMessage,
+                        clear = draft.messageEntity?.let { { change(draft.copy(messageEntity = null)) } })
+                    SettingLink("Warning badges", if (draft.homeBadges.isEmpty()) "Show active alerts on Home" else null,
+                        { open(PanelPage.HOME_BADGES) })
+                    SettingLink("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", choosePresence,
+                        clear = draft.presenceEntity?.let { { change(draft.copy(presenceEntity = null)) } })
+                }
             }
             PanelPage.REMOTE_CONTROL -> RemoteControlSettings(state, linkPanel, unlinkPanel)
             PanelPage.HOME_BADGES -> WarningBadgeSettings(draft.homeBadges, state, chooseBadge, editBadge) { removed ->
@@ -143,32 +144,75 @@ internal fun PanelSettings(
 }
 
 @Composable
+private fun SettingsListGroup(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (title != null) Text(
+            title, Modifier.padding(start = 16.dp).semantics { heading() },
+            color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall,
+        )
+        Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Column(content = content)
+        }
+    }
+}
+
+@Composable
+private fun IdleDelaySetting(current: Int, change: (Int) -> Unit) {
+    var choosing by remember { mutableStateOf(false) }
+    SettingLink("Show idle screen after", idleDelay(current), { choosing = true })
+    if (choosing) AlertDialog(
+        onDismissRequest = { choosing = false },
+        title = { Text("Show idle screen after") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
+                val choices = (listOf(0, 15, 30, 60, 120, 300, 600, 900) + current).distinct().sorted()
+                for (seconds in choices) {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
+                            selected = seconds == current,
+                            role = Role.RadioButton,
+                            onClick = { choosing = false; change(seconds) },
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = current == seconds, onClick = null)
+                        Text(idleDelay(seconds), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { choosing = false }) { Text("Cancel") } },
+    )
+}
+
+@Composable
 private fun RemoteControlSettings(state: PanelUi, link: (String) -> Unit, unlink: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val linkedName = state.remoteName
     var name by remember { mutableStateOf("Flick Panel") }
     var confirmUnlink by remember { mutableStateOf(false) }
     if (linkedName == null) {
-        Text("Link this tablet to blank or wake Panel and open its cameras from Home Assistant.",
-            color = colors.onSurfaceVariant)
+        Text("Link this tablet to wake the display or open a camera from Home Assistant.",
+            color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
         OutlinedTextField(name, { name = it.take(48) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
             enabled = !state.busy, label = { Text("Tablet name") })
         Button(onClick = { link(name) }, enabled = !state.busy && state.link == Link.ONLINE && name.isNotBlank()) {
             Text(if (state.busy) "Linking…" else "Link tablet")
         }
     } else {
-        Surface(shape = MaterialTheme.shapes.large, color = colors.surfaceContainer) {
-            ListItem(headlineContent = { Text(linkedName, style = MaterialTheme.typography.titleMedium) },
+        SettingsListGroup {
+            ListItem(
+                headlineContent = { Text(linkedName) },
                 supportingContent = { Text(state.remoteLabel()) },
                 leadingContent = { Icon(Icons.Rounded.SettingsRemote, null, tint = colors.primary) },
-                colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer))
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
         }
-        Text("Send commands to the tablet’s Mobile App notification action in Home Assistant.",
-            color = colors.onSurfaceVariant)
-        Text("Panel stays reachable while its display is blank. A tap wakes it locally.",
-            color = colors.onSurfaceVariant)
+        Text("Use the tablet’s Mobile App notification action in Home Assistant to send commands.",
+            color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
         if (state.remoteState == PanelRemoteState.UNAVAILABLE) {
-            TextButton(onClick = { link(linkedName) }, enabled = !state.busy && state.link == Link.ONLINE) {
+            Button(onClick = { link(linkedName) }, enabled = !state.busy && state.link == Link.ONLINE) {
                 Text("Relink tablet")
             }
         }
@@ -196,54 +240,47 @@ private fun idleDelay(seconds: Int) = when {
 }
 
 @Composable
-private fun ThemeChoice(theme: PanelTheme, selected: Boolean, contrast: Boolean, modifier: Modifier, choose: () -> Unit) {
+private fun ThemeChoice(theme: PanelTheme, selected: Boolean, contrast: Boolean, choose: () -> Unit) {
     val sample = panelColorScheme(theme, contrast)
-    val colors = MaterialTheme.colorScheme
-    Surface(selected = selected, onClick = choose, modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        color = if (selected) colors.primaryContainer else colors.surfaceContainer,
-        contentColor = if (selected) colors.onPrimaryContainer else colors.onSurface) {
-        Column(Modifier.padding(start = 13.dp, end = 10.dp, top = 13.dp, bottom = 10.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (swatch in listOf(sample.surfaceContainerHighest, sample.primaryContainer, sample.primary)) {
-                    Box(Modifier.size(20.dp).background(swatch, CircleShape))
+    ListItem(
+        modifier = Modifier.selectable(selected, role = Role.RadioButton, onClick = choose),
+        headlineContent = { Text(theme.label) },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (swatch in listOf(sample.surfaceContainerHighest, sample.primaryContainer, sample.primary)) {
+                        Box(Modifier.size(14.dp).background(swatch, CircleShape))
+                    }
                 }
-            }
-            Row(Modifier.fillMaxWidth().heightIn(min = 42.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(theme.label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, maxLines = 2)
                 RadioButton(selected = selected, onClick = null)
             }
-        }
-    }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
 }
 
 @Composable
 internal fun SetupSwitchRow(title: String, subtitle: String?, checked: Boolean, change: (Boolean) -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Surface(shape = MaterialTheme.shapes.large, color = colors.surfaceContainer) {
-        ListItem(
-            modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = change),
-            headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
-            supportingContent = subtitle?.let { { Text(it) } },
-            trailingContent = { Switch(checked = checked, onCheckedChange = null) },
-            colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer),
-        )
-    }
+    ListItem(
+        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = change),
+        headlineContent = { Text(title) },
+        supportingContent = subtitle?.let { { Text(it) } },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
 }
 
 @Composable
 internal fun SettingLink(title: String, subtitle: String?, open: () -> Unit, icon: ImageVector? = null, clear: (() -> Unit)? = null) {
-    val colors = MaterialTheme.colorScheme
-    Surface(shape = MaterialTheme.shapes.large, color = colors.surfaceContainer) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Surface(onClick = open, modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.large, color = colors.surfaceContainer) {
-                ListItem(headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
-                    supportingContent = subtitle?.let { { Text(it) } },
-                    leadingContent = icon?.let { { Icon(it, null, tint = colors.primary) } },
-                    trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
-                    colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer))
-            }
-            if (clear != null) IconButton(onClick = clear) { Icon(Icons.Rounded.Close, "Clear $title") }
-        }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        ListItem(
+            modifier = Modifier.weight(1f).clickable(role = Role.Button, onClick = open),
+            headlineContent = { Text(title) },
+            supportingContent = subtitle?.let { { Text(it) } },
+            leadingContent = icon?.let { { Icon(it, null, tint = MaterialTheme.colorScheme.primary) } },
+            trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        )
+        if (clear != null) IconButton(onClick = clear) { Icon(Icons.Rounded.Close, "Clear $title") }
     }
 }

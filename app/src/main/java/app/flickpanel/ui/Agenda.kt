@@ -18,10 +18,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 @Composable
-internal fun AgendaTile(tile: TileSpec, label: String, online: Boolean, model: PanelViewModel, modifier: Modifier) {
+internal fun AgendaTile(
+    tile: TileSpec, label: String, online: Boolean, model: PanelViewModel, modifier: Modifier, expanded: Boolean,
+) {
     val state = agendaState(tile.entity, online, model)
-    AgendaPreview(label, tile.kind, state, online, modifier,
-        limit = if (tile.wideOnTablet) 2 else 1) { model.openAgenda(tile.entity) }
+    AgendaPreview(label, tile.kind, state, online, modifier, expanded, wide = tile.wideOnTablet) {
+        model.openAgenda(tile.entity)
+    }
 }
 
 @Composable

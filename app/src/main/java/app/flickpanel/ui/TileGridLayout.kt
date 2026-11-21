@@ -54,10 +54,14 @@ internal fun packTileRows(
     return rows
 }
 
-internal enum class HomeGroup { CONTROLS, CAMERAS, PEOPLE, AGENDA, APPS, HISTORY }
+internal enum class HomeGroup(val label: String) {
+    READINGS("Readings"), CONTROLS("Controls"), CAMERAS("Cameras"), PEOPLE("People"),
+    AGENDA("Agenda"), APPS("Apps"), HISTORY("History"),
+}
 
 internal val TileKind.homeGroup: HomeGroup
     get() = when {
+        this == TileKind.GLANCE -> HomeGroup.READINGS
         this == TileKind.CAMERA -> HomeGroup.CAMERAS
         isAgenda -> HomeGroup.AGENDA
         this == TileKind.PERSON -> HomeGroup.PEOPLE
@@ -67,6 +71,7 @@ internal val TileKind.homeGroup: HomeGroup
     }
 
 internal data class HomeTileGroups(
+    val readings: List<TileSpec>,
     val controls: List<List<TileSpec>>,
     val cameras: List<List<TileSpec>>,
     val agenda: List<List<TileSpec>>,
@@ -90,6 +95,7 @@ internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolea
         history.firstOrNull { !it.wideOnTablet }
     } else null
     return HomeTileGroups(
+        readings = groups[HomeGroup.READINGS].orEmpty(),
         controls = packTileRows(groups[HomeGroup.CONTROLS].orEmpty(), columns, compact, resizeTiles),
         cameras = cameras.chunked(if (columns > 1) 2 else 1),
         agenda = packTileRows(agenda, agendaColumns, compact, resizeTiles),

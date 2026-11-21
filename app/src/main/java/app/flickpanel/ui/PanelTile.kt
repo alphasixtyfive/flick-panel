@@ -32,7 +32,7 @@ internal val tileArtworkSize = 36.dp
 @Composable
 internal fun PanelTile(
     tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
-    compactHistory: Boolean = false,
+    compactHistory: Boolean = false, expandedAgenda: Boolean = false,
 ) {
     val label = state.label(tile)
     val entity = state.entity(tile.entity)
@@ -63,7 +63,7 @@ internal fun PanelTile(
         TileKind.COVER -> CoverTile(label, entity, live, online, pending, modifier) { action ->
             model.controlCover(tile.entity, action)
         }
-        TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, label, available, model, modifier)
+        TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, label, available, model, modifier, expandedAgenda)
         TileKind.PERSON -> {
             val photo = rememberPanelImage(live?.personPicture?.takeIf { online },
                 model::cachedPersonAvatar, model::loadPersonAvatar)
@@ -75,6 +75,7 @@ internal fun PanelTile(
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, online && entity?.available == true, model, modifier)
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
         TileKind.TIMER -> TimerTile(label, entity, modifier)
+        TileKind.GLANCE -> GlanceTile(label, entity, available, modifier)
         TileKind.VALUE, TileKind.TREND -> ValueTile(tile, label, entity, state.link, state.graphs[tile.entity],
             model::loadGraph, modifier, compactHistory)
         TileKind.APP -> AppTile(tile, modifier)

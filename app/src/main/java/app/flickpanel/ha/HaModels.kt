@@ -88,10 +88,13 @@ internal data class Entity(
             if (dimmable) listOf(TileKind.SLIDER, TileKind.TOGGLE) else listOf(TileKind.TOGGLE)
         }
         "switch", "input_boolean" -> listOf(TileKind.TOGGLE)
-        "sensor" -> if (state.toDoubleOrNull()?.isFinite() == true) {
-            if (!hasReaderAttribute) listOf(TileKind.VALUE, TileKind.TREND)
-            else listOf(TileKind.VALUE, TileKind.TREND, TileKind.READER)
-        } else listOf(TileKind.VALUE, TileKind.READER)
+        "sensor" -> buildList {
+            val numeric = state.toDoubleOrNull()?.isFinite() == true
+            add(TileKind.VALUE)
+            if (numeric) add(TileKind.TREND)
+            if (glanceReading != null) add(TileKind.GLANCE)
+            if (!numeric || hasReaderAttribute) add(TileKind.READER)
+        }
         "input_number", "number" -> if (numberRange != null) listOf(TileKind.NUMBER, TileKind.VALUE) else listOf(TileKind.VALUE)
         "input_select", "select" -> if (options.isNotEmpty()) listOf(TileKind.CHOICE, TileKind.VALUE) else listOf(TileKind.VALUE)
         "timer" -> listOf(TileKind.TIMER, TileKind.VALUE)

@@ -46,14 +46,18 @@ private val PanelFont = FontFamily(
 
 private val PanelType = Typography().run {
     copy(
+        displayLarge = displayLarge.copy(fontFamily = PanelFont),
         displayMedium = displayMedium.copy(fontFamily = PanelFont, fontSize = 48.sp, lineHeight = 54.sp),
         displaySmall = displaySmall.copy(fontFamily = PanelFont, fontSize = 38.sp, lineHeight = 43.sp),
+        headlineLarge = headlineLarge.copy(fontFamily = PanelFont),
         headlineMedium = headlineMedium.copy(fontFamily = PanelFont, fontSize = 31.sp, lineHeight = 36.sp),
         headlineSmall = headlineSmall.copy(fontFamily = PanelFont, fontSize = 26.sp, lineHeight = 32.sp),
         titleLarge = titleLarge.copy(fontFamily = PanelFont, fontSize = 23.sp, lineHeight = 29.sp),
         titleMedium = titleMedium.copy(fontFamily = PanelFont, fontSize = 19.sp, lineHeight = 25.sp, letterSpacing = 0.sp),
+        titleSmall = titleSmall.copy(fontFamily = PanelFont),
         bodyLarge = bodyLarge.copy(fontFamily = PanelFont, fontSize = 18.sp, lineHeight = 24.sp),
         bodyMedium = bodyMedium.copy(fontFamily = PanelFont, fontSize = 16.sp, lineHeight = 22.sp),
+        bodySmall = bodySmall.copy(fontFamily = PanelFont),
         labelLarge = labelLarge.copy(fontFamily = PanelFont, fontSize = 16.sp, lineHeight = 20.sp),
         labelMedium = labelMedium.copy(fontFamily = PanelFont, fontSize = 14.sp, lineHeight = 18.sp),
         labelSmall = labelSmall.copy(fontFamily = PanelFont, fontSize = 13.sp, lineHeight = 17.sp),

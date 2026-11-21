@@ -2,11 +2,14 @@ package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SecondaryTabRow
-import androidx.compose.material3.Tab
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -16,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.HomeBadge
@@ -56,7 +60,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     }
     val detailTitle = when {
         state.connectionEditor -> "Connection"
-        activeFormat != null -> if (activeFormat.current == null) "Add tile" else "Edit tile"
+        activeFormat != null -> if (activeFormat.current == null) "Configure tile" else "Edit tile"
         activePicker != null -> activePicker.title
         activeBadge != null -> "Warning badge"
         activeRoom != null -> activeRoom.name
@@ -112,11 +116,17 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                 picker = null
             }
             adding -> Column {
-                SecondaryTabRow(selectedTabIndex = if (activePicker == SetupPicker.APP) 1 else 0) {
-                    Tab(selected = activePicker == SetupPicker.TILE, onClick = { picker = SetupPicker.TILE },
-                        text = { Text("Home Assistant") })
-                    Tab(selected = activePicker == SetupPicker.APP, onClick = { picker = SetupPicker.APP },
-                        text = { Text("Android apps") })
+                SingleChoiceSegmentedButtonRow(Modifier.padding(horizontal = setupPadding)
+                    .widthIn(max = 360.dp).fillMaxWidth()) {
+                    val sources = listOf(SetupPicker.TILE to "Home Assistant", SetupPicker.APP to "Android apps")
+                    sources.forEachIndexed { index, (source, label) ->
+                        SegmentedButton(
+                            selected = activePicker == source,
+                            onClick = { picker = source },
+                            shape = SegmentedButtonDefaults.itemShape(index, sources.size),
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) { Text(label) }
+                    }
                 }
                 if (activePicker == SetupPicker.APP) {
                     val added = remember(draft.favourites) { draft.favourites.mapNotNull { it.appPackage }.toSet() }

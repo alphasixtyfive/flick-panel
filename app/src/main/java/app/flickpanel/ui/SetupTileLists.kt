@@ -1,17 +1,18 @@
 package app.flickpanel.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -32,7 +33,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,8 +44,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
@@ -60,7 +64,9 @@ internal fun FavouriteEditor(
     draft: PanelConfig, state: PanelUi, add: () -> Unit, edit: (TileSpec) -> Unit,
     resize: (TileSpec) -> Unit, remove: (TileSpec) -> Unit, move: (String, Int) -> Unit, undo: (() -> Unit)?,
 ) {
-    val homeTiles = remember(draft.favourites) { draft.favourites.filter { it.showOnHome }.sortedBy { it.kind.homeGroup } }
+    val groups = remember(draft.favourites) {
+        draft.favourites.filter { it.showOnHome }.groupBy { it.kind.homeGroup }.toSortedMap()
+    }
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding)) {
         FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             FilledTonalButton(onClick = add, enabled = draft.favourites.size < 48, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -69,31 +75,39 @@ internal fun FavouriteEditor(
             }
             if (undo != null) TextButton(onClick = undo) { Text("Undo removal") }
         }
-        if (homeTiles.isEmpty()) {
+        if (groups.isEmpty()) {
             Text("Add something you use on this panel.", Modifier.padding(top = 12.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 14.dp)) {
-            itemsIndexed(homeTiles, key = { _, tile -> tile.entity }) { index, tile ->
-                val group = tile.kind.homeGroup
-                val after = homeTiles.getOrNull(index + 1)?.kind?.homeGroup == group
-                val before = homeTiles.getOrNull(index - 1)?.kind?.homeGroup == group
-                Surface(modifier = if (draft.reduceMotion) Modifier else Modifier.animateItem(),
-                    shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ReorderGrip(state.label(tile), before, after, { move(tile.entity, it) })
-                        Surface(onClick = { edit(tile) }, modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.surfaceContainer) {
-                            Column(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(horizontal = 8.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.Center) {
-                                Text(state.label(tile), style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 14.dp)) {
+            for ((group, tiles) in groups) {
+                item(key = "group:${group.name}") {
+                    Text(group.label, Modifier.padding(start = 16.dp, top = 12.dp, bottom = 6.dp).semantics { heading() },
+                        style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                }
+                itemsIndexed(tiles, key = { _, tile -> tile.entity }) { index, tile ->
+                    val before = index > 0
+                    val after = index < tiles.lastIndex
+                    val top = if (before) 4.dp else 20.dp
+                    val bottom = if (after) 4.dp else 20.dp
+                    val label = state.label(tile)
+                    val shape = remember(top, bottom) { RoundedCornerShape(top, top, bottom, bottom) }
+                    Surface(
+                        (if (draft.reduceMotion) Modifier else Modifier.animateItem()).fillMaxWidth().padding(bottom = 2.dp),
+                        shape = shape, color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ReorderGrip(label, before, after, { move(tile.entity, it) })
+                            Column(Modifier.weight(1f).heightIn(min = 60.dp).clip(MaterialTheme.shapes.medium)
+                                .clickable(role = Role.Button, onClickLabel = "Edit $label") { edit(tile) }
+                                .padding(horizontal = 8.dp, vertical = 8.dp), verticalArrangement = Arrangement.Center) {
+                                Text(label, style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 Text(if (tile.wideOnTablet) "${tile.kind.label} · Wide" else tile.kind.label,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                             }
+                            TileOptions(label, tile, edit = { edit(tile) }, resize = { resize(tile) }, remove = { remove(tile) })
                         }
-                        TileOptions(state.label(tile), tile, edit = { edit(tile) }, resize = { resize(tile) }, remove = { remove(tile) })
                     }
                 }
             }
@@ -127,24 +141,26 @@ internal fun RoomSetup(
 ) {
     var search by remember { mutableStateOf("") }
     val rooms = state.catalogue.rooms
-    val chosen = draft.roomIds ?: rooms.map { it.id }
+    val chosen = remember(draft.roomIds, rooms) { draft.roomIds ?: rooms.map { it.id } }
     val visible = remember(rooms, chosen, search) {
         val byId = rooms.associateBy { it.id }
         (chosen.mapNotNull(byId::get) + rooms.filterNot { it.id in chosen })
             .filter { it.name.contains(search.trim(), ignoreCase = true) }
     }
-    Column(Modifier.padding(horizontal = setupPadding, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Rooms on this panel", style = MaterialTheme.typography.titleMedium)
+    Column(Modifier.fillMaxSize().padding(horizontal = setupPadding, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (rooms.isNotEmpty()) SetupSearchField(search, { search = it }, "Find a room", Modifier.fillMaxWidth())
+        SetupSwitchRow("Heating controls", null, draft.showRoomHeating) { update(draft.copy(showRoomHeating = it)) }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = { update(draft.copy(roomIds = null)) }, enabled = draft.roomIds != null) { Text("Show all") }
             TextButton(onClick = { update(draft.copy(roomIds = emptyList())) }, enabled = chosen.isNotEmpty()) { Text("Clear selection") }
         }
-        SetupSwitchRow("Heating controls", null, draft.showRoomHeating) { update(draft.copy(showRoomHeating = it)) }
         if (state.loadingCatalogue) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
         else if (rooms.isEmpty()) Text("No rooms available")
+        else if (visible.isEmpty()) Text("No matching rooms", Modifier.padding(horizontal = 16.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         else {
-            OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Find a room") })
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
                 items(visible, key = { it.id }) { room ->
                     val position = chosen.indexOf(room.id)
                     val selected = position >= 0
@@ -153,11 +169,11 @@ internal fun RoomSetup(
                         update(draft.copy(roomIds = next))
                     }
                     Surface(selected = selected, onClick = toggle, enabled = selected || chosen.size < 48,
-                        shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 10.dp),
+                        shape = MaterialTheme.shapes.medium, color = Color.Transparent) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(end = 10.dp))
-                            Text(room.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
+                            Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(end = 16.dp))
+                            Text(room.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
                             if (selected) ReorderGrip(room.name, position > 0, position < chosen.lastIndex) { delta ->
                                 val next = chosen.toMutableList()
@@ -182,10 +198,11 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
     val cameras = remember(state.catalogue) {
         state.catalogue.entries.filter { it.visible && it.entity.domain == "camera" }.map { it.entity }
     }
-    val saved = draft.favourites.associateBy { it.entity }
-    Column(Modifier.padding(horizontal = setupPadding, vertical = 8.dp)) {
+    val saved = remember(draft.favourites) { draft.favourites.associateBy { it.entity } }
+    Column(Modifier.fillMaxSize().padding(horizontal = setupPadding, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Star cameras to show them on Home.", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Text("Star a camera to pin it to Favourites.", Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TextButton(onClick = {
                 val missing = cameras.filter { it.id !in saved }.take(48 - draft.favourites.size)
                 update(draft.copy(favourites = draft.favourites + missing.map { TileSpec(it.id, TileKind.CAMERA, showOnHome = false) }))
@@ -193,7 +210,7 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
         }
         if (state.loadingCatalogue) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
         else if (cameras.isEmpty()) Text("No cameras available")
-        else LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        else LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
             items(cameras, key = { it.id }) { camera ->
                 val tile = saved[camera.id]
                 val canAdd = draft.favourites.size < 48
@@ -205,31 +222,29 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
                     update(draft.copy(favourites = next))
                 }
                 val featured = tile?.showOnHome == true
-                Surface(shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).padding(horizontal = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Row(Modifier.weight(1f).heightIn(min = 58.dp)
-                            .toggleable(tile != null, enabled = tile != null || canAdd, role = Role.Checkbox,
-                                onValueChange = { inGallery() })
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = tile != null, onCheckedChange = null, enabled = tile != null || canAdd)
-                            Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                                maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                        IconButton(onClick = {
-                            val next = if (tile != null) draft.favourites.map {
-                                if (it.entity == tile.entity) it.copy(showOnHome = !featured) else it
-                            } else draft.favourites + TileSpec(camera.id, TileKind.CAMERA)
-                            update(draft.copy(favourites = next))
-                        }, enabled = tile != null || canAdd) {
-                            Icon(if (featured) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                                if (featured) "Remove $name from Home" else "Show $name on Home",
-                                tint = if (featured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (tile != null) IconButton(onClick = { edit(tile) }) {
-                            Icon(Icons.Rounded.Edit, "Edit $name")
-                        }
+                Row(Modifier.fillMaxWidth().heightIn(min = 58.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).heightIn(min = 58.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .toggleable(tile != null, enabled = tile != null || canAdd, role = Role.Checkbox,
+                            onValueChange = { inGallery() })
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = tile != null, onCheckedChange = null, enabled = tile != null || canAdd)
+                        Text(name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    IconButton(onClick = {
+                        val next = if (tile != null) draft.favourites.map {
+                            if (it.entity == tile.entity) it.copy(showOnHome = !featured) else it
+                        } else draft.favourites + TileSpec(camera.id, TileKind.CAMERA)
+                        update(draft.copy(favourites = next))
+                    }, enabled = tile != null || canAdd) {
+                        Icon(if (featured) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            if (featured) "Remove $name from Home" else "Show $name on Home",
+                            tint = if (featured) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (tile != null) IconButton(onClick = { edit(tile) }) {
+                        Icon(Icons.Rounded.Edit, "Edit $name")
                     }
                 }
             }

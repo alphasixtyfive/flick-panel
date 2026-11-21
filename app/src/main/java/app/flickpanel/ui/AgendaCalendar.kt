@@ -54,6 +54,8 @@ internal class AgendaDates(private val zone: ZoneId, private val today: LocalDat
 
     fun eventDay(event: AgendaEvent) = maxOf(today, day(event.start))
 
+    fun todayLabel() = today.format(shortDate)
+
     fun dayName(date: LocalDate) = when (date) {
         today -> "Today"
         today.plusDays(1) -> "Tomorrow"

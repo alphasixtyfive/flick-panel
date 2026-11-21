@@ -70,14 +70,16 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Selector** displays the choices from a Home Assistant select entity. **Number control**
   uses the minimum, maximum and increment from a number entity. For buttons, scenes and
   scripts, **Confirm before running** adds a confirmation step.
-- **Tasks** shows how many tasks are open and previews the first one. Open the tile
-  to check tasks off, add a task when the list supports it, or expand completed items.
-- **Calendar** previews the next event and opens a seven-day agenda grouped by date.
-  It includes all-day and ongoing events. **Wide** lets either tile preview two items.
+- **Compact reading** puts readings such as temperature and humidity in a short strip
+  on Favourites. The tile shows an icon and a value, and TalkBack reads the tile name.
+- **Tasks** shows the number of open items and previews up to three on Favourites.
+  Open the tile to check tasks off, add a task when supported, or view completed items.
+- **Calendar** previews up to two events on Favourites and opens a seven-day agenda
+  grouped by date. The preview shows today's date when the agenda is empty.
 - **Music player** shows the current track on the tile. Tap it for artwork,
   playback and a track position bar. The speaker button opens volume control.
-  **Browse** opens the selected player's library and returns to Now Playing when
-  you start something. Controls follow the player's Home Assistant capabilities.
+  **Browse music** opens the selected player's library. Its playback bar stays within
+  reach while you browse. Controls follow the player's Home Assistant capabilities.
   Music Assistant playlists and radio stations appear with cover art and station logos when available.
 - **Cover** shows the state and position reported by Home Assistant. It offers the
   Open, Close, and Stop actions advertised by the device. A gate uses the whole

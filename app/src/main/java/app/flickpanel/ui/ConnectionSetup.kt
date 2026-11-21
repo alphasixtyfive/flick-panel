@@ -3,28 +3,18 @@ package app.flickpanel.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Backspace
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -34,8 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -98,48 +86,6 @@ private fun PinField(value: String, change: (String) -> Unit, label: String, ena
             imeAction = if (submit == null) ImeAction.Next else ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { submit?.invoke() }),
         modifier = Modifier.fillMaxWidth())
-}
-
-@Composable
-internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -> Unit) {
-    var pin by remember { mutableStateOf("") }
-    AlertDialog(modifier = Modifier.widthIn(max = 304.dp), onDismissRequest = cancel, title = { Text("Unlock setup") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(7.dp),
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if (pin.isEmpty()) "Enter PIN" else "●".repeat(pin.length),
-                modifier = Modifier.padding(bottom = 7.dp).clearAndSetSemantics {
-                    contentDescription = if (pin.isEmpty()) "Enter PIN" else "${pin.length} digits entered"
-                }, style = MaterialTheme.typography.titleLarge)
-            ErrorText(state.error)
-            val keyPadding = PaddingValues(vertical = 6.dp)
-            for (digits in listOf("123", "456", "789", " 0⌫")) {
-                Row(Modifier.widthIn(max = 220.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (digit in digits) {
-                        val key = Modifier.weight(1f).heightIn(min = 52.dp)
-                        when (digit) {
-                            ' ' -> Spacer(key)
-                            '⌫' -> FilledTonalButton(onClick = { pin = pin.dropLast(1) }, modifier = key, contentPadding = keyPadding,
-                                enabled = pin.isNotEmpty() && !state.busy) {
-                                Icon(Icons.AutoMirrored.Rounded.Backspace, "Delete last digit")
-                            }
-                            else -> FilledTonalButton(onClick = { pin += digit }, modifier = key, contentPadding = keyPadding,
-                                enabled = pin.length < 8 && !state.busy) {
-                                Text(digit.toString(), style = MaterialTheme.typography.titleLarge)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }, confirmButton = {
-        Button(onClick = {
-            val submitted = pin
-            pin = ""
-            unlock(submitted)
-        }, enabled = !state.busy && pin.length >= 4) {
-            Text(if (state.busy) "Checking…" else "Unlock")
-        }
-    }, dismissButton = { TextButton(onClick = cancel) { Text("Cancel") } })
 }
 
 @Composable
