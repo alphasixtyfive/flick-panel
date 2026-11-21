@@ -61,7 +61,8 @@ internal data class PanelUi(
     val showingDashboard get() = configured && !clock && !screenBlank && !editor && !unlocking && !hasViewer
 
     fun entity(id: String) = entities[id] ?: catalogue.entity(id)
-    fun label(spec: TileSpec) = spec.label ?: entity(spec.entity)?.name ?: spec.entity.substringAfter('.').replace('_', ' ')
+    fun entityName(id: String) = entity(id)?.name ?: id.substringAfter('.').replace('_', ' ')
+    fun label(spec: TileSpec) = spec.label ?: entityName(spec.entity)
 
     fun wakeDisplay(): PanelUi {
         if (!configured || (!clock && !screenBlank) || editor || unlocking || hasViewer) return this

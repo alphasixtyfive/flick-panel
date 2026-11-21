@@ -40,6 +40,38 @@ class RoomLayoutTest {
     }
 
     @Test
+    fun curatedRoomsIncludeAssignedThermostatsUnlessHidden() {
+        val kitchen = Area("kitchen", "Kitchen")
+        val light = RoomTilePreference("light.pendant")
+        val player = RoomTilePreference("media_player.kitchen")
+        val thermostat = RoomTilePreference("climate.kitchen")
+        val catalogue = Catalogue(listOf(
+            Entry(Entity(light.entity, "on"), kitchen.id, diagnostic = false, visible = true),
+            Entry(Entity(player.entity, "idle", JSONObject().put("friendly_name", "Kitchen")),
+                kitchen.id, diagnostic = false, visible = true),
+            Entry(Entity(thermostat.entity, "heat", JSONObject().put("friendly_name", "Kitchen")),
+                kitchen.id, diagnostic = false, visible = true),
+            Entry(Entity("light.spare", "on"), kitchen.id, diagnostic = false, visible = true),
+        ), listOf(kitchen))
+        val customTiles = listOf(light, player)
+        val config = PanelConfig(roomTiles = mapOf(kitchen.id to customTiles))
+        val state = PanelUi(layout = RoomLayout(config, catalogue))
+        val tiles = state.roomSections.single().tiles
+        assertEquals(listOf(light.entity, player.entity, thermostat.entity), tiles.map { it.entity })
+        assertEquals(listOf("Kitchen", "Kitchen"), tiles.drop(1).map(state::label))
+
+        val hidden = config.copy(roomTiles = mapOf(kitchen.id to (customTiles + thermostat.copy(hidden = true))))
+        val heatingOff = config.copy(showRoomHeating = false)
+        for (withoutThermostat in listOf(hidden, heatingOff)) {
+            val section = RoomLayout(withoutThermostat, catalogue).sections.single()
+            assertEquals(customTiles.map { it.entity }, section.tiles.map { it.entity })
+        }
+        val editedWithHeatingOff = RoomLayout(heatingOff, catalogue).controls(kitchen).map(RoomControl::preference)
+        val heatingOnAgain = config.copy(roomTiles = mapOf(kitchen.id to editedWithHeatingOff))
+        assertEquals(tiles, RoomLayout(heatingOnAgain, catalogue).sections.single().tiles)
+    }
+
+    @Test
     fun hidingHeatingKeepsTheChosenRoomsAndTheirLightsInOrder() {
         val kitchen = Area("kitchen", "Kitchen")
         val hallway = Area("hallway", "Hallway")

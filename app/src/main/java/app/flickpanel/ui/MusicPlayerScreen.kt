@@ -42,7 +42,7 @@ import app.flickpanel.ha.text
 @Composable
 internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel) {
     val entity = state.entities[id]
-    val label = state.entity(id)?.name ?: "Music"
+    val label = state.entityName(id)
     val playback = MusicPlayback(label, entity, state.link == Link.ONLINE && entity?.available == true, id in state.pending)
     val artwork = rememberPanelImage(playback.current?.attributes?.text("entity_picture"),
         model::cachedArtwork, model::loadArtwork)

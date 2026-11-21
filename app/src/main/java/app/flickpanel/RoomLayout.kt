@@ -54,28 +54,31 @@ internal data class RoomLayout(
         val saved = config.roomTiles[area.id]
         val savedIds = saved.orEmpty().mapTo(hashSetOf(), RoomTilePreference::entity)
         val savedCount = savedIds.count { catalogue.roomEntity(it) != null }
+        fun shownByDefault(device: Entity) = when (device.domain) {
+            "climate" -> true
+            "light" -> saved == null
+            else -> false
+        }
         val discovered = catalogue.room(area.id).asSequence().map(Entry::entity)
             .filterNot { it.id in savedIds }
-            .sortedWith(compareBy({ !automaticRoomControl(it) }, { it.domain != "light" }, { it.id !in favourites }))
+            .sortedWith(compareBy({ !shownByDefault(it) }, { it.domain != "light" }, { it.id !in favourites }))
             .take((roomTileLimit - savedCount).coerceAtLeast(0))
         return buildList {
             for (preference in saved.orEmpty()) {
                 val device = catalogue.roomEntity(preference.entity)
-                val tile = device?.let { roomTile(area, it, favourites[it.id]) }
+                val tile = device?.let(::roomTile)
                 add(roomControl(preference, device, tile))
             }
             for (device in discovered) {
-                val tile = roomTile(area, device, favourites[device.id])
+                val tile = roomTile(device)
                 val preference = RoomTilePreference(
                     device.id, lightFormat = tile.kind.takeIf { device.domain == "light" },
-                    hidden = saved != null || !automaticRoomControl(device),
+                    hidden = !shownByDefault(device),
                 )
                 add(roomControl(preference, device, tile))
             }
         }
     }
-
-    private fun automaticRoomControl(entity: Entity): Boolean = entity.domain == "light" || entity.domain == "climate"
 
     private fun roomControl(preference: RoomTilePreference, device: Entity?, tile: TileSpec?): RoomControl {
         if (device == null || tile == null || !config.showRoomHeating && device.domain == "climate") {
@@ -91,20 +94,12 @@ internal data class RoomLayout(
         return RoomControl(preference, tile.copy(kind = kind, wideOnTablet = preference.wideOnTablet), canDim)
     }
 
-    private fun roomTile(area: Area, device: Entity, favourite: TileSpec?): TileSpec {
-        val kind = when {
-            favourite?.kind == TileKind.SLIDER && TileKind.SLIDER in device.kinds() -> TileKind.SLIDER
-            else -> checkNotNull(roomTileKind(device.id))
+    private fun roomTile(device: Entity): TileSpec {
+        val kind = if (favourites[device.id]?.kind == TileKind.SLIDER && TileKind.SLIDER in device.kinds()) {
+            TileKind.SLIDER
+        } else {
+            checkNotNull(roomTileKind(device.id))
         }
-        val name = device.name
-        val prefix = "${area.name} "
-        val label = favourite?.label ?: when {
-            kind == TileKind.CLIMATE && name.equals(area.name, ignoreCase = true) -> "Heating"
-            kind == TileKind.MEDIA && name.equals(area.name, ignoreCase = true) -> "Music"
-            name.startsWith(prefix, ignoreCase = true) -> name.drop(prefix.length)
-                .trimStart().replaceFirstChar { it.uppercase() }.ifBlank { name }
-            else -> null
-        }
-        return TileSpec(device.id, kind, label)
+        return TileSpec(device.id, kind)
     }
 }

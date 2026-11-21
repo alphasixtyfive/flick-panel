@@ -12,8 +12,8 @@ android {
         applicationId = "app.flickpanel"
         minSdk = 28
         targetSdk = 35
-        versionCode = 72
-        versionName = "0.1.71"
+        versionCode = 73
+        versionName = "0.1.72"
     }
     buildTypes {
         release {
