@@ -30,7 +30,7 @@ internal fun MusicPlaybackBar(
 ) {
     val colors = MaterialTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxWidth().clip(panelCardShape).background(colors.surfaceContainerHigh)) {
-        val inlineVolume = maxWidth >= 400.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val inlineVolume = maxWidth >= 440.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).clickable(enabled = !starting, role = Role.Button,
