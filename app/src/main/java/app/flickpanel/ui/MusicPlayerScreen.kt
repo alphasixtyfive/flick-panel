@@ -115,9 +115,11 @@ internal fun NowPlaying(
     ) {
         val wide = maxWidth >= 680.dp
         val inset = if (wide) 28.dp else 20.dp
-        val verticalPadding = 16.dp
+        val verticalPadding = 24.dp
         val headerGap = 24.dp
         val headerButtonSize = 48.dp
+        val showActions = browse != null || level != null
+        val actionsHeight = if (showActions) headerButtonSize + headerGap else 0.dp
         val availableHeight = maxHeight
         Column(
             Modifier.widthIn(max = musicScreenWidth).fillMaxWidth().verticalScroll(rememberScrollState())
@@ -129,22 +131,14 @@ internal fun NowPlaying(
                 Text(label, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.headlineSmall,
                     color = colors.onSurface,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (browse != null) {
-                    FilledTonalButton(onClick = browse, enabled = available, modifier = Modifier.heightIn(min = headerButtonSize)) {
-                        if (wide) Icon(Icons.Rounded.LibraryMusic, null, Modifier.padding(end = 8.dp))
-                        Text("Browse")
-                    }
-                }
-                if (level != null) {
-                    PlayerVolumeButton(entity.id, level, available, pending == null, volume)
-                }
                 FilledTonalIconButton(onClick = close, modifier = Modifier.size(headerButtonSize)) {
                     Icon(Icons.Rounded.Close, "Close music")
                 }
             }
             if (wide) {
-                val coverWidth = (availableHeight * .65f).coerceIn(112.dp, 340.dp)
-                val bodyHeight = (availableHeight - verticalPadding * 2 - headerGap - headerButtonSize).coerceAtLeast(0.dp)
+                val bodyHeight = (availableHeight - verticalPadding * 2 - headerGap - headerButtonSize - actionsHeight)
+                    .coerceAtLeast(0.dp)
+                val coverWidth = bodyHeight.coerceIn(112.dp, 340.dp)
                 Row(Modifier.fillMaxWidth().heightIn(min = bodyHeight), horizontalArrangement = Arrangement.spacedBy(28.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     MusicArtwork(artwork, Modifier.widthIn(max = coverWidth).weight(1f, fill = false).aspectRatio(1f), 76.dp)
@@ -155,6 +149,18 @@ internal fun NowPlaying(
                 MusicArtwork(artwork, Modifier.align(Alignment.CenterHorizontally).widthIn(max = coverWidth)
                     .fillMaxWidth().aspectRatio(1f), 65.dp)
                 PlaybackControls(entity, available, pending, wide, transport, seek, Modifier.fillMaxWidth())
+            }
+            if (showActions) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)) {
+                    if (browse != null) {
+                        FilledTonalButton(onClick = browse, enabled = available, modifier = Modifier.heightIn(min = headerButtonSize)) {
+                            Icon(Icons.Rounded.LibraryMusic, null, Modifier.padding(end = 8.dp))
+                            Text("Browse")
+                        }
+                    }
+                    if (level != null) PlayerVolumeButton(entity.id, level, available, pending == null, volume)
+                }
             }
         }
     }

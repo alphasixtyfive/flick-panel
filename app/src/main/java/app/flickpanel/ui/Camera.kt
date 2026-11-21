@@ -138,11 +138,12 @@ internal enum class CameraStatus(val label: String) {
 @Composable
 internal fun CameraViewer(
     id: String, label: String?, canStream: Boolean, openedAt: Long, gateId: String?, state: PanelUi, model: PanelViewModel,
+    streamCamera: String = id,
 ) {
-    var url by remember(id) { mutableStateOf<HttpUrl?>(null) }
-    var status by remember(id) { mutableStateOf(if (canStream) CameraStatus.CONNECTING else CameraStatus.STILL) }
-    var videoAspect by remember(id) { mutableStateOf<Float?>(null) }
-    var firstFrame by remember(id) { mutableStateOf(false) }
+    var url by remember(streamCamera) { mutableStateOf<HttpUrl?>(null) }
+    var status by remember(streamCamera) { mutableStateOf(if (canStream) CameraStatus.CONNECTING else CameraStatus.STILL) }
+    var videoAspect by remember(streamCamera) { mutableStateOf<Float?>(null) }
+    var firstFrame by remember(streamCamera) { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     fun playbackFailed() {
@@ -151,14 +152,14 @@ internal fun CameraViewer(
         status = CameraStatus.UNAVAILABLE
     }
 
-    LaunchedEffect(id, canStream, lifecycle) {
+    LaunchedEffect(streamCamera, canStream, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             status = if (canStream) CameraStatus.CONNECTING else CameraStatus.STILL
             videoAspect = null
             firstFrame = false
             if (!canStream) return@repeatOnLifecycle
             try {
-                url = model.stream(id)
+                url = model.stream(streamCamera)
                 Log.i("FlickPanelCamera", "hls_url_ms=${SystemClock.elapsedRealtime() - openedAt}")
                 awaitCancellation()
             } catch (cancelled: CancellationException) {

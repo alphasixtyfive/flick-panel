@@ -670,6 +670,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val ids = current.config.favourites.filter { it.kind != TileKind.APP }.mapTo(mutableSetOf()) { it.entity }
         current.config.favourites.mapNotNullTo(ids) { it.statusEntity }
         current.config.favourites.mapNotNullTo(ids) { it.cameraGate }
+        current.config.favourites.mapNotNullTo(ids) { it.cameraStream }
         if (current.config.roomIds?.isNotEmpty() == true || current.page == Page.ROOMS) {
             current.roomSections.forEach { section -> section.tiles.mapTo(ids) { it.entity } }
         }

@@ -31,6 +31,7 @@ data class TileSpec(
     val cameraGate: String? = null,
     val confirmAction: Boolean = false,
     val readerAttribute: String? = null,
+    val cameraStream: String? = null,
 ) {
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
@@ -64,6 +65,7 @@ internal object PanelConfigCodec {
         .put("tiles", JSONArray(config.favourites.map { tile ->
             JSONObject().put("entity", tile.entity).put("kind", tile.kind.name).put("label", tile.label)
                 .put("status", tile.statusEntity).put("home", tile.showOnHome).put("gate", tile.cameraGate)
+                .put("stream", tile.cameraStream)
                 .apply {
                     if (tile.wideOnTablet) put("wide", true)
                     if (tile.confirmAction) put("confirm", true)
@@ -121,7 +123,10 @@ internal object PanelConfigCodec {
                 wideOnTablet = kind.resizable && tile.optBoolean("wide"),
                 cameraGate = tile.text("gate")?.takeIf { kind == TileKind.CAMERA && validEntity(it) && it.startsWith("cover.") },
                 confirmAction = kind == TileKind.ACTION && tile.optBoolean("confirm"),
-                readerAttribute = readerAttribute)
+                readerAttribute = readerAttribute,
+                cameraStream = tile.text("stream")?.takeIf {
+                    kind == TileKind.CAMERA && it != entity && validEntity(it) && it.startsWith("camera.")
+                })
         }.distinctBy { it.entity }
         return PanelConfig(
             favourites = tiles.take(48),

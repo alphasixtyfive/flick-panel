@@ -155,6 +155,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
     var showOnHome by remember(format) { mutableStateOf(format.current?.showOnHome ?: format.suggestedOnHome) }
     var wideOnTablet by remember(format) { mutableStateOf(format.current?.wideOnTablet ?: false) }
     var cameraGate by remember(format) { mutableStateOf(format.current?.cameraGate) }
+    var cameraStream by remember(format) { mutableStateOf(format.current?.cameraStream) }
     var confirmAction by remember(format) { mutableStateOf(format.current?.confirmAction ?: false) }
     var readerAttribute by remember(format) { mutableStateOf(format.current?.readerAttribute) }
     Column(Modifier.fillMaxSize()) {
@@ -206,6 +207,14 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                     state.catalogue.entries.filter { it.visible && it.entity.gateWithOpenControl }.map { it.entity }
                 }
                 LinkedEntitySetting("Gate control", cameraGate, gates, state) { cameraGate = it }
+                val streams = remember(state.catalogue, format.entity.id) {
+                    state.catalogue.entries.map { it.entity }.filter {
+                        it.domain == "camera" && it.id != format.entity.id && it.attributes.optLong("supported_features") and 2L != 0L
+                    }.sortedBy { it.name.lowercase() }
+                }
+                LinkedEntitySetting("Live stream source", cameraStream, streams, state, defaultLabel = "This camera") {
+                    cameraStream = it
+                }
             }
             if (kind == TileKind.READER) {
                 val attributes = remember(preview.attributes) { preview.readerAttributes() }
@@ -220,6 +229,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                     cameraGate = cameraGate.takeIf { kind == TileKind.CAMERA },
                     confirmAction = kind == TileKind.ACTION && confirmAction,
                     readerAttribute = readerAttribute.takeIf { kind == TileKind.READER },
+                    cameraStream = cameraStream.takeIf { kind == TileKind.CAMERA },
                 ))
             }) { Text(if (format.current == null) "Add tile" else "Apply") }
         }
@@ -244,14 +254,15 @@ private fun ReaderSource(selected: String?, attributes: List<String>, change: (S
 
 @Composable
 private fun LinkedEntitySetting(
-    title: String, selected: String?, options: List<Entity>, state: PanelUi, change: (String?) -> Unit,
+    title: String, selected: String?, options: List<Entity>, state: PanelUi, defaultLabel: String = "None",
+    change: (String?) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    val description = selected?.let { state.entity(it)?.name ?: it } ?: "None"
+    val description = selected?.let { state.entity(it)?.name ?: it } ?: defaultLabel
     Box {
         SettingLink(title, description, { open = true })
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("None") }, onClick = { open = false; change(null) })
+            DropdownMenuItem(text = { Text(defaultLabel) }, onClick = { open = false; change(null) })
             for (option in options) {
                 DropdownMenuItem(text = { Text(option.name) }, onClick = { open = false; change(option.id) })
             }

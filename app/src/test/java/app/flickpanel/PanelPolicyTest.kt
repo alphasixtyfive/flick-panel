@@ -126,6 +126,14 @@ class PanelPolicyTest {
             PanelConfigCodec.decode(PanelConfigCodec.encode(config)).favourites)
     }
 
+    @Test fun cameraCanUseAnAlternateLiveStreamWithoutChangingItsTile() {
+        val camera = TileSpec("camera.gate", TileKind.CAMERA, cameraGate = "cover.gate", cameraStream = "camera.gate_low")
+        val invalid = TileSpec("camera.side", TileKind.CAMERA, cameraStream = "sensor.side")
+        val config = PanelConfig(favourites = listOf(camera, invalid))
+        assertEquals(listOf(camera, invalid.copy(cameraStream = null)),
+            PanelConfigCodec.decode(PanelConfigCodec.encode(config)).favourites)
+    }
+
     @Test fun layoutPreservesAppearanceAndActionConfirmation() {
         val action = TileSpec("script.night_mode", TileKind.ACTION, confirmAction = true)
         val value = TileSpec("sensor.power", TileKind.VALUE, confirmAction = true)

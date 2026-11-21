@@ -97,6 +97,9 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - A camera can link an existing Home Assistant **gate** cover. The live viewer offers
   **Open gate** when that cover is closed. The cover's Home Assistant automation
   controls when and how the gate moves.
+- **Live stream source** in a camera tile's setup can use a second Home Assistant camera
+  entity for live playback. Use it for a lower-resolution feed on tablets. The tile
+  keeps its original preview, label and gate control.
 
 ## Control the panel from Home Assistant
 

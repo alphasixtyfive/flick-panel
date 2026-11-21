@@ -147,18 +147,14 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel, cl
             val wide = maxWidth >= 680.dp
             val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
             val libraryColumns = if (minOf(maxWidth, musicScreenWidth) >= 700.dp * fontScale) 2 else 1
-            val speakerInline = maxWidth >= 620.dp
             Column(
                 Modifier.widthIn(max = musicScreenWidth).fillMaxSize()
                     .padding(horizontal = if (wide) 28.dp else 20.dp)
-                    .padding(top = 16.dp),
+                    .padding(top = 24.dp, bottom = 20.dp),
             ) {
                 MusicHeader(
                     collection = current?.title,
-                    player = player,
-                    speakerInline = speakerInline,
                     starting = starting,
-                    back = ::back,
                     playFolder = current?.takeIf { it.playable }?.let { folder -> { play(folder) } },
                 )
                 if (playFailed) {
@@ -176,7 +172,7 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel, cl
                     LazyColumn(
                         Modifier.weight(1f),
                         state = overviewScroll,
-                        contentPadding = PaddingValues(bottom = 24.dp),
+                        contentPadding = PaddingValues(bottom = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         items(shelves) { shelf ->
@@ -206,13 +202,27 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel, cl
                         columns = GridCells.Fixed(libraryColumns),
                         modifier = Modifier.weight(1f),
                         state = gridScroll,
-                        contentPadding = PaddingValues(bottom = 24.dp),
+                        contentPadding = PaddingValues(bottom = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(results) { item ->
                             MusicEntry(item, model, !starting, open = { open(item) }, play = { play(item) })
                         }
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    FilledTonalButton(onClick = ::back, enabled = !starting, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, null, Modifier.size(20.dp))
+                        Text(if (current == null) "Back to player" else "Back", Modifier.padding(start = 8.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    player?.trim()?.takeIf { it.isNotEmpty() }?.let { speaker ->
+                        MusicSpeaker(speaker, Modifier.widthIn(max = 192.dp))
                     }
                 }
             }
@@ -223,50 +233,29 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel, cl
 @Composable
 private fun MusicHeader(
     collection: String?,
-    player: String?,
-    speakerInline: Boolean,
     starting: Boolean,
-    back: () -> Unit,
     playFolder: (() -> Unit)?,
 ) {
-    val type = MaterialTheme.typography
-    val speaker = player?.trim()?.takeIf { it.isNotEmpty() }
-    val title = collection ?: "Browse"
-    Column(
+    Row(
         Modifier.fillMaxWidth().padding(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            IconButton(onClick = back, enabled = !starting, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, if (collection == null) "Back to player" else "Back")
+        Text(
+            collection ?: "Browse", Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
+        if (starting) {
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(22.dp).semantics {
+                    contentDescription = "Starting playback"
+                }, strokeWidth = 2.dp)
             }
-            Text(
-                title, Modifier.weight(1f).semantics { heading() }, style = type.headlineMedium,
-                maxLines = 2, overflow = TextOverflow.Ellipsis,
-            )
-            if (speaker != null && speakerInline) {
-                MusicSpeaker(speaker, Modifier.widthIn(max = 192.dp))
+        } else if (playFolder != null) {
+            FilledTonalButton(onClick = playFolder, modifier = Modifier.heightIn(min = 48.dp)) {
+                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp))
+                Text("Play", Modifier.padding(start = 6.dp))
             }
-            if (playFolder != null) {
-                FilledTonalButton(onClick = playFolder, enabled = !starting, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp))
-                    Text("Play", Modifier.padding(start = 6.dp))
-                }
-            }
-            if (starting) {
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(22.dp).semantics {
-                        contentDescription = "Starting playback"
-                    }, strokeWidth = 2.dp)
-                }
-            }
-        }
-        if (speaker != null && !speakerInline) {
-            MusicSpeaker(speaker, Modifier.padding(start = 62.dp))
         }
     }
 }

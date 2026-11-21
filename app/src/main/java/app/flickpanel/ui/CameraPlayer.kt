@@ -1,6 +1,9 @@
 package app.flickpanel.ui
 
-import android.graphics.Color
+import android.annotation.SuppressLint
+import android.os.Build
+import android.util.Log
+import android.view.LayoutInflater
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +16,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
@@ -22,12 +26,15 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import app.flickpanel.R
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 
 @androidx.annotation.OptIn(UnstableApi::class)
+@SuppressLint("InflateParams") // AndroidView supplies the parent and layout parameters.
 @Composable
 internal fun CameraPlayer(
     stream: HttpUrl,
@@ -48,6 +55,14 @@ internal fun CameraPlayer(
 
     LifecycleStartEffect(stream, transport) {
         val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+        if (Build.DEVICE.equals("TB128FU", ignoreCase = true)) {
+            // This Lenovo decoder can stall on HEVC streams that advertise a level above its capabilities.
+            renderers.forceDisableMediaCodecAsynchronousQueueing()
+            renderers.setMediaCodecSelector { mimeType, secure, tunneling ->
+                val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, secure, tunneling)
+                if (mimeType == MimeTypes.VIDEO_H265) decoders.sortedBy { !it.softwareOnly } else decoders
+            }
+        }
         val loadControl = DefaultLoadControl.Builder().setBufferDurationsMs(10_000, 20_000, 500, 1_500).build()
         val active = ExoPlayer.Builder(context, renderers).setLoadControl(loadControl).build()
         val listener = object : Player.Listener {
@@ -59,7 +74,10 @@ internal fun CameraPlayer(
                 }
             }
 
-            override fun onPlayerError(error: PlaybackException) = reportError()
+            override fun onPlayerError(error: PlaybackException) {
+                Log.w("FlickPanelCamera", error.errorCodeName)
+                reportError()
+            }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
@@ -88,10 +106,7 @@ internal fun CameraPlayer(
     }
     val active = player ?: return
     AndroidView(
-        factory = { PlayerView(it).apply {
-            useController = false
-            setShutterBackgroundColor(Color.TRANSPARENT)
-        } },
+        factory = { LayoutInflater.from(it).inflate(R.layout.camera_player, null) as PlayerView },
         update = {
             it.resizeMode = if (fillVideo) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
             it.player = active
