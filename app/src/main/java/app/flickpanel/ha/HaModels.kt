@@ -207,19 +207,22 @@ internal fun Long.canBrowseMusic() = hasMediaFeature(131_072L) && hasMediaFeatur
 
 internal data class MediaChoice(
     val id: String, val type: String, val title: String, val expandable: Boolean, val playable: Boolean,
-    val artwork: String? = null
+    val artwork: String? = null, val mediaClass: String? = null, val childrenMediaClass: String? = null,
 ) {
+    val category get() = if (mediaClass == "directory") childrenMediaClass ?: mediaClass else mediaClass
+
     companion object {
         fun from(row: JSONObject): MediaChoice? {
             val id = row.text("media_content_id")?.takeIf { it.length <= 2048 } ?: return null
             val type = row.text("media_content_type")?.take(100) ?: return null
             val title = row.text("title")?.take(140) ?: return null
-            val group = row.optString("media_class")
+            val group = row.text("media_class")?.take(40)
             val isAudio = group in setOf("music", "artist", "album", "track", "playlist", "genre", "podcast", "audiobook", "episode", "channel")
             val folder = row.optBoolean("can_expand") && (isAudio || group == "directory" || id.startsWith("media-source://radio_browser"))
             val playable = row.optBoolean("can_play") && (isAudio || type.startsWith("audio/"))
             val artwork = row.text("thumbnail")?.takeIf { it.isNotBlank() && it.length <= 4096 }
-            return if (folder || playable) MediaChoice(id, type, title, folder, playable, artwork) else null
+            val children = row.text("children_media_class")?.take(40)
+            return if (folder || playable) MediaChoice(id, type, title, folder, playable, artwork, group, children) else null
         }
     }
 }

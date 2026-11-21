@@ -3,6 +3,7 @@ package app.flickpanel
 import app.flickpanel.ha.HaClient
 import app.flickpanel.ha.HaCredentials
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.MediaChoice
 import app.flickpanel.ha.parseServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -25,6 +26,22 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 
 class HaSessionTest {
+    @Test fun mediaFoldersUseTheCategoryHomeAssistantReports() {
+        val row = JSONObject("""{
+            "media_content_id":"opaque/category",
+            "media_content_type":"provider",
+            "title":"Meine Musik",
+            "media_class":"directory",
+            "children_media_class":"artist",
+            "can_expand":true
+        }""")
+        assertEquals("artist", MediaChoice.from(row)?.category)
+        row.remove("children_media_class")
+        assertEquals("directory", MediaChoice.from(row)?.category)
+        row.put("media_class", "album").put("children_media_class", "track")
+        assertEquals("album", MediaChoice.from(row)?.category)
+    }
+
     @Test fun discoversControlsAndUsesOneSocketForStateActionsHistoryAndMedia() = runBlocking {
         val fixture = FakeHome()
         MockWebServer().use { server ->
@@ -45,6 +62,7 @@ class HaSessionTest {
                 assertEquals("Radio favourites", music.single().title)
                 assertEquals(true, music.single().playable)
                 assertEquals("/api/media_player_proxy/cover", music.single().artwork)
+                assertEquals("playlist", music.single().category)
                 assertNotNull(client.artwork(requireNotNull(music.single().artwork)))
                 client.command("media_player.kitchen", "media_player", "play_media", JSONObject()
                     .put("media_content_id", music.single().id).put("media_content_type", music.single().type))

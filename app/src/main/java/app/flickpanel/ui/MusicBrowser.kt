@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,7 +24,16 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Podcasts
+import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -154,7 +162,7 @@ internal fun MusicBrowser(
                 if (content == null || content.items.isEmpty()) {
                     MusicFolderStatus(content, Modifier.weight(1f)) { retry += 1 }
                 } else {
-                    val gallery = folder?.type == "music_assistant" && folder.id in setOf("albums", "artists")
+                    val gallery = folder?.childrenMediaClass == "album" || folder?.childrenMediaClass == "artist"
                     LazyVerticalGrid(
                         columns = if (gallery) GridCells.Adaptive(144.dp) else GridCells.Fixed(if (wide) 2 else 1),
                         modifier = Modifier.weight(1f),
@@ -184,12 +192,14 @@ private fun MusicLibraryNavigation(
         contentPadding = PaddingValues(top = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(sources) { source ->
             val selected = source == current
-            Box(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(MaterialTheme.shapes.large)
+            val color = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant
+            Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(MaterialTheme.shapes.large)
                 .background(if (selected) colors.secondaryContainer else Color.Transparent)
                 .selectable(selected, enabled = enabled, role = Role.Tab, onClick = { open(source) })
-                .padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
-                Text(source.title, style = MaterialTheme.typography.titleMedium,
-                    color = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant,
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Icon(source.browseIcon, null, Modifier.size(24.dp), tint = color)
+                Text(source.title, style = MaterialTheme.typography.titleMedium, color = color,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -207,13 +217,13 @@ private fun MusicLibraryItem(
     )
     if (gallery) {
         Column(action.padding(4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            MusicArtwork(artwork, Modifier.fillMaxWidth().aspectRatio(1f), fallbackSize = 40.dp)
+            MusicArtwork(artwork, Modifier.fillMaxWidth().aspectRatio(1f), fallbackSize = 40.dp, fallbackIcon = item.browseIcon)
             Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     } else {
         Row(action.fillMaxWidth().heightIn(min = 60.dp).padding(6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MusicArtwork(artwork, Modifier.size(48.dp), fallbackSize = 24.dp)
+            MusicArtwork(artwork, Modifier.size(48.dp), fallbackSize = 24.dp, fallbackIcon = item.browseIcon)
             Text(item.title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (item.expandable && item.playable) {
@@ -226,6 +236,18 @@ private fun MusicLibraryItem(
             }
         }
     }
+}
+
+private val MediaChoice.browseIcon get() = when (category) {
+    "artist" -> Icons.Rounded.Person
+    "album" -> Icons.Rounded.Album
+    "playlist" -> Icons.AutoMirrored.Rounded.QueueMusic
+    "podcast", "episode" -> Icons.Rounded.Podcasts
+    "audiobook" -> Icons.AutoMirrored.Rounded.MenuBook
+    "radio", "channel" -> Icons.Rounded.Radio
+    "music", "genre" -> Icons.Rounded.LibraryMusic
+    "track" -> Icons.Rounded.MusicNote
+    else -> if (expandable) Icons.Rounded.Folder else Icons.Rounded.MusicNote
 }
 
 @Composable

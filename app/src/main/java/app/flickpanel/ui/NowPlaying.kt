@@ -35,9 +35,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.MEDIA_SEEK
@@ -75,8 +75,9 @@ internal fun NowPlaying(
             Column(Modifier.widthIn(max = 540.dp).fillMaxWidth().padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(playback.speaker, Modifier.weight(1f).padding(start = 4.dp).semantics { heading() },
-                        style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(playback.speaker, Modifier.weight(1f).semantics { heading() },
+                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                     IconButton(onClick = close, modifier = Modifier.size(48.dp)) {
                         Icon(Icons.Rounded.Close, "Close music")
                     }
@@ -119,25 +120,22 @@ private fun PlayerActionRow(
         }
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-        val inline = maxWidth >= 388.dp + 92.dp * fontScale
-        if (inline) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { libraryAction() }
-                TransportButtons(playback, transport)
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                    if (volume != null) PlayerVolumeControl(volume)
+        val browseBesidePlayback = maxWidth >= 280.dp
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                if (browseBesidePlayback) {
+                    Box(Modifier.align(Alignment.CenterStart)) { libraryAction() }
                 }
-            }
-        } else {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 TransportButtons(playback, transport)
-                if (browse != null || volume != null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        libraryAction()
-                        if (volume != null) PlayerVolumeControl(volume)
-                    }
+            }
+            if (volume != null || !browseBesidePlayback && browse != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (!browseBesidePlayback) libraryAction()
+                    if (volume != null) PlayerVolumeControl(volume)
                 }
             }
         }

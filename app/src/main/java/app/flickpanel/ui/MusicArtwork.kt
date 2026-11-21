@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -21,10 +22,11 @@ import androidx.compose.ui.unit.dp
 @Composable
 internal fun MusicArtwork(
     artwork: ImageBitmap?, modifier: Modifier, fallbackSize: Dp = 28.dp, shape: Shape = MaterialTheme.shapes.medium,
+    fallbackIcon: ImageVector = Icons.Rounded.MusicNote,
 ) {
     val colors = MaterialTheme.colorScheme
     Box(modifier.clip(shape).background(colors.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-        if (artwork == null) Icon(Icons.Rounded.MusicNote, null, Modifier.size(fallbackSize), tint = colors.primary)
+        if (artwork == null) Icon(fallbackIcon, null, Modifier.size(fallbackSize), tint = colors.primary)
         else Image(artwork, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
     }
 }
