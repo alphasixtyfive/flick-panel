@@ -69,13 +69,13 @@ internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel
 
     BackHandler(enabled = !browsing, onBack = model::closeMusic)
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
-            val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-            val wide = minOf(maxWidth, 1080.dp) >= 760.dp * fontScale
-            Column(Modifier.widthIn(max = 1080.dp).fillMaxSize()
-                .padding(horizontal = if (wide) 28.dp else 16.dp, vertical = if (maxHeight < 460.dp) 8.dp else 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (browsing) {
+        if (browsing) {
+            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
+                val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+                val wide = minOf(maxWidth, 1080.dp) >= 760.dp * fontScale
+                Column(Modifier.widthIn(max = 1080.dp).fillMaxSize()
+                    .padding(horizontal = if (wide) 28.dp else 16.dp, vertical = if (maxHeight < 460.dp) 8.dp else 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Music library", Modifier.weight(1f).semantics { heading() },
@@ -88,15 +88,15 @@ internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel
                         id, library, model, wide, playback, artwork, transport, volume,
                         showPlayer = { browsing = false }, modifier = Modifier.weight(1f),
                     )
-                } else {
-                    NowPlaying(
-                        playback, artwork, browse = if (playback.canBrowse) ({ browsing = true }) else null,
-                        close = model::closeMusic,
-                        transport = transport, seek = { model.seekMusic(id, it) }, volume = volume,
-                        modifier = Modifier.weight(1f),
-                    )
                 }
             }
+        } else {
+            NowPlaying(
+                playback, artwork, browse = if (playback.canBrowse) ({ browsing = true }) else null,
+                close = model::closeMusic,
+                transport = transport, seek = { model.seekMusic(id, it) }, volume = volume,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

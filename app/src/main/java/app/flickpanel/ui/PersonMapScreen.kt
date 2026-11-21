@@ -105,7 +105,7 @@ internal fun InteractivePersonMap(
 ) {
     val pin = location.mapPoint()
     val minimumSpan = if (detail == null) .24f else .006f
-    val preferredSpan = if (detail == null) .75f else .04f
+    val preferredSpan = if (detail == null) .35f else .016f
     val openingSpan = maxOf(preferredSpan, ((location.accuracyMetres ?: 0.0) * 4 / metresPerLatitudeDegree).toFloat())
         .coerceAtMost(maximumMapSpan)
     var viewport by remember(detail) { mutableStateOf(MapViewport(pin, openingSpan)) }
