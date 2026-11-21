@@ -8,7 +8,7 @@ import app.flickpanel.ha.CoverAction
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.canMoveCover
 import app.flickpanel.ha.coverPosition
-import app.flickpanel.ha.requiresCoverConfirmation
+import app.flickpanel.ha.gateToggleAction
 import app.flickpanel.ha.supportsCoverAction
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -18,6 +18,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CoverPolicyTest {
+    @Test fun gateTileTogglesTheCurrentOrPartlyOpenPosition() {
+        assertEquals(CoverAction.OPEN, cover("closed").gateToggleAction())
+        assertEquals(CoverAction.CLOSE, cover("open").gateToggleAction())
+        assertEquals(CoverAction.CLOSE, cover("open", position = 42).gateToggleAction())
+        assertNull(cover("open", features = 1).gateToggleAction())
+        assertNull(cover("closed").gateToggleAction(CoverAction.OPEN.progress))
+        for (state in listOf("opening", "closing", "unknown", "unavailable")) {
+            assertNull(cover(state).gateToggleAction())
+        }
+    }
+
     @Test fun onlyHomeAssistantAdvertisedActionsBecomeControls() {
         val gate = cover("closed", features = 3)
         assertTrue(gate.gateWithOpenControl)
@@ -29,13 +40,8 @@ class CoverPolicyTest {
         assertFalse(gate.copy(id = "switch.other").supportsCoverAction(CoverAction.OPEN))
     }
 
-    @Test fun gateMovementNeedsConfirmationEvenWhenItIsPartlyOpen() {
+    @Test fun gateSupportsOnlyDirectionsThatChangeItsPosition() {
         val closed = cover("closed")
-        assertTrue(closed.requiresCoverConfirmation(CoverAction.OPEN))
-        assertTrue(closed.requiresCoverConfirmation(CoverAction.CLOSE))
-        assertFalse(closed.requiresCoverConfirmation(CoverAction.STOP))
-        assertFalse(cover("open", deviceClass = "blind").requiresCoverConfirmation(CoverAction.CLOSE))
-
         assertTrue(closed.canMoveCover(CoverAction.OPEN))
         assertFalse(closed.canMoveCover(CoverAction.CLOSE))
         val partial = cover("open", position = 42)
@@ -43,6 +49,7 @@ class CoverPolicyTest {
         assertTrue(partial.canMoveCover(CoverAction.OPEN))
         assertFalse(cover("open", position = 100).canMoveCover(CoverAction.OPEN))
         assertFalse(cover("open").canMoveCover(CoverAction.OPEN))
+        assertTrue(cover("open").canMoveCover(CoverAction.CLOSE))
     }
 
     @Test fun stopIsAvailableDuringMotionAndWhileAMoveIsPending() {
@@ -74,7 +81,7 @@ class CoverPolicyTest {
         assertEquals(listOf(tile.copy(kind = TileKind.VALUE, wideOnTablet = false)), PanelConfigCodec.decode(legacy).favourites)
     }
 
-    private fun cover(state: String, features: Long = 11, position: Any? = null, deviceClass: String = "gate") =
+    private fun cover(state: String, features: Long = 11, position: Any? = null) =
         Entity("cover.front_gate", state, JSONObject()
-            .put("supported_features", features).put("device_class", deviceClass).put("current_position", position))
+            .put("supported_features", features).put("device_class", "gate").put("current_position", position))
 }

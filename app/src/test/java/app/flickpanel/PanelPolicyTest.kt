@@ -11,6 +11,7 @@ import app.flickpanel.ha.Catalogue
 import app.flickpanel.ha.Entry
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.PhotoFolder
+import app.flickpanel.ha.adjacentTemperature
 import app.flickpanel.ha.parseServer
 import app.flickpanel.ha.reduceEntities
 import app.flickpanel.ha.sameOrigin
@@ -25,6 +26,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PanelPolicyTest {
+    @Test fun temperatureStepsRespectDeviceLimitsAndAvailability() {
+        val attributes = JSONObject().put("temperature", 22.0).put("min_temp", 15.0)
+            .put("max_temp", 22.0).put("target_temp_step", .5)
+        val thermostat = Entity("climate.kitchen", "heat", attributes)
+
+        assertEquals(21.5, thermostat.adjacentTemperature(increase = false))
+        assertNull(thermostat.adjacentTemperature(increase = true))
+        assertNull(thermostat.copy(state = "unavailable").adjacentTemperature(increase = false))
+        assertNull(thermostat.copy(attributes = JSONObject()).adjacentTemperature(increase = true))
+    }
+
     @Test fun configurationRoundTripsWithoutCredentials() {
         val original = PanelConfig(
             favourites = listOf(

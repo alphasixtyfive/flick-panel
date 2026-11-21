@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelViewModel
 import kotlinx.coroutines.CancellationException
@@ -46,12 +44,11 @@ internal fun ImageTile(id: String, title: String, state: String?, available: Boo
 
     val image = remember(bitmap) { bitmap?.asImageBitmap() }
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.fillMaxSize().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            TileTitle(title)
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 if (image != null) Image(image, null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
-                else Text(if (!available || failed) "Image unavailable" else "Loading image…",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                else TileStatus(if (!available || failed) "Image unavailable" else "Loading image…")
             }
         }
     }

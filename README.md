@@ -71,8 +71,8 @@ explicit private IPv4 addresses such as a local Home Assistant server at
   ongoing events. Tap the preview for the full agenda. Set either tile to **Wide** to
   give its preview more room.
 - **Cover** shows the state and position reported by Home Assistant. It offers the
-  Open, Close, and Stop actions advertised by the device. Gate movement asks
-  for confirmation.
+  Open, Close, and Stop actions advertised by the device. A gate uses the whole
+  tile as a toggle and shows its next action when it is ready to move.
 - **Person location** shows the Home Assistant zone and opens a map inside Panel
   when the person has a reported position. The bundled geographic basemap works
   without a map account or network tile requests.
@@ -80,8 +80,8 @@ explicit private IPv4 addresses such as a local Home Assistant server at
   the entity state or a text attribute as the source. A longer recipe or note can
   live in a text attribute, with line breaks kept in the reader.
 - A camera can link an existing Home Assistant **gate** cover. The live viewer offers
-  **Open gate** when that cover is closed and asks for confirmation. The cover's Home
-  Assistant automation still controls when and how the gate moves.
+  **Open gate** when that cover is closed. The cover's Home Assistant automation
+  controls when and how the gate moves.
 
 ## Control the panel from Home Assistant
 

@@ -118,13 +118,12 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
                     entity?.let { model.setVolume(it, level) }
                 }
                 .tileFill((adjusting ?: volume ?: 0) / 100f, colors.primary.copy(alpha = if (adjusting == null) .08f else .22f))
-                .padding(start = 19.dp, top = 12.dp, end = 19.dp, bottom = 8.dp),
+                .padding(tileContentPadding),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TileTitle(label, Modifier.weight(1f))
                 Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
                     if (cover != null) {
                         Image(cover, null, Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
@@ -135,8 +134,7 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
                 }
             }
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(detail.orEmpty(), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                TileStatus(detail.orEmpty(), Modifier.weight(1f))
                 Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                     if (showTransport) {
                         FilledTonalIconButton(onClick = { entity?.let { model.mediaTransport(it, transport) } },

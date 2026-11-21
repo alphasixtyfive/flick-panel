@@ -30,9 +30,10 @@ import app.flickpanel.ha.weather
 @Composable
 internal fun WeatherTile(label: String, entity: Entity?, modifier: Modifier) {
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            WeatherSummary(entity, compact = false)
+        Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            TileTitle(label)
+            if (entity?.weather() == null) TileStatus("Unavailable")
+            else WeatherSummary(entity, compact = false)
         }
     }
 }

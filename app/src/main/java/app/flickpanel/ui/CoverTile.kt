@@ -4,105 +4,106 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.Fence
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.CoverAction
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.canMoveCover
 import app.flickpanel.ha.coverPosition
-import app.flickpanel.ha.requiresCoverConfirmation
+import app.flickpanel.ha.gateToggleAction
 import app.flickpanel.ha.supportsCoverAction
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CoverTile(
-    id: String, label: String, entity: Entity?, live: Entity?, online: Boolean, pending: String?,
-    modifier: Modifier, move: (CoverAction, Boolean) -> Unit,
+    label: String, entity: Entity?, live: Entity?, online: Boolean, pending: String?,
+    modifier: Modifier, move: (CoverAction) -> Unit,
 ) {
-    var confirming by remember(id) { mutableStateOf<CoverAction?>(null) }
-    val canMove: (CoverAction) -> Boolean = { action -> online && live?.canMoveCover(action, pending) == true }
-    val confirmation = confirming?.takeIf(canMove)
-    LaunchedEffect(confirming, confirmation) {
-        if (confirmation == null) confirming = null
+    val status = if (online) pending ?: live?.coverStatus() ?: "Unavailable" else "Unavailable"
+    if (entity?.isGate == true) {
+        val action = if (online) live?.gateToggleAction(pending) else null
+        GateToggleTile(label, status, online && live?.state == "open", action, modifier, move)
+        return
     }
 
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 13.dp),
+            Modifier.fillMaxWidth().padding(tileContentPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(label, Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.titleMedium,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
-            val status = if (online) pending ?: live?.coverStatus() ?: "Unavailable" else "Unavailable"
-            Text(status,
-                Modifier.padding(horizontal = 4.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            TileTitle(label)
+            TileStatus(status)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 for (action in CoverAction.entries) {
                     if (entity?.supportsCoverAction(action) != true) continue
-                    FilledTonalIconButton(
-                        enabled = canMove(action),
-                        onClick = {
-                            if (live?.requiresCoverConfirmation(action) == true) confirming = action
-                            else move(action, false)
+                    FilledTonalButton(
+                        onClick = { move(action) },
+                        enabled = online && live?.canMoveCover(action, pending) == true,
+                        modifier = Modifier.widthIn(min = 48.dp).heightIn(min = 48.dp).semantics {
+                            contentDescription = "${action.label} $label"
                         },
-                    ) {
-                        val icon = when (action) {
-                            CoverAction.OPEN -> Icons.Rounded.KeyboardArrowUp
-                            CoverAction.STOP -> Icons.Rounded.Stop
-                            CoverAction.CLOSE -> Icons.Rounded.KeyboardArrowDown
-                        }
-                        Icon(icon, "${action.label} $label")
-                    }
+                        contentPadding = PaddingValues(horizontal = 9.dp, vertical = 8.dp),
+                    ) { Text(action.label) }
                 }
             }
         }
     }
+}
 
-    if (confirmation != null) {
-        AlertDialog(
-            onDismissRequest = { confirming = null },
-            title = { Text("${confirmation.label} $label?") },
-            text = { Text("Make sure the gate’s path is clear.") },
-            confirmButton = {
-                Button(onClick = { confirming = null; move(confirmation, true) }) { Text(confirmation.label) }
-            },
-            dismissButton = { TextButton(onClick = { confirming = null }) { Text("Cancel") } },
-        )
+@Composable
+private fun GateToggleTile(
+    label: String, status: String, isOpen: Boolean, action: CoverAction?, modifier: Modifier,
+    move: (CoverAction) -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        onClick = { action?.let(move) },
+        enabled = action != null,
+        modifier = modifier.semantics {
+            role = Role.Button
+            stateDescription = status
+        },
+        shape = panelCardShape,
+        color = if (isOpen) colors.primaryContainer else colors.surfaceContainer,
+        contentColor = if (isOpen) colors.onPrimaryContainer else colors.onSurface,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val accent = if (isOpen) colors.onPrimaryContainer else colors.primary
+            ControlTileTitle(label, Icons.Rounded.Fence, accent)
+            TileStatus(status, color = if (isOpen) colors.onPrimaryContainer else colors.onSurfaceVariant)
+            if (action != null) {
+                val hint = if (action == CoverAction.OPEN) "Tap to open" else "Tap to close"
+                Text(hint, style = MaterialTheme.typography.labelLarge, color = accent)
+            }
+        }
     }
 }
 
 internal fun Entity.coverStatus(): String {
-    if (state.isBlank() || state == "unavailable") return "Unavailable"
-    val position = coverPosition()
-    val label = when (state) {
-        "open" -> if (position != null && position in 1..99) "Partly open" else "Open"
+    val position = coverPosition()?.takeIf { it in 1..99 }
+    return when (state) {
+        "open" -> if (position == null) "Open" else "Partly open · $position%"
         "closed" -> "Closed"
-        "opening" -> "Opening"
-        "closing" -> "Closing"
-        else -> "Unknown"
+        "opening" -> "Opening…"
+        "closing" -> "Closing…"
+        "unknown" -> "Unknown"
+        else -> "Unavailable"
     }
-    return if (position == null) label else "$label · $position%"
 }

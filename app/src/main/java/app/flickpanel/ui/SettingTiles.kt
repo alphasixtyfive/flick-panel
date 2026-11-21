@@ -27,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.Entity
 
@@ -41,14 +40,12 @@ internal fun ChoiceTile(
     Surface(onClick = { open = true }, enabled = enabled && options.isNotEmpty(), modifier = modifier,
         shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
         Box {
-            Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+            Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    TileTitle(label, Modifier.weight(1f))
                     Icon(Icons.Rounded.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
                 }
-                Text(pending ?: entity?.takeIf(Entity::available)?.state ?: "Unavailable",
-                    style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TileValue(pending ?: entity?.takeIf(Entity::available)?.state ?: "Unavailable", maxLines = 2)
             }
             DropdownMenu(expanded = open && enabled, onDismissRequest = { open = false }) {
                 for (option in options) {
@@ -68,13 +65,12 @@ internal fun NumberTile(
     val value = entity?.numberValue
     val range = entity?.numberRange
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 19.dp, vertical = 13.dp),
+        Column(Modifier.fillMaxWidth().padding(tileContentPadding),
             verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            TileTitle(label)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(pending ?: displayValue(entity), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TileValue(pending ?: displayValue(entity), Modifier.weight(1f), maxLines = 2)
                 FilledTonalIconButton(onClick = { step(false) },
                     enabled = enabled && value != null && range?.adjacent(value, false) != null) {
                     Icon(Icons.Rounded.Remove, "Decrease $label")

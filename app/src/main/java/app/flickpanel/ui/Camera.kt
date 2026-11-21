@@ -115,11 +115,10 @@ internal fun CameraTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
                 placeholder = if (online) "Camera preview" else "Camera offline")
             if (!widescreen) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(12.dp)
                 .background(Brush.verticalGradient(listOf(Color(0xff101317), Color.Transparent))))
-            Text(state.label(tile), modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
+            TileTitle(state.label(tile), modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xdc101317))))
-                .padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 14.dp),
-                color = Color.White, style = MaterialTheme.typography.titleMedium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                .padding(start = tileContentPadding, top = 24.dp, end = tileContentPadding, bottom = 14.dp),
+                color = Color.White)
             Box(Modifier.align(Alignment.TopEnd).padding(12.dp).size(38.dp)
                 .background(Color(0xc0171a1d), CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.ArrowOutward, "Open live camera", Modifier.size(23.dp), tint = Color.White)

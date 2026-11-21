@@ -45,31 +45,19 @@ internal fun ReaderTile(label: String, content: ReadingContent?, modifier: Modif
         color = colors.surfaceContainer,
     ) {
         Column(
-            Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.padding(tileContentPadding),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    label,
-                    Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                TileTitle(label, Modifier.weight(1f))
                 if (content != null) {
                     Icon(Icons.Rounded.ArrowOutward, "Open full screen", Modifier.size(20.dp), tint = colors.onSurfaceVariant)
                 }
             }
-            Text(
-                content?.preview ?: "Text unavailable",
-                style = MaterialTheme.typography.bodyLarge,
-                color = colors.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            TileStatus(content?.preview ?: "Text unavailable")
         }
     }
 }

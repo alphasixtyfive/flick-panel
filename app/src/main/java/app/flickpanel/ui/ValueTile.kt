@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
@@ -49,18 +48,18 @@ internal fun ValueTile(
         }
     }
     Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
-        Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                TileTitle(label, Modifier.weight(1f))
                 if (trend) Text("6 h", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
             }
-            Text(displayValue(entity), style = MaterialTheme.typography.headlineMedium,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val value = displayValue(entity)
+            if (entity?.available == true) TileValue(value, prominent = entity.state.toDoubleOrNull()?.isFinite() == true, maxLines = 2)
+            else TileStatus(value)
             if (trend) {
                 val points = state.graphs[tile.entity].orEmpty()
                 if (points.size > 1) {
@@ -68,13 +67,17 @@ internal fun ValueTile(
                     Sparkline(points, chart.fillMaxWidth())
                 } else {
                     Text(
-                        if (state.graphs.containsKey(tile.entity)) "No history" else "History",
+                        when {
+                            state.link != Link.ONLINE -> "History unavailable"
+                            state.graphs.containsKey(tile.entity) -> "No history"
+                            else -> "Loading history…"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.onSurfaceVariant,
                     )
                 }
             } else if (state.link == Link.OFFLINE && entity?.available == true) {
-                Text("Last reported", style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+                TileStatus("Last reported")
             }
         }
     }

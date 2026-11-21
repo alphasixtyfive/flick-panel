@@ -8,15 +8,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowOutward
-import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.PersonLocation
@@ -36,17 +34,15 @@ internal fun PersonTile(label: String, live: Entity?, online: Boolean, modifier:
         color = colors.surfaceContainer,
     ) {
         Column(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.fillMaxWidth().padding(tileContentPadding),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Icon(Icons.Rounded.LocationOn, null, Modifier.size(22.dp), tint = colors.primary)
-                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Icon(Icons.Rounded.Star, null, Modifier.size(22.dp), tint = colors.primary)
+                TileTitle(label, Modifier.weight(1f))
                 if (location != null) Icon(Icons.Rounded.ArrowOutward, "Open map", Modifier.size(19.dp), tint = colors.onSurfaceVariant)
             }
-            Text(person?.personStatus() ?: "Unavailable", style = MaterialTheme.typography.bodyLarge,
-                color = colors.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            TileStatus(person?.personStatus() ?: "Unavailable")
         }
     }
 }

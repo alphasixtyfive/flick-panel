@@ -24,14 +24,15 @@ import app.flickpanel.ha.MediaTransport
 import app.flickpanel.ha.PanelCommand
 import app.flickpanel.ha.PanelRegistration
 import app.flickpanel.ha.PanelRemoteState
+import app.flickpanel.ha.adjacentTemperature
 import app.flickpanel.ha.canAddTasks
 import app.flickpanel.ha.canBrowseMusic
 import app.flickpanel.ha.canMoveCover
 import app.flickpanel.ha.canUpdateTasks
 import app.flickpanel.ha.coverPosition
+import app.flickpanel.ha.gateToggleAction
 import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.parseServer
-import app.flickpanel.ha.requiresCoverConfirmation
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -268,7 +269,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (current.camera != camera) return
         val gateId = current.config.favourites.firstOrNull { it.entity == camera && it.kind == TileKind.CAMERA }?.cameraGate ?: return
         val gate = current.entities[gateId]?.takeIf { it.state == "closed" && it.gateWithOpenControl } ?: return
-        send(gate, "open_cover", matches = { it.state == "opening" || it.state == "open" })
+        moveCover(gate, CoverAction.OPEN)
     }
 
     fun openMusic(id: String) {
@@ -377,10 +378,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             pending = "$value%", matches = { state -> state.brightness?.let { abs(it - value) <= 1 } == true })
     }
 
-    fun setTemperature(entity: Entity, value: Double) {
-        val min = entity.attributes.optDouble("min_temp", 5.0)
-        val max = entity.attributes.optDouble("max_temp", 35.0)
-        if (value !in min..max) return
+    fun stepTemperature(id: String, increase: Boolean) {
+        val entity = _ui.value.entities[id] ?: return
+        val value = entity.adjacentTemperature(increase) ?: return
         send(entity, "set_temperature", JSONObject().put("temperature", value), pending = "$value°",
             matches = { abs(it.attributes.optDouble("temperature") - value) < .05 })
     }
@@ -392,13 +392,16 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun controlCover(id: String, action: CoverAction, confirmed: Boolean = false) {
+    fun controlCover(id: String, action: CoverAction) {
         val state = _ui.value
         if (state.config.favourites.none { it.entity == id && it.kind == TileKind.COVER }) return
         val cover = state.entities[id] ?: return
-        if (!cover.canMoveCover(action, state.pending[id])) return
-        if (cover.requiresCoverConfirmation(action) && !confirmed) return
+        if (cover.isGate && cover.gateToggleAction(state.pending[id]) != action) return
+        moveCover(cover, action)
+    }
 
+    private fun moveCover(cover: Entity, action: CoverAction) {
+        if (!cover.canMoveCover(action, _ui.value.pending[cover.id])) return
         val matches: ((Entity) -> Boolean)? = when (action) {
             CoverAction.OPEN -> { result ->
                 result.state == "opening" || result.state == "open" && (result.coverPosition() ?: 100) == 100

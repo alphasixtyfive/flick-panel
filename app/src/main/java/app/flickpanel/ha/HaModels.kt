@@ -113,14 +113,12 @@ internal data class Entity(
 
 internal enum class CoverAction(val feature: Long, val service: String, val label: String, val progress: String) {
     OPEN(1L, "open_cover", "Open", "Opening…"),
-    STOP(8L, "stop_cover", "Stop", "Stopping…"),
     CLOSE(2L, "close_cover", "Close", "Closing…"),
+    STOP(8L, "stop_cover", "Stop", "Stopping…"),
 }
 
 internal fun Entity.supportsCoverAction(action: CoverAction) =
     domain == "cover" && attributes.optLong("supported_features") and action.feature != 0L
-
-internal fun Entity.requiresCoverConfirmation(action: CoverAction) = isGate && action != CoverAction.STOP
 
 internal fun Entity.coverPosition(): Int? {
     if (domain != "cover" || !available) return null
@@ -137,6 +135,29 @@ internal fun Entity.canMoveCover(action: CoverAction, pending: String? = null): 
         CoverAction.STOP -> pending != CoverAction.STOP.progress &&
             (pending != null || state == "opening" || state == "closing")
     }
+}
+
+internal fun Entity.gateToggleAction(pending: String? = null): CoverAction? {
+    if (!isGate) return null
+    val action = when (state) {
+        "closed" -> CoverAction.OPEN
+        "open" -> CoverAction.CLOSE
+        else -> return null
+    }
+    return action.takeIf { canMoveCover(it, pending) }
+}
+
+internal val Entity.targetTemperature: Double?
+    get() = attributes.optDouble("temperature").takeIf(Double::isFinite)
+
+internal fun Entity.adjacentTemperature(increase: Boolean): Double? {
+    if (domain != "climate" || !available) return null
+    val current = targetTemperature ?: return null
+    val minimum = attributes.optDouble("min_temp", 5.0)
+    val maximum = attributes.optDouble("max_temp", 35.0)
+    val step = attributes.optDouble("target_temp_step", .5).takeIf { it.isFinite() && it > 0 } ?: .5
+    val next = current + if (increase) step else -step
+    return next.takeIf { it != current && it in minimum..maximum }
 }
 
 internal data class NumberRange(val min: BigDecimal, val max: BigDecimal, val step: BigDecimal) {

@@ -3,9 +3,7 @@ package app.flickpanel.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -15,78 +13,50 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import app.flickpanel.PanelUi
-import app.flickpanel.PanelViewModel
-import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
+import app.flickpanel.ha.adjacentTemperature
+import app.flickpanel.ha.targetTemperature
 
 @Composable
 internal fun ClimateTile(
-    tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
-    entity: Entity?, enabled: Boolean, compact: Boolean,
+    label: String, entity: Entity?, live: Entity?, pending: String?, enabled: Boolean,
+    modifier: Modifier, step: (Boolean) -> Unit,
 ) {
-    val info = entity ?: state.entity(tile.entity)
-    val current = info?.attributes?.optDouble("current_temperature")?.takeIf(Double::isFinite)
-    val temperature = current?.let { formatNumber(it, 1) + "°" } ?: "—"
-    val label = state.label(tile)
-    val pending = state.pending[tile.entity]
+    val current = entity?.attributes?.optDouble("current_temperature")?.takeIf(Double::isFinite)
+    val setpoint = pending ?: entity?.targetTemperature?.let { "${formatNumber(it, 1)}°" }
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        if (compact) {
-            Column(Modifier.fillMaxSize().padding(horizontal = 19.dp, vertical = 12.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 32.dp), horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis)
-                    Text(temperature, style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                }
-                TemperatureSetpoint(info, entity, pending, enabled, model, compact = true)
+        Column(
+            Modifier.fillMaxWidth().padding(tileContentPadding),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                TileTitle(label, Modifier.weight(1f))
+                if (current != null) TileStatus("${formatNumber(current, 1)}°", maxLines = 1)
             }
-        } else {
-            Row(Modifier.fillMaxWidth().padding(19.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(temperature, style = MaterialTheme.typography.headlineMedium)
+                    if (setpoint != null) {
+                        TileStatus("Set to", maxLines = 1)
+                        TileValue(setpoint)
+                    } else {
+                        TileStatus("No setpoint")
+                    }
                 }
-                TemperatureSetpoint(info, entity, pending, enabled, model, compact = false)
+                FilledTonalIconButton(onClick = { step(false) }, modifier = Modifier.size(48.dp),
+                    enabled = enabled && live?.adjacentTemperature(increase = false) != null) {
+                    Icon(Icons.Rounded.Remove, "Lower set temperature")
+                }
+                FilledTonalIconButton(onClick = { step(true) }, modifier = Modifier.size(48.dp),
+                    enabled = enabled && live?.adjacentTemperature(increase = true) != null) {
+                    Icon(Icons.Rounded.Add, "Raise set temperature")
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun TemperatureSetpoint(
-    info: Entity?,
-    live: Entity?,
-    pending: String?,
-    enabled: Boolean,
-    model: PanelViewModel,
-    compact: Boolean,
-) {
-    val attrs = info?.attributes
-    val target = attrs?.optDouble("temperature")?.takeIf(Double::isFinite)
-    val step = attrs?.optDouble("target_temp_step", .5)?.takeIf { it > 0 } ?: .5
-    val adjustable = enabled && live != null && target != null
-    Row(
-        if (compact) Modifier.fillMaxWidth() else Modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(if (compact) Modifier.weight(1f) else Modifier.padding(end = 10.dp)) {
-            Text("Set to", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-            Text(pending ?: target?.let { formatNumber(it, 1) + "°" } ?: "—",
-                style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target - step) },
-            enabled = adjustable, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Remove, "Lower target") }
-        FilledTonalIconButton(onClick = { if (live != null && target != null) model.setTemperature(live, target + step) },
-            enabled = adjustable, modifier = Modifier.size(48.dp)) { Icon(Icons.Rounded.Add, "Raise target") }
     }
 }

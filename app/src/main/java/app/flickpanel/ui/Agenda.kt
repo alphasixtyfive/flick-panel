@@ -68,12 +68,11 @@ internal fun AgendaPreview(
     val colors = MaterialTheme.colorScheme
     val dates = rememberAgendaDates()
     Surface(onClick = open, modifier = modifier, color = colors.surfaceContainer, shape = panelCardShape) {
-        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Icon(if (kind == TileKind.TASKS) Icons.Rounded.Checklist else Icons.Rounded.CalendarMonth,
                     null, Modifier.size(22.dp), tint = colors.primary)
-                Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                TileTitle(title, Modifier.weight(1f))
                 Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(19.dp), tint = colors.onSurfaceVariant)
             }
             val message = agendaMessage(kind, state, online)

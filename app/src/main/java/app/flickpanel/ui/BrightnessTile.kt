@@ -8,14 +8,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelViewModel
 import app.flickpanel.ha.Entity
 
@@ -52,11 +50,12 @@ internal fun BrightnessTile(
         color = colors.surfaceContainer,
     ) {
         Column(
-            Modifier.fillMaxSize().tileFill((level ?: 0) / 100f, colors.primaryContainer).padding(19.dp),
+            Modifier.fillMaxSize().tileFill((level ?: 0) / 100f, colors.primaryContainer).padding(tileContentPadding),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             ControlTileTitle(label, Icons.Rounded.Lightbulb, colors.primary)
-            Text(status, style = MaterialTheme.typography.titleMedium)
+            if (status.endsWith('%')) TileValue(status)
+            else TileStatus(status)
         }
     }
 }

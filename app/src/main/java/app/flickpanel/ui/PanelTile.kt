@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
@@ -22,6 +23,7 @@ import app.flickpanel.ha.Link
 import app.flickpanel.ha.readContent
 
 internal val panelCardShape = RoundedCornerShape(26.dp)
+internal val tileContentPadding = 16.dp
 
 @Composable
 internal fun PanelTile(
@@ -38,7 +40,9 @@ internal fun PanelTile(
         TileKind.TOGGLE, TileKind.ACTION ->
             ToggleActionTile(tile, state, model, modifier, live, ready)
         TileKind.SLIDER -> BrightnessTile(label, entity, live, pending, ready, model, modifier)
-        TileKind.CLIMATE -> ClimateTile(tile, state, model, modifier, live, ready, compact)
+        TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier) { increase ->
+            model.stepTemperature(tile.entity, increase)
+        }
         TileKind.MEDIA -> MusicTile(label, entity, pending, ready, model, modifier)
         TileKind.CHOICE -> ChoiceTile(label, entity, pending, ready, modifier) { option ->
             live?.let { model.selectOption(it, option) }
@@ -46,8 +50,8 @@ internal fun PanelTile(
         TileKind.NUMBER -> NumberTile(label, entity, pending, ready, modifier) { increase ->
             live?.let { model.stepNumber(it, increase) }
         }
-        TileKind.COVER -> CoverTile(tile.entity, label, entity, live, online, pending, modifier) { action, confirmed ->
-            model.controlCover(tile.entity, action, confirmed)
+        TileKind.COVER -> CoverTile(label, entity, live, online, pending, modifier) { action ->
+            model.controlCover(tile.entity, action)
         }
         TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, state, model, modifier)
         TileKind.PERSON -> PersonTile(label, live, online, modifier) {
@@ -67,14 +71,31 @@ internal fun PanelTile(
 
 @Composable
 internal fun ControlTileTitle(label: String, icon: ImageVector, tint: Color) {
-    Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            label,
-            Modifier.weight(1f),
-            style = MaterialTheme.typography.titleMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Icon(icon, null, tint = tint, modifier = Modifier.size(29.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        TileTitle(label, Modifier.weight(1f))
+        Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
     }
+}
+
+@Composable
+internal fun TileTitle(label: String, modifier: Modifier = Modifier, maxLines: Int = 2, color: Color = Color.Unspecified) {
+    Text(label, modifier, style = MaterialTheme.typography.titleMedium, color = color,
+        maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+}
+
+@Composable
+internal fun TileStatus(
+    text: String, modifier: Modifier = Modifier, maxLines: Int = 2,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = color,
+        maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+}
+
+@Composable
+internal fun TileValue(text: String, modifier: Modifier = Modifier, prominent: Boolean = false, maxLines: Int = 1) {
+    val typography = MaterialTheme.typography
+    val style = if (prominent) typography.headlineSmall else typography.titleLarge
+    Text(text, modifier, style = style.copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "'tnum'"),
+        maxLines = maxLines, overflow = TextOverflow.Ellipsis)
 }
