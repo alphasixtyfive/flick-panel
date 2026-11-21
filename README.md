@@ -5,10 +5,11 @@ pinned tiles into the available space. Page arrows appear if the tiles need anot
 screen. Rooms uses Home Assistant areas to show lighting and thermostat controls.
 Before you choose rooms, the panel suggests areas of pinned lights and thermostats.
 The **Rooms** section in setup chooses individual areas, their order, and whether
-heating controls appear. Select the
-edit icon beside a room to hide or reorder its controls, choose Standard or Wide,
-and switch between Switch and Dimmer on dimmable lights. Use **Use automatic layout**
-to return to the Home Assistant area defaults. Save changes to apply the layout.
+heating controls appear. Tap an enabled room to edit its tiles. Tap a tile to set its
+visibility, choose **Standard** or **Wide**, or change a dimmable light between **Switch**
+and **Dimmer**. Use the handles to reorder shown tiles and the eye icon to restore a hidden
+tile. **Use automatic layout** restores the Home Assistant area defaults for that room.
+Select **Save changes** to apply the layout.
 Cameras
 shows pinned previews and opens one full-screen feed at a time.
 In setup, use **Cameras** to choose gallery feeds, edit their settings and star the

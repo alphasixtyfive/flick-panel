@@ -28,9 +28,12 @@ import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
 import app.flickpanel.ha.Entity
 
+private data class RoomTileTarget(val entity: String, val label: String)
+
 private sealed class SetupDestination(val title: String, val allowsSaving: Boolean = false) {
     data class Panel(val page: PanelPage) : SetupDestination(page.label, allowsSaving = !page.readOnly)
-    data class Room(val area: Area) : SetupDestination(area.name, allowsSaving = true)
+    data class Room(val area: Area, val tile: RoomTileTarget? = null) :
+        SetupDestination(tile?.label ?: area.name, allowsSaving = true)
     data class Picker(val source: SetupPicker) : SetupDestination(source.title)
     data class Format(val tile: TileFormat) : SetupDestination(if (tile.current == null) "Configure tile" else "Edit tile")
     data class Badge(val badge: HomeBadge) : SetupDestination("Warning badge")
@@ -153,13 +156,18 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                 draft = draft.copy(homeBadges = next)
                 backToPrevious()
             }
-            is SetupDestination.Room -> RoomControlsEditor(
-                room = current.area,
-                draft = draft,
-                state = state,
-                update = { controls -> draft = draft.copy(roomTiles = draft.roomTiles + (current.area.id to controls)) },
-                reset = { draft = draft.copy(roomTiles = draft.roomTiles - current.area.id) },
-            )
+            is SetupDestination.Room -> Column(Modifier.fillMaxWidth()) {
+                ErrorText(state.error, Modifier.padding(horizontal = setupPadding))
+                RoomControlsEditor(
+                    room = current.area,
+                    draft = draft,
+                    state = state,
+                    selectedTile = current.tile?.entity,
+                    openTile = { tile -> navigateTo(current.copy(tile = RoomTileTarget(tile.entity, state.label(tile)))) },
+                    update = { controls -> draft = draft.copy(roomTiles = draft.roomTiles + (current.area.id to controls)) },
+                    reset = { draft = draft.copy(roomTiles = draft.roomTiles - current.area.id) },
+                )
+            }
             is SetupDestination.Panel, null -> editorPages.SaveableStateProvider(section.name) {
                 Column(Modifier.fillMaxWidth()) {
                     ErrorText(state.error, Modifier.padding(horizontal = setupPadding))

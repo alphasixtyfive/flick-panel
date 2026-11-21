@@ -52,8 +52,11 @@ import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Link
 
 internal const val tabletWidthDp = 840
+internal val dashboardPillHeight = 48.dp
+private val inlineTabsWidth = 400.dp
+private val inlineAlertWidth = 230.dp
+private val navigationGap = 16.dp
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     val colors = MaterialTheme.colorScheme
@@ -72,7 +75,8 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val cameraColumns = minOf(tileColumns, if (maxWidth >= 1100.dp) 4 else if (wide) 3 else 2)
         val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
         val headerWidth = minOf(maxWidth, panelMaxWidth) - side * 2
-        val alertsInNavigation = alerts.isNotEmpty() && headerWidth >= 640.dp * fontScale.coerceAtLeast(1f)
+        val tabsWidth = inlineTabsWidth * fontScale.coerceAtLeast(1f)
+        val alertsInNavigation = alerts.isNotEmpty() && headerWidth >= tabsWidth + inlineAlertWidth + navigationGap
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
                 "Home",
@@ -100,13 +104,13 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
             if (status != null) Text(status, style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             Row(
-                Modifier.fillMaxWidth().padding(top = if (short) 4.dp else 10.dp)
-                    .heightIn(min = if (short) 48.dp else 56.dp),
+                Modifier.fillMaxWidth().padding(top = if (short) 4.dp else 14.dp)
+                    .heightIn(min = if (short) dashboardPillHeight else 56.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(navigationGap),
             ) {
                 DashboardNavigation(state.page, short, model::selectPage, Modifier.weight(1f))
-                if (alertsInNavigation) HomeWarnings(alerts, Modifier.widthIn(max = 230.dp))
+                if (alertsInNavigation) HomeWarnings(alerts, Modifier.widthIn(max = inlineAlertWidth), prominent = !short)
             }
             pages.SaveableStateProvider(state.page.name) {
                 val body = Modifier.fillMaxSize().panelEntrance(state.page, state.config.reduceMotion)
@@ -172,10 +176,10 @@ private fun DashboardHeader(
 }
 
 @Composable
-internal fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page) -> Unit, modifier: Modifier = Modifier) {
+private fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page) -> Unit, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     BoxWithConstraints(modifier) {
-        val stacked = maxWidth < 400.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val stacked = maxWidth < inlineTabsWidth * LocalDensity.current.fontScale.coerceAtLeast(1f)
         val style = if (short || stacked) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium
         val row = if (stacked) Modifier.fillMaxWidth() else Modifier
         Row(row.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -190,7 +194,7 @@ internal fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Pag
                 val width = if (stacked) Modifier.weight(1f) else Modifier
                 val tab = width.clip(CircleShape).selectable(selected, role = Role.Tab, onClick = { selectPage(page) })
                     .background(if (selected) colors.secondaryContainer else Color.Transparent)
-                    .heightIn(min = if (stacked) 56.dp else 48.dp)
+                    .heightIn(min = if (stacked) 56.dp else dashboardPillHeight)
                     .padding(horizontal = if (stacked) 4.dp else 12.dp, vertical = 6.dp)
                 val label: @Composable () -> Unit = {
                     Text(page.label, style = style, color = color,

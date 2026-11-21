@@ -1,7 +1,7 @@
 package app.flickpanel.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -9,153 +9,183 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.RoomLayout
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.RoomTilePreference
 import app.flickpanel.config.TileKind
+import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
 import java.util.Collections
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RoomControlsEditor(
-    room: Area, draft: PanelConfig, state: PanelUi,
+    room: Area, draft: PanelConfig, state: PanelUi, selectedTile: String?, openTile: (TileSpec) -> Unit,
     update: (List<RoomTilePreference>) -> Unit, reset: () -> Unit,
 ) {
     val controls = remember(room, draft, state.catalogue) { RoomLayout(draft, state.catalogue).controls(room) }
     val preferences = remember(controls) { controls.map { it.preference } }
+    val scroll = rememberLazyListState()
+    fun edit(preference: RoomTilePreference) {
+        update(preferences.map { if (it.entity == preference.entity) preference else it })
+    }
+    if (selectedTile != null) {
+        val control = controls.firstOrNull { it.preference.entity == selectedTile }
+        val tile = control?.tile
+        if (control != null && tile != null) {
+            RoomTileSettings(tile.kind, control.preference, control.canDim, ::edit)
+        } else {
+            EmptyState("This tile is unavailable", null)
+        }
+        return
+    }
     val (visible, hidden) = remember(controls) {
         controls.filter { it.tile != null }.partition { !it.preference.hidden }
     }
     val custom = room.id in draft.roomTiles
-    fun edit(preference: RoomTilePreference) {
-        update(preferences.map { if (it.entity == preference.entity) preference else it })
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = setupPadding),
+        state = scroll,
+        contentPadding = PaddingValues(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        item {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                RoomEditorHeading("Shown in room")
+                if (custom) TextButton(onClick = reset) { Text("Use automatic layout") }
+            }
+        }
+        if (visible.isEmpty()) item {
+            Text("No controls shown", Modifier.padding(start = 16.dp, bottom = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        itemsIndexed(visible, key = { _, control -> control.preference.entity }) { index, control ->
+            val tile = checkNotNull(control.tile)
+            val settings = control.preference
+            val label = state.label(tile)
+            val format = if (tile.kind == TileKind.SLIDER) "Dimmer" else tile.kind.label
+            val size = if (settings.wideOnTablet) "Wide" else "Standard"
+            RoomControlRow(label, "$format · $size", edit = { openTile(tile) }) {
+                if (visible.size > 1) ReorderGrip(label, before = index > 0, after = index < visible.lastIndex) { delta ->
+                    val other = visible.getOrNull(index + delta)?.preference ?: return@ReorderGrip
+                    val next = preferences.toMutableList()
+                    Collections.swap(next, next.indexOf(settings), next.indexOf(other))
+                    update(next)
+                }
+            }
+        }
+        if (hidden.isNotEmpty()) item { RoomEditorHeading("Hidden controls", Modifier.padding(top = 6.dp)) }
+        items(hidden, key = { it.preference.entity }) { control ->
+            val label = state.label(checkNotNull(control.tile))
+            RoomControlRow(label) {
+                IconButton(onClick = { edit(control.preference.copy(hidden = false)) }) {
+                    Icon(Icons.Rounded.Visibility, "Show $label")
+                }
+            }
+        }
     }
+}
 
-    Column(Modifier.fillMaxSize().padding(horizontal = setupPadding)) {
-        FlowRow(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                if (custom) "Custom layout" else "Automatic layout",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(vertical = 12.dp),
-            )
-            if (custom) TextButton(onClick = reset) { Text("Use automatic layout") }
-        }
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = PaddingValues(bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (visible.isEmpty()) item { Text("No controls shown", Modifier.padding(vertical = 8.dp)) }
-            itemsIndexed(visible, key = { _, control -> control.preference.entity }) { index, control ->
-                val tile = checkNotNull(control.tile)
-                val settings = control.preference
-                val label = state.label(tile)
-                RoomControlRow(label, tile.kind, settings) {
-                    ReorderGrip(label, before = index > 0, after = index < visible.lastIndex) { delta ->
-                        val other = visible.getOrNull(index + delta)?.preference ?: return@ReorderGrip
-                        val next = preferences.toMutableList()
-                        Collections.swap(next, next.indexOf(settings), next.indexOf(other))
-                        update(next)
-                    }
-                    RoomControlOptions(label, tile.kind, settings, control.canDim, ::edit)
-                }
-            }
-            if (hidden.isNotEmpty()) item {
-                Text("Hidden controls", Modifier.padding(top = 14.dp, bottom = 4.dp).semantics { heading() },
-                    style = MaterialTheme.typography.titleMedium)
-            }
-            items(hidden, key = { it.preference.entity }) { control ->
-                val tile = checkNotNull(control.tile)
-                val label = state.label(tile)
-                RoomControlRow(label, tile.kind, control.preference) {
-                    IconButton(onClick = { edit(control.preference.copy(hidden = false)) }) {
-                        Icon(Icons.Rounded.Visibility, "Show $label")
-                    }
-                }
-            }
-        }
-    }
+@Composable
+private fun RoomEditorHeading(label: String, modifier: Modifier = Modifier) {
+    Text(label, modifier.padding(horizontal = 16.dp, vertical = 12.dp).semantics { heading() },
+        color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
 }
 
 @Composable
 private fun RoomControlRow(
-    label: String, kind: TileKind, settings: RoomTilePreference, actions: @Composable () -> Unit,
+    label: String, summary: String? = null, edit: (() -> Unit)? = null, actions: @Composable () -> Unit,
 ) {
-    val format = if (kind == TileKind.SLIDER) "Dimmer" else kind.label
-    val size = if (settings.wideOnTablet) "Wide" else "Standard"
-    ListItem(
-        headlineContent = { Text(label) },
-        supportingContent = { Text("$format · $size") },
-        trailingContent = { Row(verticalAlignment = Alignment.CenterVertically) { actions() } },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
+    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            val open = if (edit == null) Modifier else Modifier.clip(MaterialTheme.shapes.medium)
+                .clickable(role = Role.Button, onClickLabel = "Edit $label", onClick = edit)
+            ListItem(
+                modifier = Modifier.weight(1f).then(open).heightIn(min = 52.dp),
+                headlineContent = { Text(label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                supportingContent = summary?.let { { Text(it) } },
+                trailingContent = edit?.let { { Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) } },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            )
+            actions()
+        }
+    }
 }
 
 @Composable
-private fun RoomControlOptions(
-    label: String, kind: TileKind, settings: RoomTilePreference, canDim: Boolean,
-    edit: (RoomTilePreference) -> Unit,
-) {
-    var opened by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { opened = true }) { Icon(Icons.Rounded.MoreVert, "Options for $label") }
-        DropdownMenu(expanded = opened, onDismissRequest = { opened = false }) {
-            if (canDim) {
-                val dimmer = kind == TileKind.SLIDER
-                DropdownMenuItem(
-                    text = { Text(if (dimmer) "Use switch" else "Use dimmer") },
-                    onClick = {
-                        opened = false
-                        edit(settings.copy(lightFormat = if (dimmer) TileKind.TOGGLE else TileKind.SLIDER))
-                    },
+private fun RoomTileSettings(kind: TileKind, settings: RoomTilePreference, canDim: Boolean, edit: (RoomTilePreference) -> Unit) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = setupPadding, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        SettingsListGroup {
+            SetupSwitchRow("Show in room", null, !settings.hidden) { edit(settings.copy(hidden = !it)) }
+        }
+        if (canDim) {
+            RoomTileChoice("Control", "Switch", "Dimmer", kind == TileKind.SLIDER) { dimmer ->
+                edit(settings.copy(lightFormat = if (dimmer) TileKind.SLIDER else TileKind.TOGGLE))
+            }
+        }
+        RoomTileChoice("Tile size", "Standard", "Wide", settings.wideOnTablet) { wide ->
+            edit(settings.copy(wideOnTablet = wide))
+        }
+    }
+}
+
+@Composable
+private fun RoomTileChoice(title: String, first: String, second: String, secondSelected: Boolean, select: (Boolean) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    SettingsListGroup(title) {
+        Column(Modifier.selectableGroup()) {
+            for ((index, label) in listOf(first, second).withIndex()) {
+                val selected = (index == 1) == secondSelected
+                ListItem(
+                    modifier = Modifier.selectable(selected, role = Role.RadioButton) {
+                        if (!selected) select(index == 1)
+                    }.heightIn(min = 56.dp),
+                    headlineContent = { Text(label) },
+                    trailingContent = { RadioButton(selected, onClick = null) },
+                    colors = ListItemDefaults.colors(
+                        containerColor = if (selected) colors.secondaryContainer else Color.Transparent,
+                        headlineColor = if (selected) colors.onSecondaryContainer else colors.onSurface,
+                    ),
                 )
             }
-            DropdownMenuItem(
-                text = { Text(if (settings.wideOnTablet) "Make standard" else "Make wide") },
-                onClick = {
-                    opened = false
-                    edit(settings.copy(wideOnTablet = !settings.wideOnTablet))
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Hide tile") },
-                onClick = {
-                    opened = false
-                    edit(settings.copy(hidden = true))
-                },
-            )
         }
     }
 }

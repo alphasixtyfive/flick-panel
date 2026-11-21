@@ -40,7 +40,7 @@ internal fun Favourites(
     alerts: List<ActiveHomeBadge>,
 ) {
     Column(modifier.padding(bottom = 12.dp)) {
-        if (alerts.isNotEmpty()) HomeWarnings(alerts)
+        if (alerts.isNotEmpty()) HomeWarnings(alerts, Modifier.padding(bottom = tileGap))
         if (tiles.isEmpty() && alerts.isEmpty()) {
             EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.")
         }

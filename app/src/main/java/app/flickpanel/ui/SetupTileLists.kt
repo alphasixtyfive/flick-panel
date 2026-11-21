@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -41,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -139,7 +142,7 @@ private fun TileOptions(label: String, tile: TileSpec, edit: () -> Unit, resize:
 internal fun RoomSetup(
     draft: PanelConfig, state: PanelUi, customize: (Area) -> Unit, update: (PanelConfig) -> Unit,
 ) {
-    var search by remember { mutableStateOf("") }
+    var search by rememberSaveable { mutableStateOf("") }
     val rooms = state.catalogue.rooms
     val selectedRooms = remember(draft, state.catalogue) { RoomLayout(draft, state.catalogue).selectedRooms }
     val chosen = remember(selectedRooms) { selectedRooms.map(Area::id) }
@@ -169,27 +172,45 @@ internal fun RoomSetup(
                     items(choices, key = Area::id) { room ->
                         val position = positions[room.id] ?: -1
                         val selected = position >= 0
+                        val toggle = {
+                            update(draft.copy(roomIds = if (selected) chosen - room.id else chosen + room.id))
+                        }
                         Surface(
-                            selected = selected,
-                            onClick = { update(draft.copy(roomIds = if (selected) chosen - room.id else chosen + room.id)) },
+                            modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.medium,
                             color = if (selected) MaterialTheme.colorScheme.surfaceContainerLow else Color.Transparent,
                         ) {
-                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 12.dp),
+                            val select = if (selected) Modifier else Modifier.toggleable(false, role = Role.Checkbox) { toggle() }
+                            Row(Modifier.then(select).heightIn(min = 56.dp).padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.padding(end = 16.dp))
-                                Text(room.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
-                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                if (selected) {
+                                Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) {
+                                    Checkbox(
+                                        checked = selected,
+                                        onCheckedChange = if (selected) ({ toggle() }) else null,
+                                        modifier = if (selected) Modifier.semantics {
+                                            contentDescription = "Remove ${room.name} from panel"
+                                        } else Modifier,
+                                    )
+                                }
+                                val open = if (selected) Modifier.clip(MaterialTheme.shapes.medium)
+                                    .clickable(role = Role.Button, onClickLabel = "Edit ${room.name}") { customize(room) }
+                                else Modifier
+                                Row(
+                                    Modifier.weight(1f).then(open).heightIn(min = 56.dp).padding(horizontal = 8.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(room.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    if (selected) Icon(Icons.Rounded.Edit, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (selected && chosen.size > 1) {
                                     ReorderGrip(room.name, position > 0, position < chosen.lastIndex) { delta ->
                                         val next = chosen.toMutableList()
                                         if (position + delta in next.indices) {
                                             java.util.Collections.swap(next, position, position + delta)
                                             update(draft.copy(roomIds = next))
                                         }
-                                    }
-                                    IconButton(onClick = { customize(room) }) {
-                                        Icon(Icons.Rounded.Edit, "Customize ${room.name}")
                                     }
                                 }
                             }
