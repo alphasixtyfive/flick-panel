@@ -23,11 +23,11 @@ import java.time.format.DateTimeFormatter
 
 internal fun LazyListScope.calendarRows(events: List<AgendaEvent>, dates: AgendaDates) {
     for ((day, grouped) in events.groupBy(dates::eventDay)) {
-        item { AgendaSection(dates.dayName(day)) }
+        item(key = "day:$day") { AgendaSection(dates.dayHeading(day)) }
         items(grouped) { event ->
             Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
-                Column(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    Text(event.summary, style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(16.dp)) {
+                    Text(event.summary, style = MaterialTheme.typography.titleLarge)
                     AgendaSubtitle(dates.eventTime(event))
                 }
             }
@@ -60,6 +60,11 @@ internal class AgendaDates(private val zone: ZoneId, private val today: LocalDat
         else -> date.format(shortDate)
     }
 
+    fun dayHeading(date: LocalDate) = when (date) {
+        today, today.plusDays(1) -> "${dayName(date)} · ${date.format(shortDate)}"
+        else -> dayName(date)
+    }
+
     fun startTime(value: AgendaMoment): String = when (value) {
         is AgendaMoment.AllDay -> "All day"
         is AgendaMoment.Timed -> value.instant.atZone(zone).format(clock)
@@ -69,7 +74,8 @@ internal class AgendaDates(private val zone: ZoneId, private val today: LocalDat
         val date = day(value)
         val name = if (date == today || date == today.plusDays(1)) dayName(date).lowercase() else dayName(date)
         val time = if (value is AgendaMoment.Timed) " · ${startTime(value)}" else ""
-        return "Due $name$time"
+        val prefix = if (date < today) "Overdue ·" else "Due"
+        return "$prefix $name$time"
     }
 
     fun eventSubtitle(event: AgendaEvent): String {

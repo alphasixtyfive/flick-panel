@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val camera = state.camera
                 val music = state.musicBrowser
+                val agenda = state.config.favourites.firstOrNull { it.entity == state.agendaOpen && it.kind.isAgenda }
                 val content = state.config.favourites.firstOrNull { it.entity == state.contentOpen && it.kind.hasContentScreen }
                 when {
                     blank -> {
@@ -109,6 +110,10 @@ class MainActivity : ComponentActivity() {
                         BackHandler(onBack = model::closeCamera)
                     }
                     music != null -> MusicBrowser(music, state.entity(music)?.name, model)
+                    agenda != null -> {
+                        OpenAgenda(agenda, state, model)
+                        BackHandler(onBack = model::closeAgenda)
+                    }
                     content != null -> {
                         val title = state.label(content)
                         when (content.kind) {
@@ -138,9 +143,6 @@ class MainActivity : ComponentActivity() {
                 }
                 if (state.unlocking) UnlockEditor(state, model::unlock, model::relock)
                 if (state.editor) EditPanel(state, model)
-                state.config.favourites.firstOrNull { it.entity == state.agendaOpen && it.kind.isAgenda }?.let { tile ->
-                    OpenAgenda(tile, state, model)
-                }
                 BackHandler(state.configured && state.page != Page.FAVOURITES && !state.clock && !state.screenBlank &&
                     !state.editor && !state.unlocking && !state.hasViewer) {
                     model.selectPage(Page.FAVOURITES)

@@ -65,14 +65,13 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Selector** displays the choices from a Home Assistant select entity. **Number control**
   uses the minimum, maximum and increment from a number entity. For buttons, scenes and
   scripts, **Confirm before running** adds a confirmation step.
-- **Tasks** pins a Home Assistant to-do list. Tap the preview to see the full list,
-  add tasks, or mark them done when the list supports those actions.
-- **Calendar** shows upcoming events for the next seven days, including all-day and
-  ongoing events. Tap the preview for the full agenda. Set either tile to **Wide** to
-  give its preview more room.
+- **Tasks** shows how many tasks are open and previews the first one. Open the tile
+  to check tasks off, add a task when the list supports it, or expand completed items.
+- **Calendar** previews the next event and opens a seven-day agenda grouped by date.
+  It includes all-day and ongoing events. **Wide** lets either tile preview two items.
 - **Cover** shows the state and position reported by Home Assistant. It offers the
   Open, Close, and Stop actions advertised by the device. A gate uses the whole
-  tile as a toggle and shows its next action when it is ready to move.
+  tile as a toggle and shows its current state.
 - **Person location** shows the Home Assistant zone and opens a map inside Panel
   when the person has a reported position. The bundled geographic basemap works
   without a map account or network tile requests.

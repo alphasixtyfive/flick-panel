@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowOutward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -77,6 +79,16 @@ internal fun ControlTileTitle(label: String, icon: ImageVector, tint: Color) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
         Icon(icon, null, tint = tint, modifier = Modifier.size(tileIconSize))
+    }
+}
+
+@Composable
+internal fun PreviewTileTitle(label: String, icon: ImageVector, canOpen: Boolean = true) {
+    val colors = MaterialTheme.colorScheme
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(compactTileIconSize), tint = colors.primary)
+        TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
+        if (canOpen) Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(19.dp), tint = colors.onSurfaceVariant)
     }
 }
 
