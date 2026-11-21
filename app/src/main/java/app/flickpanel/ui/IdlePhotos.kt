@@ -43,6 +43,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.ha.PhotoAlbum
 import app.flickpanel.ha.PhotoFolder
 import kotlinx.coroutines.CancellationException
@@ -62,26 +65,29 @@ internal fun IdlePhotos(
 ) {
     if (albumId == null) return
     var photo by remember(albumId) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(albumId) {
-        while (isActive) {
-            val photos = photoRequest { browse(albumId).photos }.orEmpty().shuffled()
-            if (photos.isEmpty()) {
-                delay(albumRetryMillis)
-                continue
-            }
-            var hasPhoto = false
-            for (id in photos) {
-                val bitmap = photoRequest { load(id) }
-                if (bitmap == null) {
-                    delay(2_000)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(albumId, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                val photos = photoRequest { browse(albumId).photos }.orEmpty().shuffled()
+                if (photos.isEmpty()) {
+                    delay(albumRetryMillis)
                     continue
                 }
-                photo = bitmap
-                hasPhoto = true
-                if (photos.size == 1) return@LaunchedEffect
-                delay(photoIntervalMillis)
+                var hasPhoto = false
+                for (id in photos) {
+                    val bitmap = photoRequest { load(id) }
+                    if (bitmap == null) {
+                        delay(2_000)
+                        continue
+                    }
+                    photo = bitmap
+                    hasPhoto = true
+                    if (photos.size == 1) return@repeatOnLifecycle
+                    delay(photoIntervalMillis)
+                }
+                if (!hasPhoto) delay(albumRetryMillis)
             }
-            if (!hasPhoto) delay(albumRetryMillis)
         }
     }
     Crossfade(photo, modifier, animationSpec = tween(if (reduceMotion) 0 else 400), label = "Idle photo") { bitmap ->

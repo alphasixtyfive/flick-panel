@@ -56,9 +56,10 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Wall display** keeps the foreground panel awake and dims the idle clock, including
   while a managed charger has paused charging. Set the idle timeout to **Never
   automatically** to open the clock only from the dashboard clock.
-- **Idle photos** selects a Home Assistant media folder or Synology Photos album. The
-  idle screen shows its photos with the clock and any configured message. Tap the clock
-  on the dashboard to open it, and tap anywhere on the idle screen to return.
+- **Panel → Display → Idle photos** selects a Home Assistant media folder or Synology
+  Photos album. Copy photos into a folder under `/media` on Home Assistant OS, then
+  open the folder under **My media**, choose **Use this folder**, and save. Tap the
+  dashboard clock to preview the photos with the clock and any configured message.
 - For the kitchen boost, pin the existing boost button and link its timer in the tile's
   settings. The tile shows the remaining time when the boost runs. A standalone timer
   can use the **Countdown** format. Home Assistant owns both the boost and the timer.
@@ -122,8 +123,9 @@ recent music folders are reused on the same Home Assistant connection. Agenda ca
 share a rate-limited refresh with their full-list views and retain the last results
 in memory if Home Assistant disconnects.
 
-Live video uses Home Assistant HLS and one Media3 player, as in Flick TV. The player
-is released when the viewer closes. For timings, `adb logcat -s FlickPanelCamera:I`
+Live video uses Home Assistant HLS and one Media3 player, as in Flick TV. Android releases the player
+when the viewer closes or the app goes to the background.
+Camera previews and idle photos pause in the background. For timings, `adb logcat -s FlickPanelCamera:I`
 reports `hls_url_ms` and `first_frame_ms` from the camera tap. The first-frame timer
 stops at Media3's `onRenderedFirstFrame` callback.
 

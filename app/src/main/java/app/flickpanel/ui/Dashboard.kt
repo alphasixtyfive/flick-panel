@@ -1,5 +1,6 @@
 package app.flickpanel.ui
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -45,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -68,8 +71,23 @@ import java.time.format.DateTimeFormatter
 
 internal const val tabletWidthDp = 840
 
-private val clockFormat = DateTimeFormatter.ofPattern("HH:mm")
-private val dateFormat = DateTimeFormatter.ofPattern("EEEE d MMMM")
+@Composable
+private fun clockFormatter(): DateTimeFormatter {
+    val locale = LocalConfiguration.current.locales[0]
+    val use24Hour = DateFormat.is24HourFormat(LocalContext.current)
+    return remember(locale, use24Hour) {
+        val pattern = DateFormat.getBestDateTimePattern(locale, if (use24Hour) "Hm" else "hma")
+        DateTimeFormatter.ofPattern(pattern, locale)
+    }
+}
+
+@Composable
+private fun dateFormatter(): DateTimeFormatter {
+    val locale = LocalConfiguration.current.locales[0]
+    return remember(locale) {
+        DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale)
+    }
+}
 
 @Composable
 private fun clockTime(): ZonedDateTime {
@@ -86,6 +104,8 @@ private fun clockTime(): ZonedDateTime {
 @Composable
 internal fun AmbientClock(message: String?, albumId: String?, reduceMotion: Boolean, model: PanelViewModel) {
     val now = clockTime()
+    val time = now.format(clockFormatter())
+    val date = now.format(dateFormatter())
     val shadow = if (albumId == null) null else Shadow(Color(0x66000000), Offset(0f, 2f), blurRadius = 10f)
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xff10151b))
         .clickable(interactionSource = null, indication = null, onClickLabel = "Open home controls", onClick = model::wake)) {
@@ -99,12 +119,12 @@ internal fun AmbientClock(message: String?, albumId: String?, reduceMotion: Bool
                 maxLines = if (short) 1 else 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.TopCenter).padding(captionInset))
         }
-        val availableClock = minOf(maxWidth.value * .24f, maxHeight.value * .35f)
-        val size = minOf((maxWidth.value * .18f).coerceIn(68f, 160f), availableClock / fontScale).sp
+        val availableClock = minOf((maxWidth - 24.dp).value * .18f, maxHeight.value * .35f)
+        val size = minOf(160f, availableClock / fontScale).sp
         Column(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(now.format(clockFormat), fontSize = size, lineHeight = size,
+            Text(time, fontSize = size, lineHeight = size, maxLines = 1,
                 fontWeight = FontWeight.Medium, color = Color(0xfff1f6fb), style = MaterialTheme.typography.displayMedium.copy(shadow = shadow))
-            Text(now.format(dateFormat), style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
+            Text(date, style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
                 color = Color(0xffedf3fa), modifier = Modifier.padding(top = if (short) 4.dp else 12.dp),
                 textAlign = TextAlign.Center, maxLines = if (short) 1 else 2, overflow = TextOverflow.Ellipsis)
         }
@@ -126,7 +146,11 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
-                if (state.page == Page.ROOMS) "Rooms" else "Home",
+                when (state.page) {
+                    Page.FAVOURITES -> "Home"
+                    Page.ROOMS -> "Rooms"
+                    Page.CAMERAS -> "Cameras"
+                },
                 weather?.let { state.entity(it.entity) },
                 wide = wide,
                 short = short,
@@ -216,7 +240,7 @@ private fun HeaderClock(wide: Boolean, showIdleScreen: () -> Unit) {
         onClickLabel = "Show idle screen", role = Role.Button, onClick = showIdleScreen),
         contentAlignment = Alignment.Center) {
         val style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge
-        Text(clockTime().format(clockFormat), style = style.copy(fontFeatureSettings = "'tnum'"))
+        Text(clockTime().format(clockFormatter()), style = style.copy(fontFeatureSettings = "'tnum'"), maxLines = 1)
     }
 }
 

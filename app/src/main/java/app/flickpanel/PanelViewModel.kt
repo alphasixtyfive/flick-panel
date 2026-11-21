@@ -102,6 +102,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         } else {
             idleJob?.cancel()
             approachJob?.cancel()
+            cancelCommands()
             client?.stop()
             agenda.pause()
             presence = null
@@ -444,7 +445,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     ) {
         val active = client ?: return
         val id = entity.id
-        if (_ui.value.link != Link.ONLINE || !entity.available || !interruptPending && id in _ui.value.pending) return
+        val current = _ui.value
+        if (!foreground || current.link != Link.ONLINE || current.entities[id]?.available != true ||
+            !interruptPending && id in current.pending) return
         val previous = commandJobs[id]
         val command = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -468,6 +471,12 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         _ui.update { it.copy(pending = it.pending + (id to pending)) }
         if (interruptPending) previous?.cancel()
         command.start()
+    }
+
+    private fun cancelCommands() {
+        val active = commandJobs.values.toList()
+        commandJobs.clear()
+        active.forEach { it.cancel() }
     }
 
     fun cachedSnapshot(id: String, revision: String = ""): Bitmap? = images.snapshots.cached("$id@$revision")
@@ -546,6 +555,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         stateJob?.cancel()
         remoteJob?.cancel()
         catalogueJob?.cancel()
+        cancelCommands()
         agenda.keep(emptySet())
         client?.stop()
         graphTimes.clear()
