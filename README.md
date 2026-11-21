@@ -114,6 +114,17 @@ tablet, and choose **Link tablet**. Home Assistant's built-in
 creates the device and its `notify.mobile_app_…` action. Check the action name in
 Home Assistant before using it in a script or automation.
 
+For native controls, install `custom_components/flick_panel` from this repository in
+Home Assistant and restart Core. Add **Flick Panel** under **Settings → Devices &
+services** and choose the linked tablet. **Panel display** blanks and wakes Flick Panel
+while it is running. The switch follows the app's reported display mode, and the linked
+Mobile App device holds the tablet's diagnostic sensors. Android controls physical
+display power. Set the tablet's regular keep-awake preference under **Wall display**.
+
+Use **Flick Panel: Start screensaver**, **Stop screensaver**, or **Open camera** in an
+automation. Choose the tablet and, for a camera action, a camera saved in Flick Panel.
+The existing notify action supports the full command set below.
+
 ```yaml
 action: notify.mobile_app_kitchen_panel
 data:

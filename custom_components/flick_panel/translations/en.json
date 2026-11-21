@@ -1,0 +1,45 @@
+{
+  "title": "Flick Panel",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose a Flick Panel tablet",
+        "data": {"panel": "Tablet"}
+      }
+    },
+    "abort": {
+      "already_configured": "This tablet already has Flick Panel controls.",
+      "no_linked_panels": "No tablets are ready to add. Open Panel → Home Assistant → Tablet link in Flick Panel and link the tablet first."
+    },
+    "error": {"panel_unavailable": "That tablet is no longer available."}
+  },
+  "entity": {
+    "switch": {
+      "display": {"name": "Panel display"}
+    }
+  },
+  "services": {
+    "start_screensaver": {
+      "name": "Start screensaver",
+      "description": "Show the clock and configured photos on the tablet.",
+      "fields": {
+        "device_id": {"name": "Tablet", "description": "The Flick Panel tablet."}
+      }
+    },
+    "stop_screensaver": {
+      "name": "Stop screensaver",
+      "description": "Return to Favourites from the clock or blank display.",
+      "fields": {
+        "device_id": {"name": "Tablet", "description": "The Flick Panel tablet."}
+      }
+    },
+    "open_camera": {
+      "name": "Open camera",
+      "description": "Open a camera saved in Flick Panel.",
+      "fields": {
+        "device_id": {"name": "Tablet", "description": "The Flick Panel tablet."},
+        "camera_entity_id": {"name": "Camera", "description": "A camera saved on this tablet."}
+      }
+    }
+  }
+}

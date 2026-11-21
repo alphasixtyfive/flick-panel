@@ -1,0 +1,27 @@
+start_screensaver:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: flick_panel
+stop_screensaver:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: flick_panel
+open_camera:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: flick_panel
+    camera_entity_id:
+      required: true
+      selector:
+        entity:
+          filter:
+            domain: camera
