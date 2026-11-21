@@ -70,8 +70,8 @@ internal fun AgendaPreview(
         Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                 Icon(if (kind == TileKind.TASKS) Icons.Rounded.Checklist else Icons.Rounded.CalendarMonth,
-                    null, Modifier.size(22.dp), tint = colors.primary)
-                TileTitle(title, Modifier.weight(1f))
+                    null, Modifier.size(compactTileIconSize), tint = colors.primary)
+                TileTitle(title, Modifier.weight(1f).align(Alignment.Top))
                 Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(19.dp), tint = colors.onSurfaceVariant)
             }
             val message = agendaMessage(kind, state, online)

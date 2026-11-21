@@ -119,9 +119,9 @@ internal fun CameraTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, m
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xdc101317))))
                 .padding(start = tileContentPadding, top = 24.dp, end = tileContentPadding, bottom = 14.dp),
                 color = Color.White)
-            Box(Modifier.align(Alignment.TopEnd).padding(12.dp).size(38.dp)
+            Box(Modifier.align(Alignment.TopEnd).padding(12.dp).size(44.dp)
                 .background(Color(0xc0171a1d), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.ArrowOutward, "Open live camera", Modifier.size(23.dp), tint = Color.White)
+                Icon(Icons.Rounded.ArrowOutward, "Open live camera", Modifier.size(compactTileIconSize), tint = Color.White)
             }
         }
     }

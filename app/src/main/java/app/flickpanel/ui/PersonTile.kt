@@ -38,8 +38,8 @@ internal fun PersonTile(label: String, live: Entity?, online: Boolean, modifier:
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                Icon(Icons.Rounded.Star, null, Modifier.size(22.dp), tint = colors.primary)
-                TileTitle(label, Modifier.weight(1f))
+                Icon(Icons.Rounded.Star, null, Modifier.size(compactTileIconSize), tint = colors.primary)
+                TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
                 if (location != null) Icon(Icons.Rounded.ArrowOutward, "Open map", Modifier.size(19.dp), tint = colors.onSurfaceVariant)
             }
             val status = person?.personStatus()

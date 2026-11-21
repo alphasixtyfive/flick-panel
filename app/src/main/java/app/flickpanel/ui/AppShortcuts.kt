@@ -115,10 +115,11 @@ internal fun AppTile(tile: TileSpec, modifier: Modifier) {
             Toast.makeText(context, "$label couldn't open", Toast.LENGTH_SHORT).show()
         }
     }, modifier = modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(Modifier.fillMaxWidth().padding(tileContentPadding), horizontalArrangement = Arrangement.spacedBy(10.dp),
+        Row(Modifier.fillMaxWidth().padding(horizontal = tileContentPadding, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            if (image != null) Image(image, null, Modifier.size(29.dp))
-            else Icon(Icons.Rounded.Apps, null, Modifier.size(29.dp), tint = MaterialTheme.colorScheme.primary)
+            if (image != null) Image(image, null, Modifier.size(tileArtworkSize))
+            else Icon(Icons.Rounded.Apps, null, Modifier.size(tileArtworkSize), tint = MaterialTheme.colorScheme.primary)
             TileTitle(label, Modifier.weight(1f))
             Icon(Icons.Rounded.ArrowOutward, "Open app", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }

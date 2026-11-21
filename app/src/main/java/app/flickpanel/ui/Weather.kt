@@ -54,7 +54,7 @@ internal fun WeatherSummary(entity: Entity?, compact: Boolean, prominent: Boolea
     val iconSize = when {
         prominent -> 38.dp
         compact -> 23.dp
-        else -> 28.dp
+        else -> tileIconSize
     }
     val gap = if (prominent) 12.dp else 8.dp
     val temperatureStyle = if (prominent) type.displaySmall else type.titleLarge

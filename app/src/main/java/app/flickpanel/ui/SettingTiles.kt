@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -45,7 +46,7 @@ internal fun ChoiceTile(
             Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TileTitle(label, Modifier.weight(1f))
-                    Icon(Icons.Rounded.ExpandMore, null, tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Rounded.ExpandMore, null, Modifier.size(compactTileIconSize), tint = MaterialTheme.colorScheme.primary)
                 }
                 TileValue(pending ?: entity?.takeIf(Entity::available)?.state ?: "Unavailable", maxLines = 2)
             }
@@ -75,11 +76,11 @@ internal fun NumberTile(
                 TileValue(pending ?: displayValue(entity), Modifier.weight(1f), maxLines = 2)
                 FilledTonalIconButton(onClick = { step(false) },
                     enabled = enabled && value != null && range?.adjacent(value, false) != null) {
-                    Icon(Icons.Rounded.Remove, "Decrease $label")
+                    Icon(Icons.Rounded.Remove, "Decrease $label", Modifier.size(compactTileIconSize))
                 }
                 FilledTonalIconButton(onClick = { step(true) },
                     enabled = enabled && value != null && range?.adjacent(value, true) != null) {
-                    Icon(Icons.Rounded.Add, "Increase $label")
+                    Icon(Icons.Rounded.Add, "Increase $label", Modifier.size(compactTileIconSize))
                 }
             }
         }

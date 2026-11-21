@@ -125,12 +125,12 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 TileTitle(label, Modifier.weight(1f))
-                Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(tileArtworkSize), contentAlignment = Alignment.Center) {
                     if (cover != null) {
                         Image(cover, null, Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
                             contentScale = ContentScale.Crop)
                     } else {
-                        Icon(Icons.Rounded.MusicNote, null, Modifier.size(29.dp), tint = colors.primary)
+                        Icon(Icons.Rounded.MusicNote, null, Modifier.size(tileIconSize), tint = colors.primary)
                     }
                 }
             }
@@ -141,7 +141,7 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
                         FilledTonalIconButton(onClick = { entity?.let { model.mediaTransport(it.id, transport) } },
                             modifier = Modifier.fillMaxSize(), enabled = ready) {
                             Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                if (playing) "Pause" else "Play")
+                                if (playing) "Pause" else "Play", Modifier.size(compactTileIconSize))
                         }
                     } else if (canBrowse) {
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = colors.onSurfaceVariant)

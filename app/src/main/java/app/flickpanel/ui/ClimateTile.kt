@@ -50,11 +50,11 @@ internal fun ClimateTile(
                 }
                 FilledTonalIconButton(onClick = { step(false) }, modifier = Modifier.size(48.dp),
                     enabled = enabled && live?.adjacentTemperature(increase = false) != null) {
-                    Icon(Icons.Rounded.Remove, "Lower set temperature")
+                    Icon(Icons.Rounded.Remove, "Lower set temperature", Modifier.size(compactTileIconSize))
                 }
                 FilledTonalIconButton(onClick = { step(true) }, modifier = Modifier.size(48.dp),
                     enabled = enabled && live?.adjacentTemperature(increase = true) != null) {
-                    Icon(Icons.Rounded.Add, "Raise set temperature")
+                    Icon(Icons.Rounded.Add, "Raise set temperature", Modifier.size(compactTileIconSize))
                 }
             }
         }

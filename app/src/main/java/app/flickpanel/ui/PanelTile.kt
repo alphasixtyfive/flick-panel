@@ -24,6 +24,9 @@ import app.flickpanel.ha.readContent
 
 internal val panelCardShape = RoundedCornerShape(26.dp)
 internal val tileContentPadding = 16.dp
+internal val tileIconSize = 32.dp
+internal val compactTileIconSize = 28.dp
+internal val tileArtworkSize = 36.dp
 
 @Composable
 internal fun PanelTile(
@@ -72,8 +75,8 @@ internal fun PanelTile(
 @Composable
 internal fun ControlTileTitle(label: String, icon: ImageVector, tint: Color) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        TileTitle(label, Modifier.weight(1f))
-        Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
+        TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
+        Icon(icon, null, tint = tint, modifier = Modifier.size(tileIconSize))
     }
 }
 
