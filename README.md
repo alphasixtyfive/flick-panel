@@ -72,10 +72,10 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Selector** displays the choices from a Home Assistant select entity. **Number control**
   uses the minimum, maximum and increment from a number entity. For buttons, scenes and
   scripts, **Confirm before running** adds a confirmation step.
-- **Compact reading** puts readings such as temperature and humidity on Favourites.
-  Hold **Home**, enter the setup PIN, then open an item under **Favourites → Readings**
+- **Indicator** displays values such as temperature and humidity on Favourites.
+  Hold **Home**, enter the setup PIN, then open an item under **Favourites → Indicators**
   to edit it. To add a reading, use **Add tile**, choose the Home Assistant sensor and
-  select **Compact reading**. TalkBack reads the tile name and value.
+  select **Indicator**. TalkBack reads the tile name and value.
 - **Tasks** previews open items on Favourites. Open the tile for the checklist.
   Tap a row to check it off, use **Add item**, or expand **Completed** to restore an item.
   The app offers the actions supported by the list in Home Assistant.
@@ -94,10 +94,11 @@ explicit private IPv4 addresses such as a local Home Assistant server at
   reports a position. The full-screen map works offline, with OpenStreetMap road,
   park and water detail for north and central London and Varna. Natural Earth
   supplies the worldwide overview. See the [map data credits](app/src/main/assets/offline_map/ATTRIBUTION.md).
-- In PIN-protected setup, open **Panel → Home Assistant → Warning badges**. Pick an
-  existing sensor and enter the states that should show a badge on Home. For example,
-  use **on** for a maintenance binary sensor or **high, very-high** for a pollen sensor.
-  Tap a badge to read the current warning, including any issues listed by the sensor.
+- In PIN-protected setup, open **Panel → Home Assistant → Home alerts**. Pick an
+  existing sensor and select the states that should show an alert on Home. For example,
+  use **On** for a maintenance binary sensor or **High** and **Very high** for a pollen sensor.
+  Alerts appear beside the tabs when there is room and below them on compact screens.
+  Tap an alert to read the current warning, including any issues listed by the sensor.
 - **Content reader** opens a sensor or text helper in a full-screen reader. Select
   the entity state or a text attribute as the source. A longer recipe or note can
   live in a text attribute, with line breaks kept in the reader.

@@ -62,7 +62,7 @@ internal enum class PanelPage(val label: String, val readOnly: Boolean = false) 
     APPEARANCE("Appearance"),
     HOME_ASSISTANT("Home Assistant"),
     REMOTE_CONTROL("Tablet link"),
-    HOME_BADGES("Warning badges"),
+    HOME_BADGES("Home alerts"),
     ABOUT("About", readOnly = true),
     FONT_LICENCE("Google Sans Flex licence", readOnly = true),
 }
@@ -140,7 +140,7 @@ internal fun PanelSettings(
                 SettingsListGroup("Favourites") {
                     SettingLink("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", chooseMessage,
                         clear = draft.messageEntity?.let { { change(draft.copy(messageEntity = null)) } })
-                    SettingLink("Warning badges", if (draft.homeBadges.isEmpty()) "Show active alerts on Home" else null,
+                    SettingLink(PanelPage.HOME_BADGES.label, if (draft.homeBadges.isEmpty()) "Show active alerts on Home" else null,
                         { open(PanelPage.HOME_BADGES) })
                     SettingLink("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", choosePresence,
                         clear = draft.presenceEntity?.let { { change(draft.copy(presenceEntity = null)) } })

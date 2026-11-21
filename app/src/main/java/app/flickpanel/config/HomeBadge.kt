@@ -16,3 +16,6 @@ internal fun badgeStates(values: Iterable<String>): List<String> = values
     .filter { it.isNotEmpty() && it.length <= 80 && it != "unknown" && it != "unavailable" }
     .distinct()
     .take(12)
+
+internal fun badgeStateLabel(state: String): String =
+    state.replace('-', ' ').replace('_', ' ').replaceFirstChar(Char::uppercase)

@@ -54,7 +54,7 @@ internal fun packTileRows(
 }
 
 internal enum class HomeGroup(val label: String) {
-    READINGS("Readings"), CONTROLS("Controls"), CAMERAS("Cameras"), PEOPLE("People"),
+    READINGS("Indicators"), CONTROLS("Controls"), CAMERAS("Cameras"), PEOPLE("People"),
     AGENDA("Agenda"), APPS("Apps"), HISTORY("History"),
 }
 

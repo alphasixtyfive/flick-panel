@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import app.flickpanel.ActiveHomeBadge
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
@@ -36,11 +37,11 @@ import app.flickpanel.config.TileSpec
 @Composable
 internal fun Favourites(
     tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, modifier: Modifier, showReadings: Boolean,
+    alerts: List<ActiveHomeBadge>,
 ) {
-    val badges = state.activeHomeBadges()
     Column(modifier.padding(bottom = 12.dp)) {
-        if (badges.isNotEmpty()) HomeWarnings(badges)
-        if (tiles.isEmpty() && badges.isEmpty()) {
+        if (alerts.isNotEmpty()) HomeWarnings(alerts)
+        if (tiles.isEmpty() && alerts.isEmpty()) {
             EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.")
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {

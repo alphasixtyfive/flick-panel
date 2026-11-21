@@ -26,15 +26,17 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ActiveHomeBadge
+import app.flickpanel.config.badgeStateLabel
 
 @Composable
-internal fun HomeWarnings(badges: List<ActiveHomeBadge>) {
+internal fun HomeWarnings(badges: List<ActiveHomeBadge>, modifier: Modifier = Modifier) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     val dark = MaterialTheme.colorScheme.surface.luminance() < .45f
     val container = if (dark) Color(0xff48391e) else Color(0xffffedc2)
     val content = if (dark) Color(0xffffdfa0) else Color(0xff533800)
     val single = badges.singleOrNull()
     AssistChip(
+        modifier = modifier,
         onClick = { open = single?.entity?.id ?: "" },
         label = { Text(single?.label ?: "${badges.size} alerts", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = { Icon(Icons.Rounded.WarningAmber, null, Modifier.size(20.dp)) },
@@ -57,7 +59,7 @@ internal fun HomeWarnings(badges: List<ActiveHomeBadge>) {
                 val items = selected.details()
                 if (items.isEmpty()) {
                     val value = selected.entity.state
-                    Text(if (value == "on") "Active" else value.replace('-', ' ').replaceFirstChar { it.uppercase() })
+                    Text(if (value == "on") "Active" else badgeStateLabel(value))
                 }
                 for ((name, detail) in items) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
