@@ -1,5 +1,7 @@
 package app.flickpanel.ha
 
+import app.flickpanel.config.roomTileKind
+
 import app.flickpanel.config.TileKind
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -257,15 +259,15 @@ internal data class Area(val id: String, val name: String)
 internal data class Entry(val entity: Entity, val area: String?, val diagnostic: Boolean, val visible: Boolean)
 internal data class Catalogue(val entries: List<Entry> = emptyList(), val areas: List<Area> = emptyList()) {
     private val byId = entries.associateBy { it.entity.id }
-    private val byRoom = entries.asSequence()
-        .filter { it.area != null && it.visible && !it.diagnostic && (it.entity.domain == "light" || it.entity.domain == "climate") }
-        .sortedBy { it.entity.domain != "light" }
-        .groupBy { it.area }
+    private val controlsById = entries.filter { it.visible && !it.diagnostic && roomTileKind(it.entity.id) != null }
+        .associateBy { it.entity.id }
+    private val byRoom = controlsById.values.filter { it.area != null }.groupBy { it.area }
     val rooms = areas.filter { it.id in byRoom }
 
     fun entity(id: String) = byId[id]?.entity
     fun areaOf(id: String) = byId[id]?.area
     fun room(area: String): List<Entry> = byRoom[area].orEmpty()
+    fun roomEntity(id: String): Entity? = controlsById[id]?.entity
 }
 
 internal data class GraphPoint(val time: Long, val value: Double)

@@ -109,7 +109,7 @@ internal object PanelConfigCodec {
                 val control = controls.optJSONObject(index) ?: return@mapNotNull null
                 val entity = control.optString("entity").takeIf(::validEntity) ?: return@mapNotNull null
                 val light = entity.startsWith("light.")
-                if (!light && !entity.startsWith("climate.")) return@mapNotNull null
+                if (roomTileKind(entity) == null) return@mapNotNull null
                 val lightFormat = if (light) when (control.optString("format")) {
                     TileKind.TOGGLE.name -> TileKind.TOGGLE
                     TileKind.SLIDER.name -> TileKind.SLIDER

@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.DisplaySettings
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Hub
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.config.HomeBadge
 import app.flickpanel.config.PanelConfig
+import app.flickpanel.config.PanelBackupAction
 import app.flickpanel.config.PanelTheme
 import app.flickpanel.ha.Link
 
@@ -63,6 +65,7 @@ internal enum class PanelPage(val label: String, val readOnly: Boolean = false) 
     HOME_ASSISTANT("Home Assistant"),
     REMOTE_CONTROL("Tablet link"),
     HOME_BADGES("Home alerts"),
+    BACKUP("Backup & restore"),
     ABOUT("About", readOnly = true),
     FONT_LICENCE("Google Sans Flex licence", readOnly = true),
 }
@@ -73,10 +76,12 @@ internal fun PanelSettings(
     choosePhotos: () -> Unit, chooseMessage: () -> Unit, choosePresence: () -> Unit, changeConnection: () -> Unit,
     linkPanel: (String) -> Unit, unlinkPanel: () -> Unit,
     chooseBadge: () -> Unit, editBadge: (HomeBadge) -> Unit,
+    backup: (PanelBackupAction) -> Unit,
 ) {
     val context = LocalContext.current
     val album = draft.idleAlbum?.title ?: "Clock only"
     val scroll = key(page) { rememberScrollState() }
+    var confirmRestore by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxWidth().verticalScroll(scroll)
             .padding(start = setupPadding, end = setupPadding, top = 12.dp, bottom = 24.dp),
@@ -102,6 +107,7 @@ internal fun PanelSettings(
                         { openHomeAppSettings(context) }, Icons.Rounded.Home, opensAndroid = true)
                 }
                 SettingsListGroup {
+                    SettingLink(PanelPage.BACKUP.label, null, { open(PanelPage.BACKUP) }, Icons.Rounded.Backup)
                     SettingLink(PanelPage.ABOUT.label, null, { open(PanelPage.ABOUT) }, Icons.Rounded.Info)
                 }
             }
@@ -150,10 +156,36 @@ internal fun PanelSettings(
             PanelPage.HOME_BADGES -> WarningBadgeSettings(draft.homeBadges, state, chooseBadge, editBadge) { removed ->
                 change(draft.copy(homeBadges = draft.homeBadges - removed))
             }
+            PanelPage.BACKUP -> {
+                if (draft != state.config) {
+                    Text("Save your changes before choosing a backup file.", style = MaterialTheme.typography.bodyLarge)
+                } else {
+                    SettingsListGroup {
+                        SettingLink("Back up", "Save your layout and panel preferences",
+                            { backup(PanelBackupAction.BACK_UP) })
+                        SettingLink("Restore", "Replace the layout from a Flick Panel backup",
+                            { confirmRestore = true })
+                    }
+                    Text("Backups leave your setup PIN and Home Assistant connection on this device.",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             PanelPage.ABOUT -> PanelAbout { open(PanelPage.FONT_LICENCE) }
             PanelPage.FONT_LICENCE -> FontLicence()
         }
     }
+    if (confirmRestore) AlertDialog(
+        onDismissRequest = { confirmRestore = false },
+        title = { Text("Restore a backup?") },
+        text = { Text("The selected file will replace the saved layout and panel preferences.") },
+        dismissButton = { TextButton(onClick = { confirmRestore = false }) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(onClick = {
+                confirmRestore = false
+                backup(PanelBackupAction.RESTORE)
+            }) { Text("Choose file") }
+        },
+    )
 }
 
 @Composable

@@ -72,7 +72,7 @@ class HaSessionTest {
                 withTimeout(6_000) { client.entities.first { it["light.lamp"]?.state == "on" } }
                 assertEquals(50, client.entities.value.getValue("light.lamp").brightness)
                 assertEquals(listOf(801.0, 840.0), client.history("sensor.power").map { it.value })
-                assertEquals("/api/hls/abcdefgh123456/master_playlist.m3u8", client.stream("camera.front_door").encodedPath)
+                assertEquals("/api/hls/abcdefgh123456/master_playlist.m3u8", client.cameraStream("camera.front_door").url.encodedPath)
                 assertNotNull(client.snapshot("camera.front_door"))
                 assertNotNull(client.snapshot("image.vacuum_map"))
                 val album = client.photoAlbum("media-source://synology_dsm/nas/album")

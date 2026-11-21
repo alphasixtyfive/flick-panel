@@ -2,10 +2,10 @@
 
 import probatio as vol
 
-from homeassistant.config_entries import ConfigFlow
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.selector import SelectSelector, SelectSelectorConfig
 
-from .panel import CONF_PANEL, DOMAIN, linked_panels
+from .panel import CONF_PANEL, CONF_REGISTRATION_ID, DOMAIN, linked_panels
 
 
 class FlickPanelConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -14,11 +14,18 @@ class FlickPanelConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 3
 
-    async def async_step_user(self, user_input=None):
-        existing = {entry.unique_id for entry in self._async_current_entries()}
-        available = {key: panel for key, panel in linked_panels(self.hass).items() if key not in existing}
-        if not available:
+    async def async_step_user(self, user_input: dict | None = None) -> ConfigFlowResult:
+        if not (panels := linked_panels(self.hass)):
             return self.async_abort(reason="no_linked_panels")
+        entries = self._async_current_entries()
+        existing = {entry.data[CONF_PANEL] for entry in entries}
+        registrations = {entry.data[CONF_REGISTRATION_ID] for entry in entries if entry.data.get(CONF_REGISTRATION_ID)}
+        available = {
+            key: panel for key, panel in panels.items()
+            if key not in existing and panel.registration_id not in registrations
+        }
+        if not available:
+            return self.async_abort(reason="already_configured")
 
         errors = {}
         if user_input is not None:
@@ -28,7 +35,7 @@ class FlickPanelConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=panel.device.name_by_user or panel.device.name or "Flick Panel",
-                    data={CONF_PANEL: device_id},
+                    data={CONF_PANEL: device_id, CONF_REGISTRATION_ID: panel.registration_id},
                 )
             errors["base"] = "panel_unavailable"
 

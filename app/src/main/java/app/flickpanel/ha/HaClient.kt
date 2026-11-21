@@ -1,6 +1,7 @@
 package app.flickpanel.ha
 
 import app.flickpanel.config.validEntity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -16,6 +17,8 @@ private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 private val streamPath = Regex("/api/hls/[A-Za-z0-9_-]{8,160}/[A-Za-z0-9_-]+\\.m3u8")
 private const val MAX_PHOTO_BYTES = 12 * 1024 * 1024L
 
+internal class CameraStream(val url: HttpUrl, val transport: OkHttpClient)
+
 internal class HaClient(
     private val credentials: HaCredentials,
     scope: CoroutineScope,
@@ -25,7 +28,7 @@ internal class HaClient(
     val entities = connection.entities
     val panelRemoteState = connection.panelState
     val panelCommands = connection.panelCommands
-    val videoClient: OkHttpClient by lazy { HaHttp.videoClient(credentials.server) }
+    private val videoClient: OkHttpClient by lazy { HaHttp.videoClient(credentials.server) }
 
     fun start() = connection.start()
     fun stop() = connection.stop()
@@ -34,15 +37,25 @@ internal class HaClient(
 
     suspend fun catalogue(): Catalogue = loadCatalogue { request(it) }
 
-    suspend fun publishPanelSensors(webhookId: String, readings: List<PanelSensorReading>) {
-        if (readings.isEmpty()) return
+    suspend fun publishPanelSensors(webhookId: String, readings: List<PanelSensorReading>): Set<PanelSensor> {
+        if (readings.isEmpty()) return emptySet()
         val result = panelWebhook(webhookId, "update_sensor_states", JSONArray(readings.map(PanelSensorReading::update)))
-        for (reading in readings) {
-            val status = result.optJSONObject(reading.sensor.id)
-            if (status?.optBoolean("success") == true) continue
-            val missing = status?.optJSONObject("error")?.optString("code") == "not_registered"
-            if (!missing || !panelWebhook(webhookId, "register_sensor", reading.registration()).optBoolean("success")) {
-                throw HaProblem("Home Assistant could not update the tablet sensors")
+        return buildSet {
+            for (reading in readings) {
+                val status = result.optJSONObject(reading.sensor.id)
+                if (status?.optBoolean("success") == true) {
+                    add(reading.sensor)
+                } else if (status?.optJSONObject("error")?.optString("code") == "not_registered") {
+                    try {
+                        if (panelWebhook(webhookId, "register_sensor", reading.registration()).optBoolean("success")) {
+                            add(reading.sensor)
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // Keep the failed registration eligible for retry without blocking other sensors.
+                    }
+                }
             }
         }
     }
@@ -173,12 +186,13 @@ internal class HaClient(
         return HaHttp.get(url, credentials.token) { it.readImage(MAX_PHOTO_BYTES) }
     }
 
-    suspend fun stream(entity: String): HttpUrl {
+    suspend fun cameraStream(entity: String): CameraStream {
         require(validEntity(entity) && entity.startsWith("camera."))
         val response = request("camera/stream", JSONObject().put("entity_id", entity).put("format", "hls"))
         val path = response.optJSONObject("result")?.text("url")
         if (path == null || !streamPath.matches(path)) throw HaProblem("This camera has no supported live stream")
-        return checkNotNull(credentials.server.resolve(path.removePrefix("/")))
+        val url = checkNotNull(credentials.server.resolve(path.removePrefix("/")))
+        return CameraStream(url, videoClient)
     }
 
     private suspend fun request(type: String, data: JSONObject = JSONObject()): JSONObject =

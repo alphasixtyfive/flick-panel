@@ -7,14 +7,14 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from . import PanelEntry
-from .panel import Panel
+from .panel import CONF_PANEL, Panel
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: PanelEntry, async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Expose the display switch on the tablet device."""
-    async_add_entities([PanelDisplay(entry.runtime_data)])
+    async_add_entities([PanelDisplay(entry.runtime_data, entry.data[CONF_PANEL])])
 
 
 class PanelDisplay(SwitchEntity):
@@ -25,10 +25,10 @@ class PanelDisplay(SwitchEntity):
     _attr_translation_key = "display"
     _attr_icon = "mdi:tablet-dashboard"
 
-    def __init__(self, panel: Panel) -> None:
+    def __init__(self, panel: Panel, original_device_id: str) -> None:
         self.panel = panel
         self.device_entry = panel.device
-        self._attr_unique_id = f"{panel.device.id}_{self.translation_key}"
+        self._attr_unique_id = f"{original_device_id}_{self.translation_key}"
 
     @property
     def available(self) -> bool:

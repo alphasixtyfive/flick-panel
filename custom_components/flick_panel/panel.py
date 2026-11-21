@@ -12,6 +12,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 DOMAIN = "flick_panel"
 CONF_PANEL = "panel"
+CONF_REGISTRATION_ID = "registration_id"
 CONF_LEGACY_DEVICE_ID = "legacy_device_id"
 APP_ID = "app.flickpanel"
 
@@ -22,6 +23,7 @@ class Panel:
 
     hass: HomeAssistant
     device: dr.DeviceEntry
+    registration_id: str | None
     webhook_id: str
     display_entity_id: str
 
@@ -50,12 +52,15 @@ def linked_panels(hass: HomeAssistant) -> dict[str, Panel]:
     entities = er.async_get(hass)
     panels = {}
     for entry in hass.config_entries.async_entries(MOBILE_APP):
-        if entry.disabled_by or entry.data.get(ATTR_APP_ID) != APP_ID:
+        if entry.disabled_by is not None or entry.data.get(ATTR_APP_ID) != APP_ID:
             continue
-        webhook_id = entry.data[CONF_WEBHOOK_ID]
+        if not (webhook_id := entry.data.get(CONF_WEBHOOK_ID)):
+            continue
         display = entities.async_get_entity_id("sensor", MOBILE_APP, f"{webhook_id}_display_mode")
-        if not display or not (sensor := entities.async_get(display)) or not sensor.device_id:
+        if not display or not (sensor := entities.async_get(display)):
             continue
-        if device := devices.async_get(sensor.device_id):
-            panels[device.id] = Panel(hass, device, webhook_id, display)
+        if sensor.disabled_by is not None or sensor.config_entry_id != entry.entry_id:
+            continue
+        if sensor.device_id and (device := devices.async_get(sensor.device_id)):
+            panels[device.id] = Panel(hass, device, entry.unique_id, webhook_id, display)
     return panels

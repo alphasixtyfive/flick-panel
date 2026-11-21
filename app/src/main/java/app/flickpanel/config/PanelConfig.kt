@@ -60,5 +60,12 @@ internal const val roomTileLimit = 32
 private val entityPattern = Regex("[a-z0-9_]+\\.[a-z0-9_]+")
 internal fun validEntity(entity: String): Boolean = entity.length <= 255 && entityPattern.matches(entity)
 
+internal fun roomTileKind(entity: String): TileKind? = when (entity.substringBefore('.')) {
+    "light", "switch" -> TileKind.TOGGLE
+    "climate" -> TileKind.CLIMATE
+    "media_player" -> TileKind.MEDIA
+    else -> null
+}
+
 private val appPattern = Regex("app:[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
 internal fun validAppTarget(target: String): Boolean = target.length <= 259 && appPattern.matches(target)

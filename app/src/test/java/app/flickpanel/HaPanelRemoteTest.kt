@@ -125,6 +125,26 @@ class HaPanelRemoteTest {
         )) assertNull(parse(data))
     }
 
+    @Test fun remoteRecoversAfterMobileAppSetupOutlastsTheInitialRetries() = runBlocking {
+        MockWebServer().use { server ->
+            val fixture = PanelPushFixture(failuresBeforeReady = 5)
+            server.enqueue(MockResponse().withWebSocketUpgrade(fixture))
+            val address = parseServer(server.url("/").newBuilder().host("127.0.0.1").build().toString())
+            val client = HaClient(HaCredentials(address, "test-access-token"), this)
+            try {
+                client.setPanelWebhook("test-private-webhook")
+                client.start()
+                withTimeout(8_000) { client.panelRemoteState.first { it == PanelRemoteState.UNAVAILABLE } }
+                assertEquals(Link.ONLINE, client.link.value)
+                withTimeout(14_000) { client.panelRemoteState.first { it == PanelRemoteState.READY } }
+                assertEquals(6, fixture.subscriptionAttempts.get())
+                assertEquals(1, server.requestCount)
+            } finally {
+                client.stop()
+            }
+        }
+    }
+
     @Test fun sensorUpdatesRegisterOnlyMissingEntitiesOnTheLinkedWebhook() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{
@@ -134,10 +154,11 @@ class HaPanelRemoteTest {
             server.enqueue(MockResponse().setResponseCode(201).setBody("""{"success":true}"""))
             val address = parseServer(server.url("/ha/").newBuilder().host("127.0.0.1").build().toString())
             val client = HaClient(HaCredentials(address, "test-access-token"), this)
-            client.publishPanelSensors("test-private-webhook", listOf(
+            val confirmed = client.publishPanelSensors("test-private-webhook", listOf(
                 PanelSensorReading(PanelSensor.BATTERY, 61),
                 PanelSensorReading(PanelSensor.PLUGGED, true),
             ))
+            assertEquals(setOf(PanelSensor.BATTERY, PanelSensor.PLUGGED), confirmed)
             val batch = server.takeRequest()
             assertEquals("/ha/api/webhook/test-private-webhook", batch.path)
             assertNull(batch.getHeader("Authorization"))
@@ -153,12 +174,35 @@ class HaPanelRemoteTest {
         }
     }
 
+    @Test fun rejectedSensorDoesNotBlockOtherUpdatesAndRegistrations() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{
+                "battery_level":{"success":false},
+                "wifi_signal":{"success":false,"error":{"code":"not_registered"}},
+                "illuminance":{"success":false,"error":{"code":"not_registered"}},
+                "display_mode":{"success":true}
+            }"""))
+            server.enqueue(MockResponse().setResponseCode(500))
+            server.enqueue(MockResponse().setResponseCode(201).setBody("""{"success":true}"""))
+            val address = parseServer(server.url("/").newBuilder().host("127.0.0.1").build().toString())
+            val client = HaClient(HaCredentials(address, "test-access-token"), this)
+            val confirmed = client.publishPanelSensors("test-private-webhook", listOf(
+                PanelSensorReading(PanelSensor.BATTERY, 61),
+                PanelSensorReading(PanelSensor.WIFI_SIGNAL, -72),
+                PanelSensorReading(PanelSensor.ILLUMINANCE, 300),
+                PanelSensorReading(PanelSensor.DISPLAY, "dashboard"),
+            ))
+            assertEquals(setOf(PanelSensor.ILLUMINANCE, PanelSensor.DISPLAY), confirmed)
+            assertEquals(3, server.requestCount)
+        }
+    }
+
     private fun sendPanelEvent(socket: WebSocket, id: Int, command: String) {
         socket.send("""{"id":$id,"type":"event","event":{"message":"command_flick_panel","data":{"command":"$command"}}}""")
     }
 }
 
-private class PanelPushFixture : WebSocketListener() {
+private class PanelPushFixture(private val failuresBeforeReady: Int = 1) : WebSocketListener() {
     val connection = CompletableDeferred<WebSocket>()
     val subscriptionAttempts = AtomicInteger()
     val subscriptionId = AtomicInteger()
@@ -177,7 +221,7 @@ private class PanelPushFixture : WebSocketListener() {
             "auth" -> webSocket.send("""{"type":"auth_ok"}""")
             "mobile_app/push_notification_channel" -> {
                 if (message.optString("webhook_id") != "test-private-webhook" || message.optBoolean("support_confirm", true)) return
-                if (subscriptionAttempts.getAndIncrement() == 0) {
+                if (subscriptionAttempts.getAndIncrement() < failuresBeforeReady) {
                     webSocket.send("""{"id":$id,"type":"result","success":false,"error":{"code":"not_found"}}""")
                 } else {
                     subscriptionId.set(id)

@@ -3,17 +3,21 @@ package app.flickpanel
 import android.app.ActivityManager
 import android.app.Application
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.util.LruCache
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.flickpanel.config.PanelConfig
+import app.flickpanel.config.PanelBackup
+import app.flickpanel.config.PanelBackupAction
 import app.flickpanel.config.PanelStore
 import app.flickpanel.config.PanelStoreProblem
 import app.flickpanel.config.SavedRemote
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.validPin
+import app.flickpanel.ha.CameraStream
 import app.flickpanel.ha.CoverAction
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.HaClient
@@ -48,8 +52,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
 import org.json.JSONObject
 import kotlin.math.abs
 
@@ -81,6 +83,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var roomControlsRequested = false
     private var securityEpoch = 0
     private var presence = false
+    private var pendingBackup: Pair<PanelBackupAction, PanelConfig>? = null
 
     init {
         viewModelScope.launch {
@@ -270,16 +273,54 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     fun save(config: PanelConfig) {
         if (!_ui.value.editor) return
         submitSettingsOperation {
-            withContext(Dispatchers.IO) { store.save(config) }
-            if (_ui.value.config.presenceEntity != config.presenceEntity) {
-                approachJob?.cancel()
-                presence = false
-            }
-            _ui.update { it.copy(layout = it.layout.copy(config = config)) }
-            updatePresence(_ui.value.entities)
-            updateSelection()
+            saveLayout(config)
             relock()
         }
+    }
+
+    fun beginBackup(action: PanelBackupAction): Boolean {
+        val current = _ui.value
+        if (!foreground || !current.editor || current.busy || pendingBackup != null) return false
+        pendingBackup = action to current.config
+        return true
+    }
+
+    fun backupDocument(action: PanelBackupAction, uri: Uri?, done: (String) -> Unit) {
+        val requested = pendingBackup?.takeIf { it.first == action } ?: return
+        pendingBackup = null
+        if (uri == null) return
+        val resolver = getApplication<Application>().contentResolver
+        submitSettingsOperation {
+            when (action) {
+                PanelBackupAction.BACK_UP -> {
+                    withContext(Dispatchers.IO) {
+                        resolver.openOutputStream(uri, "wt")?.use { PanelBackup.write(requested.second, it) }
+                            ?: throw PanelStoreProblem("Couldn't save the backup")
+                    }
+                    done("Backup saved")
+                }
+                PanelBackupAction.RESTORE -> {
+                    val config = withContext(Dispatchers.IO) {
+                        resolver.openInputStream(uri)?.use(PanelBackup::read)
+                            ?: throw PanelStoreProblem("Couldn't open the backup")
+                    }
+                    saveLayout(config)
+                    relock()
+                    done("Backup restored")
+                }
+            }
+        }
+    }
+
+    private suspend fun saveLayout(config: PanelConfig) {
+        withContext(Dispatchers.IO) { store.save(config) }
+        if (_ui.value.config.presenceEntity != config.presenceEntity) {
+            approachJob?.cancel()
+            presence = false
+        }
+        _ui.update { it.copy(layout = it.layout.copy(config = config)) }
+        updatePresence(_ui.value.entities)
+        updateSelection()
     }
 
     private fun submitSettingsOperation(operation: suspend () -> Unit) {
@@ -320,8 +361,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     fun openMusic(id: String) {
         val current = _ui.value
         if (!current.showingDashboard) return
-        if (current.link != Link.ONLINE || current.entities[id]?.available != true ||
-            current.config.favourites.none { it.entity == id && it.kind == TileKind.MEDIA }) return
+        if (current.link != Link.ONLINE || current.entities[id]?.available != true) return
+        val availableTiles = if (current.page == Page.ROOMS) current.roomSections.asSequence().flatMap { it.tiles.asSequence() }
+            else current.config.favourites.asSequence()
+        if (availableTiles.none { it.entity == id && it.kind == TileKind.MEDIA }) return
         openViewer(PanelViewer.Music(id))
     }
 
@@ -534,9 +577,12 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         return images.artwork.load("person:$reference", decodeEdge = 192) { active.personAvatar(reference) }
     }
 
-    suspend fun stream(id: String): HttpUrl = client?.stream(id) ?: throw HaProblem("Home Assistant isn't connected")
-
-    fun videoTransport(): OkHttpClient = client?.videoClient ?: throw HaProblem("Home Assistant isn't connected")
+    suspend fun cameraStream(id: String): CameraStream {
+        val active = client ?: throw HaProblem("Home Assistant isn't connected")
+        val stream = active.cameraStream(id)
+        if (client !== active) throw HaProblem("The Home Assistant connection changed")
+        return stream
+    }
 
     suspend fun loadGraph(id: String) {
         if (!foreground) return

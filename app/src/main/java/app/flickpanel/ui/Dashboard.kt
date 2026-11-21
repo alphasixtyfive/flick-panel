@@ -104,7 +104,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
             if (status != null) Text(status, style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             Row(
-                Modifier.fillMaxWidth().padding(top = if (short) 4.dp else 14.dp)
+                Modifier.fillMaxWidth().padding(top = if (short) 10.dp else 24.dp)
                     .heightIn(min = if (short) dashboardPillHeight else 56.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(navigationGap),

@@ -17,6 +17,29 @@ import org.junit.Test
 
 class RoomLayoutTest {
     @Test
+    fun curatedRoomUsesAnExplicitCrossAreaLightAndMusicWithoutShowingAllSwitches() {
+        val landing = Area("landing", "Landing")
+        val stairs = Area("stairs", "Stairs")
+        val catalogue = Catalogue(listOf(
+            Entry(Entity("light.landing", "on"), landing.id, false, true),
+            Entry(Entity("light.stairs", "off"), stairs.id, false, true),
+            Entry(Entity("media_player.landing", "idle"), landing.id, false, true),
+            Entry(Entity("switch.spare", "off"), landing.id, false, true),
+        ), listOf(landing, stairs))
+        val automatic = PanelConfig(roomIds = listOf(landing.id))
+        assertEquals(listOf("light.landing"), RoomLayout(automatic, catalogue).sections.single().tiles.map { it.entity })
+
+        val custom = automatic.copy(roomTiles = mapOf(landing.id to listOf(
+            RoomTilePreference("light.stairs"),
+            RoomTilePreference("media_player.landing"),
+        )))
+        val restored = PanelConfigCodec.decode(PanelConfigCodec.encode(custom))
+        val tiles = RoomLayout(restored, catalogue).sections.single().tiles
+        assertEquals(listOf("light.stairs", "media_player.landing"), tiles.map { it.entity })
+        assertEquals(listOf(TileKind.TOGGLE, TileKind.MEDIA), tiles.map { it.kind })
+    }
+
+    @Test
     fun hidingHeatingKeepsTheChosenRoomsAndTheirLightsInOrder() {
         val kitchen = Area("kitchen", "Kitchen")
         val hallway = Area("hallway", "Hallway")

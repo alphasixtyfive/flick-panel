@@ -106,6 +106,14 @@ explicit private IPv4 addresses such as a local Home Assistant server at
   entity for live playback. Use it for a lower-resolution feed on tablets. The tile
   keeps its original preview, label and gate control.
 
+## Backup and restore
+
+Long-press **Home**, enter the setup PIN, then open **Panel → Backup & restore**.
+Use Android's file picker to save or restore a JSON file. The file holds your
+Favourites, room selections, appearance, display preferences, and Home Assistant
+photo album reference. The setup PIN, access token, and tablet link stay on the device.
+Restore the file on a panel connected to the same Home Assistant instance so the entity IDs match.
+
 ## Control the panel from Home Assistant
 
 In PIN-protected setup, open **Panel → Home Assistant → Tablet link**, name the
@@ -113,6 +121,9 @@ tablet, and choose **Link tablet**. Home Assistant's built-in
 [Mobile App integration](https://www.home-assistant.io/integrations/mobile_app/)
 creates the device and its `notify.mobile_app_…` action. Check the action name in
 Home Assistant before using it in a script or automation.
+The Mobile App integration also creates a location entity on registration.
+Flick Panel sends no location updates, so you can disable that entity in
+Home Assistant.
 
 For native controls, install `custom_components/flick_panel` from this repository in
 Home Assistant and restart Core. Add **Flick Panel** under **Settings → Devices &

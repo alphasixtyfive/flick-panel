@@ -53,13 +53,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileSpec
+import app.flickpanel.ha.CameraStream
 import app.flickpanel.ha.Link
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import okhttp3.HttpUrl
-import okhttp3.OkHttpClient
 import kotlin.math.abs
 
 @Composable
@@ -136,19 +135,21 @@ internal enum class CameraStatus(val label: String) {
     val buffering get() = this == CONNECTING || this == RECONNECTING
 }
 
-private data class CameraStream(val url: HttpUrl, val transport: OkHttpClient)
-
 @Composable
 internal fun CameraViewer(
     id: String, label: String?, canStream: Boolean, openedAt: Long, gateId: String?, state: PanelUi, model: PanelViewModel,
     streamCamera: String = id,
 ) {
-    var stream by remember(streamCamera, canStream) { mutableStateOf<CameraStream?>(null) }
-    var status by remember(streamCamera, canStream) {
-        mutableStateOf(if (canStream) CameraStatus.CONNECTING else CameraStatus.STILL)
+    val online = state.link == Link.ONLINE
+    val initialStatus = when {
+        !canStream -> CameraStatus.STILL
+        online -> CameraStatus.CONNECTING
+        else -> CameraStatus.UNAVAILABLE
     }
-    var videoAspect by remember(streamCamera, canStream) { mutableStateOf<Float?>(null) }
-    var firstFrame by remember(streamCamera, canStream) { mutableStateOf(false) }
+    var stream by remember(streamCamera, initialStatus) { mutableStateOf<CameraStream?>(null) }
+    var status by remember(streamCamera, initialStatus) { mutableStateOf(initialStatus) }
+    var videoAspect by remember(streamCamera, initialStatus) { mutableStateOf<Float?>(null) }
+    var firstFrame by remember(streamCamera, initialStatus) { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     fun playbackFailed() {
@@ -157,15 +158,14 @@ internal fun CameraViewer(
         status = CameraStatus.UNAVAILABLE
     }
 
-    LaunchedEffect(streamCamera, canStream, lifecycle) {
+    LaunchedEffect(streamCamera, initialStatus, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            status = if (canStream) CameraStatus.CONNECTING else CameraStatus.STILL
+            status = initialStatus
             videoAspect = null
             firstFrame = false
-            if (!canStream) return@repeatOnLifecycle
+            if (initialStatus != CameraStatus.CONNECTING) return@repeatOnLifecycle
             try {
-                val transport = model.videoTransport()
-                stream = CameraStream(model.stream(streamCamera), transport)
+                stream = model.cameraStream(streamCamera)
                 Log.i("FlickPanelCamera", "hls_url_ms=${SystemClock.elapsedRealtime() - openedAt}")
                 awaitCancellation()
             } catch (cancelled: CancellationException) {

@@ -9,7 +9,7 @@ from homeassistant.helpers.event import async_track_entity_registry_updated_even
 from homeassistant.helpers.helper_integration import async_remove_helper_devices
 from homeassistant.helpers.typing import ConfigType
 
-from .panel import CONF_LEGACY_DEVICE_ID, CONF_PANEL, DOMAIN, Panel, linked_panels
+from .panel import CONF_LEGACY_DEVICE_ID, CONF_PANEL, CONF_REGISTRATION_ID, DOMAIN, Panel, linked_panels
 from .services import register_actions
 
 PLATFORMS = (Platform.SWITCH,)
@@ -24,13 +24,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: PanelEntry) -> bool:
     """Attach panel controls to the tablet's existing device."""
-    if not (panel := linked_panels(hass).get(entry.data[CONF_PANEL])):
+    panels = linked_panels(hass)
+    registration_id = entry.data.get(CONF_REGISTRATION_ID)
+    if registration_id:
+        panel = next((panel for panel in panels.values() if panel.registration_id == registration_id), None)
+    else:
+        panel = panels.get(entry.data[CONF_PANEL])
+    if panel is None:
         raise ConfigEntryNotReady("Link the tablet in Flick Panel and enable its Display mode sensor")
+    if not registration_id and panel.registration_id:
+        hass.config_entries.async_update_entry(entry, data=entry.data | {CONF_REGISTRATION_ID: panel.registration_id})
     entry.runtime_data = panel
 
     @callback
     def source_changed(event) -> None:
-        if event.data.get("old_entity_id") == panel.display_entity_id:
+        changes = event.data.get("changes", {})
+        if event.data["action"] == "remove" or changes.keys() & {"entity_id", "device_id", "disabled_by"}:
             hass.config_entries.async_schedule_reload(entry.entry_id)
 
     entry.async_on_unload(async_track_entity_registry_updated_event(

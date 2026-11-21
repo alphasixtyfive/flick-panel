@@ -202,7 +202,7 @@ class PanelPolicyTest {
         assertEquals("org.example.player", saved.appPackage)
     }
 
-    @Test fun roomsKeepOnlyVisibleHouseholdControlsInTheirOwnArea() {
+    @Test fun roomCandidatesKeepVisibleHouseholdControlsInTheirOwnArea() {
         val kitchen = Area("area_1", "Kitchen")
         val hall = Area("area_2", "Hall")
         val light = Entity("light.pendant", "on")
@@ -214,10 +214,11 @@ class PanelPolicyTest {
             Entry(light, kitchen.id, diagnostic = false, visible = true),
             Entry(Entity("switch.hall", "off"), hall.id, diagnostic = false, visible = true)
         ), listOf(hall, kitchen))
-        assertEquals(listOf(kitchen), catalogue.rooms)
-        assertEquals(listOf(light, heat), catalogue.room(kitchen.id).map { it.entity })
+        assertEquals(listOf(hall, kitchen), catalogue.rooms)
+        assertEquals(setOf(light, heat), catalogue.room(kitchen.id).map { it.entity }.toSet())
         assertEquals(light, catalogue.entity(light.id))
-        assertTrue(catalogue.room(hall.id).isEmpty())
+        assertEquals("switch.hall", catalogue.room(hall.id).single().entity.id)
+        assertTrue(RoomLayout(PanelConfig(roomIds = listOf(hall.id)), catalogue).sections.isEmpty())
     }
 
     @Test fun roomTilesUseShortNamesAndKeepAnExplicitBrightnessControl() {

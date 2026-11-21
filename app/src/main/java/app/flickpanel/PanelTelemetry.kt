@@ -48,14 +48,16 @@ internal suspend fun publishPanelTelemetry(
         }
             .conflate()
             .collect { readings ->
-                val changed = readings.filter { published[it.sensor] != it }
-                if (changed.isEmpty()) return@collect
+                var pending = readings.filter { published[it.sensor] != it }
                 for (pause in sensorRetryDelays) {
+                    if (pending.isEmpty()) break
                     delay(pause)
                     try {
-                        client.publishPanelSensors(webhookId, changed)
-                        changed.associateByTo(published, PanelSensorReading::sensor)
-                        break
+                        val confirmed = client.publishPanelSensors(webhookId, pending)
+                        for (reading in pending) {
+                            if (reading.sensor in confirmed) published[reading.sensor] = reading
+                        }
+                        pending = pending.filterNot { it.sensor in confirmed }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {

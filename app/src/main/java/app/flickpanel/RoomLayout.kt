@@ -4,6 +4,7 @@ import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.RoomTilePreference
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
+import app.flickpanel.config.roomTileKind
 import app.flickpanel.config.roomTileLimit
 import app.flickpanel.ha.Area
 import app.flickpanel.ha.Catalogue
@@ -52,27 +53,29 @@ internal data class RoomLayout(
     fun controls(area: Area): List<RoomControl> {
         val saved = config.roomTiles[area.id]
         val savedIds = saved.orEmpty().mapTo(hashSetOf(), RoomTilePreference::entity)
-        val devices = catalogue.room(area.id).associateBy({ it.entity.id }, Entry::entity)
-        val savedCount = savedIds.count(devices::containsKey)
-        val discovered = devices.values.asSequence()
+        val savedCount = savedIds.count { catalogue.roomEntity(it) != null }
+        val discovered = catalogue.room(area.id).asSequence().map(Entry::entity)
             .filterNot { it.id in savedIds }
-            .sortedWith(compareBy({ it.domain != "light" }, { it.id !in favourites }))
+            .sortedWith(compareBy({ !automaticRoomControl(it) }, { it.domain != "light" }, { it.id !in favourites }))
             .take((roomTileLimit - savedCount).coerceAtLeast(0))
         return buildList {
             for (preference in saved.orEmpty()) {
-                val device = devices[preference.entity]
+                val device = catalogue.roomEntity(preference.entity)
                 val tile = device?.let { roomTile(area, it, favourites[it.id]) }
                 add(roomControl(preference, device, tile))
             }
             for (device in discovered) {
                 val tile = roomTile(area, device, favourites[device.id])
                 val preference = RoomTilePreference(
-                    device.id, lightFormat = tile.kind.takeIf { device.domain == "light" }, hidden = saved != null,
+                    device.id, lightFormat = tile.kind.takeIf { device.domain == "light" },
+                    hidden = saved != null || !automaticRoomControl(device),
                 )
                 add(roomControl(preference, device, tile))
             }
         }
     }
+
+    private fun automaticRoomControl(entity: Entity): Boolean = entity.domain == "light" || entity.domain == "climate"
 
     private fun roomControl(preference: RoomTilePreference, device: Entity?, tile: TileSpec?): RoomControl {
         if (device == null || tile == null || !config.showRoomHeating && device.domain == "climate") {
@@ -90,14 +93,14 @@ internal data class RoomLayout(
 
     private fun roomTile(area: Area, device: Entity, favourite: TileSpec?): TileSpec {
         val kind = when {
-            device.domain == "climate" -> TileKind.CLIMATE
             favourite?.kind == TileKind.SLIDER && TileKind.SLIDER in device.kinds() -> TileKind.SLIDER
-            else -> TileKind.TOGGLE
+            else -> checkNotNull(roomTileKind(device.id))
         }
         val name = device.name
         val prefix = "${area.name} "
         val label = favourite?.label ?: when {
             kind == TileKind.CLIMATE && name.equals(area.name, ignoreCase = true) -> "Heating"
+            kind == TileKind.MEDIA && name.equals(area.name, ignoreCase = true) -> "Music"
             name.startsWith(prefix, ignoreCase = true) -> name.drop(prefix.length)
                 .trimStart().replaceFirstChar { it.uppercase() }.ifBlank { name }
             else -> null

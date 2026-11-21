@@ -12,6 +12,10 @@ import kotlinx.coroutines.flow.collectLatest
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicReference
 
+private const val FIRST_PUSH_RETRY_MS = 300L
+private const val PUSH_SETUP_GRACE_MS = 2_400L
+private const val MAX_PUSH_RETRY_MS = 30_000L
+
 internal data class PanelRegistration(
     val deviceId: String,
     val deviceName: String,
@@ -134,9 +138,9 @@ internal class HaPanelRemote {
                 }
                 if (binding == null || !isCurrent()) return@collectLatest
                 mark(binding, PanelRemoteState.CONNECTING)
-                // HA may finish setting up a mobile app entry after returning its registration.
-                for (pause in listOf(0L, 300L, 750L, 1_500L, 3_000L)) {
-                    delay(pause)
+                // Mobile App can finish setup later while the dashboard socket stays healthy.
+                var retryDelay = FIRST_PUSH_RETRY_MS
+                while (isCurrent()) {
                     try {
                         socket.request("mobile_app/push_notification_channel", JSONObject()
                             .put("webhook_id", binding.webhookId).put("support_confirm", false)) { id ->
@@ -147,8 +151,10 @@ internal class HaPanelRemote {
                     } catch (_: HaProblem) {
                         subscription.set(null)
                     }
+                    if (retryDelay >= PUSH_SETUP_GRACE_MS) mark(binding, PanelRemoteState.UNAVAILABLE)
+                    delay(retryDelay)
+                    retryDelay = (retryDelay * 2).coerceAtMost(MAX_PUSH_RETRY_MS)
                 }
-                mark(binding, PanelRemoteState.UNAVAILABLE)
             }
         }
 

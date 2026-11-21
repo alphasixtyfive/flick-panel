@@ -28,13 +28,16 @@ import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.PanelViewer
 import app.flickpanel.config.TileKind
+import app.flickpanel.config.PanelBackupAction
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.PersonLocation
 import app.flickpanel.ha.personStatus
 import app.flickpanel.ha.readContent
 
 @Composable
-internal fun PanelScreen(state: PanelUi, model: PanelViewModel, offlineMaps: () -> OfflineMapAssets) {
+internal fun PanelScreen(
+    state: PanelUi, model: PanelViewModel, backup: (PanelBackupAction) -> Unit, offlineMaps: () -> OfflineMapAssets,
+) {
     PanelColors(state.config.theme, state.config.highContrast) {
         val snacks = remember { SnackbarHostState() }
         val dashboard = rememberSaveableStateHolder()
@@ -51,7 +54,7 @@ internal fun PanelScreen(state: PanelUi, model: PanelViewModel, offlineMaps: () 
             viewer?.let { open -> tiles.firstOrNull { it.entity == open.id } }
         }
         when {
-            state.editor -> EditPanel(state, model)
+            state.editor -> EditPanel(state, model, backup)
             state.screenBlank -> {
                 Box(Modifier.fillMaxSize().background(Color.Black).clickable(
                     interactionSource = null, indication = null, onClickLabel = "Wake panel",

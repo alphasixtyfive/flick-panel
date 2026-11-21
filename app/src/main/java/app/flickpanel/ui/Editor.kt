@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.HomeBadge
+import app.flickpanel.config.PanelBackupAction
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
@@ -41,7 +42,7 @@ private sealed class SetupDestination(val title: String, val allowsSaving: Boole
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
+internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBackupAction) -> Unit) {
     var draft by remember(state.config) { mutableStateOf(state.config) }
     var section by remember { mutableStateOf(SetupSection.FAVOURITES) }
     var destinations by remember { mutableStateOf(emptyList<SetupDestination>()) }
@@ -230,6 +231,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                             changeConnection = model::changeConnection,
                             linkPanel = model::linkPanel,
                             unlinkPanel = model::unlinkPanel,
+                            backup = backup,
                         )
                     }
                 }
