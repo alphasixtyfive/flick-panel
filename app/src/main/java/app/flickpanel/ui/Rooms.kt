@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -32,9 +31,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,11 +52,12 @@ import app.flickpanel.ha.Link
 
 @Composable
 internal fun Rooms(
-    state: PanelUi, model: PanelViewModel, columns: Int, roomId: String?,
+    state: PanelUi, model: PanelViewModel, roomId: String?,
     selectRoom: (String) -> Unit, modifier: Modifier,
 ) {
     val sections = state.roomSections
-    val selected = sections.firstOrNull { it.area.id == roomId } ?: sections.firstOrNull()
+    val selected = remember(sections, roomId) { sections.firstOrNull { it.area.id == roomId } ?: sections.firstOrNull() }
+    val roomScroll = rememberSaveableStateHolder()
     if (selected == null) {
         val loading = state.loadingCatalogue || state.link == Link.CONNECTING
         val needsSelection = state.config.roomIds?.isEmpty() == true
@@ -83,17 +83,13 @@ internal fun Rooms(
     val rooms = remember(sections) { sections.map { it.area } }
     BoxWithConstraints(modifier) {
         val fontScale = LocalDensity.current.fontScale
-        val split = rooms.size > 1 && maxWidth >= tabletWidthDp.dp - panelWidePadding * 2
         val listWidth = (188.dp * fontScale).coerceIn(188.dp, 256.dp)
         val paneGap = 24.dp
-        val controlsWidth = if (split) maxWidth - listWidth - paneGap else maxWidth
-        val standardColumns = if (split) dashboardTileColumns(controlsWidth.value, fontScale) else columns
-        val slots = remember(selected, standardColumns) {
-            selected.tiles.sumOf { tileSpan(it, standardColumns, compact = standardColumns >= 4, resizeTiles = true) }
-        }
-        val gridColumns = roomTileColumns(controlsWidth.value, fontScale, standardColumns, slots)
+        val detailColumns = roomTileColumns((maxWidth - listWidth - paneGap).value, fontScale)
+        val split = rooms.size > 1 && maxWidth >= tabletWidthDp.dp - panelWidePadding * 2 && detailColumns >= 2
+        val gridColumns = if (split) detailColumns else roomTileColumns(maxWidth.value, fontScale)
         val compact = gridColumns >= 4
-        val rows = remember(selected, gridColumns, compact) {
+        val rows = remember(selected.tiles, gridColumns) {
             packTileRows(selected.tiles, gridColumns, compact, resizeTiles = true)
         }
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(paneGap)) {
@@ -107,11 +103,13 @@ internal fun Rooms(
                     Text(
                         selected.area.name,
                         modifier = Modifier.padding(vertical = 9.dp).semantics { heading() },
-                        style = MaterialTheme.typography.headlineSmall,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                key(selected.area.id) {
+                roomScroll.SaveableStateProvider(selected.area.id) {
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(bottom = 24.dp),
@@ -148,14 +146,15 @@ private fun RoomList(rooms: List<Area>, selected: String, selectRoom: (String) -
             Surface(
                 selected = active,
                 onClick = { selectRoom(room.id) },
-                shape = CircleShape,
+                shape = MaterialTheme.shapes.large,
                 color = if (active) colors.secondaryContainer else Color.Transparent,
                 contentColor = if (active) colors.onSecondaryContainer else colors.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Box(Modifier.heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 10.dp),
                     contentAlignment = Alignment.CenterStart) {
-                    Text(room.name, style = MaterialTheme.typography.titleMedium, maxLines = 2,
+                    Text(room.name, style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (active) FontWeight.SemiBold else null, maxLines = 2,
                         overflow = TextOverflow.Ellipsis)
                 }
             }

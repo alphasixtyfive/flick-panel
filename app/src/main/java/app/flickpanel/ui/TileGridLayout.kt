@@ -19,12 +19,11 @@ internal fun dashboardTileColumns(windowWidth: Float, fontScale: Float): Int {
     }
 }
 
-internal fun roomTileColumns(availableWidth: Float, fontScale: Float, standardColumns: Int, tileCount: Int): Int {
-    if (standardColumns < 4) return standardColumns
+internal fun roomTileColumns(availableWidth: Float, fontScale: Float): Int {
     val gap = tileGap.value
-    val minimum = minimumTileWidthDp * fontScale.coerceAtLeast(1f)
-    val fitting = ((availableWidth + gap) / (minimum + gap)).toInt()
-    return minOf(fitting, tileCount, 6).coerceAtLeast(standardColumns)
+    val scale = fontScale.coerceAtLeast(1f)
+    if (availableWidth < 2 * minimumTileWidthDp * scale + gap) return 1
+    return ((availableWidth + gap) / (190f * scale + gap)).toInt().coerceIn(2, 5)
 }
 
 internal fun tileSpan(tile: TileSpec, columns: Int, compact: Boolean, resizeTiles: Boolean): Int {

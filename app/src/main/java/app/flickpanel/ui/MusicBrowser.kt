@@ -110,9 +110,7 @@ internal fun MusicBrowser(
         if (item.expandable) library.enter(item, fromRoot) else play(item)
     }
 
-    BackHandler {
-        if (volume?.expanded == true) volume.toggle() else back()
-    }
+    BackHandler(onBack = ::back)
     LaunchedEffect(id, retry) { library.load(null) { model.browseMusic(id, it) } }
     LaunchedEffect(id, folder, retry) {
         if (folder != null) library.load(folder) { model.browseMusic(id, it) }

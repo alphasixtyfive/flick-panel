@@ -46,16 +46,12 @@ internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel
         model::cachedArtwork, model::loadArtwork)
     val library = remember(id) { MusicLibraryState() }
     var browsing by rememberSaveable(id) { mutableStateOf(false) }
-    var volumeOpen by remember(id, browsing, playback.available, playback.volume == null) { mutableStateOf(false) }
     val transport: (MediaTransport) -> Unit = { model.mediaTransport(id, it) }
-    val volume = playback.volume?.let { level ->
-        SpeakerVolume(level, volumeOpen, playback.available, playback.ready,
-            toggle = { volumeOpen = !volumeOpen }, change = { entity?.let { speaker -> model.setVolume(speaker, it) } })
+    val volume = if (entity == null) null else playback.volume?.let { level ->
+        SpeakerVolume(level, playback.ready) { model.setVolume(entity, it) }
     }
 
-    BackHandler(enabled = !browsing) {
-        if (volumeOpen) volumeOpen = false else model.closeMusic()
-    }
+    BackHandler(enabled = !browsing, onBack = model::closeMusic)
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         if (browsing) {
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {

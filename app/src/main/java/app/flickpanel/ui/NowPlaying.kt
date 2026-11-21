@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -21,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
@@ -32,16 +30,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.MEDIA_SEEK
 import app.flickpanel.ha.MediaTransport
@@ -85,50 +82,26 @@ internal fun NowPlaying(
                     }
                 }
                 val current = playback.current
-                FeaturedTrack(playback, artwork, artworkHeight)
-                current?.playbackProgress()?.let { timeline ->
-                    val track = current.attributes.text("media_content_id") ?: playback.title
-                    PlaybackTimeline(timeline, track, playback.features.hasMediaFeature(MEDIA_SEEK), playback.ready, seek)
-                }
-                PlayerActionRow(playback, browse, transport, volume)
-                if (volume != null) {
-                    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp), contentAlignment = Alignment.CenterEnd) {
-                        if (volume.expanded) PlayerVolumeControl(volume)
+                MusicArtwork(artwork, Modifier.fillMaxWidth().height(artworkHeight), fallbackSize = 52.dp,
+                    shape = MaterialTheme.shapes.large)
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        playback.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = if (current == null) colors.onSurfaceVariant else colors.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    playback.artist?.let { artist ->
+                        Text(artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    current?.playbackProgress()?.let { timeline ->
+                        val track = current.attributes.text("media_content_id") ?: playback.title
+                        PlaybackTimeline(timeline, track, playback.features.hasMediaFeature(MEDIA_SEEK), playback.ready, seek)
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeaturedTrack(playback: MusicPlayback, artwork: ImageBitmap?, height: Dp) {
-    val colors = MaterialTheme.colorScheme
-    Box(Modifier.fillMaxWidth().height(height).clip(MaterialTheme.shapes.large)) {
-        if (playback.current == null) {
-            Column(
-                Modifier.matchParentSize().background(Brush.verticalGradient(
-                    listOf(colors.surfaceContainerHigh, colors.surfaceContainerLow),
-                )).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(Icons.Rounded.MusicNote, null, Modifier.size(48.dp), tint = colors.primary)
-                Text(playback.title, style = MaterialTheme.typography.titleMedium, color = colors.onSurfaceVariant)
-            }
-        } else {
-            MusicArtwork(artwork, Modifier.matchParentSize(), fallbackSize = 64.dp, shape = MaterialTheme.shapes.large)
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(
-                0f to Color.Transparent, .43f to Color(0x24090d11), 1f to Color(0xf4090d11),
-            )))
-            Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(playback.title, style = MaterialTheme.typography.headlineSmall, color = Color.White,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                playback.artist?.let {
-                    Text(it, style = MaterialTheme.typography.bodyLarge, color = Color(0xffe6ebf1),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+                PlayerActionRow(playback, browse, transport, volume)
             }
         }
     }
@@ -146,23 +119,25 @@ private fun PlayerActionRow(
         }
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if (maxWidth < 300.dp) {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val inline = maxWidth >= 388.dp + 92.dp * fontScale
+        if (inline) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { libraryAction() }
                 TransportButtons(playback, transport)
-                if (browse != null || volume != null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        libraryAction()
-                        if (volume != null) PlayerVolumeButton(volume)
-                    }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                    if (volume != null) PlayerVolumeControl(volume)
                 }
             }
         } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { libraryAction() }
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 TransportButtons(playback, transport)
-                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                    if (volume != null) PlayerVolumeButton(volume)
+                if (browse != null || volume != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        libraryAction()
+                        if (volume != null) PlayerVolumeControl(volume)
+                    }
                 }
             }
         }

@@ -97,10 +97,15 @@ class TileGridLayoutTest {
         assertEquals(listOf(listOf(wideGraph)), layout.history)
     }
     @Test
-    fun roomGridKeepsAFifthLightInTheRowWhenThereIsSpace() {
-        assertEquals(5, roomTileColumns(1168f, 1f, 4, 5))
-        assertEquals(4, roomTileColumns(768f, 1f, 4, 5))
-        assertEquals(2, roomTileColumns(768f, 1.6f, 2, 5))
+    fun roomGridUsesTheDetailsPaneWidthAndKeepsTilesReadable() {
+        assertEquals(5, roomTileColumns(1168f, 1f))
+        assertEquals(4, roomTileColumns(956f, 1f))
+        assertEquals(3, roomTileColumns(768f, 1f))
+        assertEquals(2, roomTileColumns(768f, 1.6f))
+        assertEquals(2, roomTileColumns(600f, 1.6f))
+        assertEquals(2, roomTileColumns(372f, 1f))
+        assertEquals(1, roomTileColumns(360f, 2f))
+        assertEquals(1, roomTileColumns(0f, 1f))
     }
 
     @Test
