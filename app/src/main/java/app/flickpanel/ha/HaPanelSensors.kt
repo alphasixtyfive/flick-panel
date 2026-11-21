@@ -15,6 +15,8 @@ internal enum class PanelSensor(
     PLUGGED("charger_connected", "Charger connected", "mdi:power-plug", "binary_sensor", "plug"),
     TEMPERATURE("battery_temperature", "Battery temperature", "mdi:thermometer", deviceClass = "temperature", unit = "°C"),
     ILLUMINANCE("illuminance", "Ambient light", "mdi:brightness-6", deviceClass = "illuminance", unit = "lx"),
+    WIFI_SIGNAL("wifi_signal", "Wi-Fi signal", "mdi:wifi", deviceClass = "signal_strength", unit = "dBm"),
+    BATTERY_SAVER("battery_saver", "Battery Saver", "mdi:battery-heart-outline", "binary_sensor"),
     DISPLAY("display_mode", "Display mode", "mdi:tablet-dashboard"),
 }
 

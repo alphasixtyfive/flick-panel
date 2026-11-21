@@ -40,8 +40,11 @@ internal suspend fun publishPanelTelemetry(
         if (status != PanelRemoteState.READY) return@collectLatest
         val display = ui.map(PanelUi::displayReport).distinctUntilChanged().map(DisplayReport::reading)
         val published = mutableMapOf<PanelSensor, PanelSensorReading>()
-        combine(batteryReadings(context), display, ambientLightReadings(context)) { battery, screen, light ->
-            battery + screen + listOfNotNull(light)
+        combine(
+            batteryReadings(context), display, ambientLightReadings(context),
+            batterySaverReadings(context), wifiSignalReadings(context),
+        ) { battery, screen, light, batterySaver, wifi ->
+            battery + screen + listOfNotNull(light, batterySaver, wifi)
         }
             .conflate()
             .collect { readings ->

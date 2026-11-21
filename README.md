@@ -117,13 +117,17 @@ Home Assistant before using it in a script or automation.
 For native controls, install `custom_components/flick_panel` from this repository in
 Home Assistant and restart Core. Add **Flick Panel** under **Settings → Devices &
 services** and choose the linked tablet. **Display** blanks and wakes Flick Panel
-while it is running. The switch follows the app's reported display mode, and the linked
-Mobile App device holds the tablet's diagnostic sensors. Android controls physical
-display power. Set the tablet's regular keep-awake preference under **Wall display**.
+while it is running. The switch follows the app's reported display mode. To see
+the tablet's sensors, open its **Mobile App** device under **Linked devices**, then
+look under **Diagnostic**. Android controls physical display power. Set the
+tablet's regular keep-awake preference under **Wall display**.
 
-Use **Flick Panel: Start screensaver**, **Stop screensaver**, or **Open camera** in an
-automation. Choose the tablet and, for a camera action, a camera saved in Flick Panel.
-The existing notify action supports the full command set below.
+Choose an action under **Flick Panel** in the Home Assistant automation editor.
+Select the tablet to wake or blank its display, start or stop its screensaver,
+set brightness, open a dashboard tab, open a saved camera or tile, or close the
+current viewer. Leave the brightness field empty to clear the override.
+Camera and tile actions use entities saved in Favourites. Existing automations
+can also use the Mobile App notify service with the commands below.
 
 ```yaml
 action: notify.mobile_app_kitchen_panel
@@ -153,11 +157,12 @@ The tablet accepts commands outside PIN-protected setup. Use the underlying Home
 Assistant action to operate devices such as lights and gates.
 
 A linked tablet publishes battery level, charging status, charger connection,
-battery temperature, display mode, and ambient light when the tablet has a light
-sensor. The charger sensor reports the power source. The display sensor reports
-the selected tab, brightness override and effective Wall display setting. The battery
-level sensor includes Android's battery health status and voltage when available. Android
-collects these readings while the linked panel is active. Home Assistant can disable
+battery temperature, Battery Saver, display mode, Wi-Fi signal on supported
+tablets, and ambient light when the tablet has a light sensor. The charger sensor
+reports the power source. The display sensor reports the selected tab, brightness
+override and effective Wall display setting. The battery level sensor includes
+Android's battery health status and voltage when available. Wi-Fi reports signal
+strength in dBm once a minute while the panel is linked. Home Assistant can disable
 individual sensors.
 
 ## Data flow

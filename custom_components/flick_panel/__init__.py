@@ -1,53 +1,24 @@
 """Home Assistant controls for Flick Panel tablets."""
 
-import probatio as vol
-
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import ATTR_DEVICE_ID, Platform
-from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_entity_registry_updated_event
-from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
 from .panel import CONF_PANEL, DOMAIN, Panel, linked_panels
+from .services import register_actions
 
 PLATFORMS = (Platform.SWITCH,)
-CAMERA = "camera_entity_id"
-SCREENSAVER_COMMANDS = {"start_screensaver": "show_clock", "stop_screensaver": "wake"}
-DEVICE_FIELDS = {vol.Required(ATTR_DEVICE_ID): cv.string}
 type PanelEntry = ConfigEntry[Panel]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register actions for the screensaver and camera viewer."""
-    async def open_camera(call: ServiceCall) -> None:
-        camera = call.data[CAMERA]
-        if not camera.startswith("camera.") or hass.states.get(camera) is None:
-            raise ServiceValidationError("Choose a Home Assistant camera")
-        await _target_panel(hass, call.data[ATTR_DEVICE_ID]).async_command("open_camera", camera=camera)
-
-    async def screensaver(call: ServiceCall) -> None:
-        await _target_panel(hass, call.data[ATTR_DEVICE_ID]).async_command(SCREENSAVER_COMMANDS[call.service])
-
-    async_register_admin_service(
-        hass, DOMAIN, "open_camera", open_camera, schema=vol.Schema(DEVICE_FIELDS | {vol.Required(CAMERA): cv.entity_id}),
-    )
-    device_schema = vol.Schema(DEVICE_FIELDS)
-    for action in SCREENSAVER_COMMANDS:
-        async_register_admin_service(hass, DOMAIN, action, screensaver, schema=device_schema)
+    """Register Home Assistant actions for linked tablets."""
+    register_actions(hass)
     return True
-
-
-def _target_panel(hass: HomeAssistant, device_id: str) -> Panel:
-    """Resolve a configured tablet selected by a Home Assistant action."""
-    if device := dr.async_get(hass).async_get(device_id):
-        for entry in hass.config_entries.async_entries(DOMAIN):
-            if entry.entry_id in device.config_entries and entry.state is ConfigEntryState.LOADED:
-                return entry.runtime_data
-    raise ServiceValidationError("Choose a tablet linked to Flick Panel")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PanelEntry) -> bool:
