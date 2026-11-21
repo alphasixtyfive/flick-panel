@@ -2,6 +2,8 @@ package app.flickpanel.ha
 
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.validEntity
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlin.math.roundToInt
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -55,6 +57,27 @@ internal data class Entity(
     val brightness get() = if (state == "off") 0 else
         attributes.optInt("brightness", -1).takeIf { it in 0..255 }?.let { (it * 100 + 127) / 255 }
 
+    val options: List<String>
+        get() {
+            if (domain != "input_select" && domain != "select") return emptyList()
+            val list = attributes.optJSONArray("options") ?: return emptyList()
+            return (0 until minOf(list.length(), 256)).mapNotNull { index ->
+                (list.opt(index) as? String)?.takeIf { it.isNotBlank() && it.length <= 255 }
+            }.distinct()
+        }
+
+    val numberValue get() = state.toDoubleOrNull()?.takeIf(Double::isFinite)?.let(BigDecimal::valueOf)
+
+    val numberRange: NumberRange?
+        get() {
+            if (domain != "input_number" && domain != "number") return null
+            val min = attributes.optDouble("min")
+            val max = attributes.optDouble("max")
+            val step = attributes.optDouble("step")
+            if (!min.isFinite() || !max.isFinite() || !step.isFinite() || min >= max || step <= 0) return null
+            return NumberRange(BigDecimal.valueOf(min), BigDecimal.valueOf(max), BigDecimal.valueOf(step))
+        }
+
     fun kinds(): List<TileKind> = when (domain) {
         "light" -> {
             val modes = attributes.optJSONArray("supported_color_modes")
@@ -63,8 +86,10 @@ internal data class Entity(
             if (dimmable) listOf(TileKind.SLIDER, TileKind.TOGGLE) else listOf(TileKind.TOGGLE)
         }
         "switch", "input_boolean" -> listOf(TileKind.TOGGLE)
-        "sensor", "input_number", "number" -> if (domain == "sensor" && state.toDoubleOrNull()?.isFinite() == true)
+        "sensor" -> if (state.toDoubleOrNull()?.isFinite() == true)
             listOf(TileKind.VALUE, TileKind.TREND) else listOf(TileKind.VALUE)
+        "input_number", "number" -> if (numberRange != null) listOf(TileKind.NUMBER, TileKind.VALUE) else listOf(TileKind.VALUE)
+        "input_select", "select" -> if (options.isNotEmpty()) listOf(TileKind.CHOICE, TileKind.VALUE) else listOf(TileKind.VALUE)
         "timer" -> listOf(TileKind.TIMER, TileKind.VALUE)
         "binary_sensor", "input_text", "cover" -> listOf(TileKind.VALUE)
         "input_button", "button", "scene", "script" -> listOf(TileKind.ACTION)
@@ -78,12 +103,28 @@ internal data class Entity(
     }
 }
 
+internal data class NumberRange(val min: BigDecimal, val max: BigDecimal, val step: BigDecimal) {
+    fun adjacent(value: BigDecimal, increase: Boolean): BigDecimal? {
+        val rounding = if (increase) RoundingMode.FLOOR else RoundingMode.CEILING
+        val index = value.subtract(min).divide(step, 0, rounding)
+        val offset = if (increase) BigDecimal.ONE else BigDecimal.ONE.negate()
+        return min.add(step.multiply(index.add(offset))).takeIf { it in min..max }?.stripTrailingZeros()
+    }
+}
+
 internal fun Entity.binaryStatus(): String? {
     if (domain != "binary_sensor" || state !in setOf("on", "off")) return null
     val labels = when (attributes.text("device_class")) {
         "door", "window", "garage_door", "opening" -> "Open" to "Closed"
         "motion", "occupancy", "presence" -> "Detected" to "Clear"
         "moisture" -> "Wet" to "Dry"
+        "battery" -> "Battery low" to "Battery OK"
+        "plug" -> "Plugged in" to "Unplugged"
+        "connectivity" -> "Connected" to "Disconnected"
+        "power" -> "Powered" to "No power"
+        "smoke" -> "Smoke detected" to "Clear"
+        "gas" -> "Gas detected" to "Clear"
+        "carbon_monoxide" -> "CO detected" to "Clear"
         "problem" -> "Problem" to "Clear"
         "running" -> "Running" to "Stopped"
         else -> return null

@@ -80,12 +80,12 @@ private fun clockTime(): ZonedDateTime {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun AmbientClock(message: String?, albumId: String?, model: PanelViewModel) {
+internal fun AmbientClock(message: String?, albumId: String?, reduceMotion: Boolean, model: PanelViewModel) {
     val now = clockTime()
     val shadow = if (albumId == null) null else Shadow(Color(0x66000000), Offset(0f, 2f), blurRadius = 10f)
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xff10151b))
         .clickable(interactionSource = null, indication = null, onClickLabel = "Open home controls", onClick = model::wake)) {
-        IdlePhotos(albumId, model::browsePhotos, model::loadPhoto, Modifier.matchParentSize())
+        IdlePhotos(albumId, model::browsePhotos, model::loadPhoto, reduceMotion, Modifier.matchParentSize())
         if (message != null) {
             Text(message, color = Color(0xffeef4fa), fontSize = 23.sp, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
                 maxLines = 2, modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 34.dp, vertical = 34.dp))
@@ -147,7 +147,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             DashboardNavigation(state.page, wide, compactNavigation, model::selectPage)
             key(state.page) {
-                val body = Modifier.fillMaxSize().padding(top = 22.dp)
+                val body = Modifier.fillMaxSize().padding(top = 22.dp).panelEntrance(state.page, state.config.reduceMotion)
                 when (state.page) {
                     Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
                     Page.ROOMS -> Rooms(state, model, wide, body)

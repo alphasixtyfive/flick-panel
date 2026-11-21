@@ -56,6 +56,7 @@ internal data class PanelUi(
     val configured: Boolean = false,
     val layout: RoomLayout = RoomLayout(),
     val link: Link = Link.OFFLINE,
+    val serverAddress: String? = null,
     val entities: Map<String, Entity> = emptyMap(),
     val loadingCatalogue: Boolean = false,
     val page: Page = Page.FAVOURITES,

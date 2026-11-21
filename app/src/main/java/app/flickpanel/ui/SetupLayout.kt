@@ -3,6 +3,7 @@ package app.flickpanel.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -61,10 +62,14 @@ internal enum class SetupSection(val label: String, val icon: ImageVector) {
 @Composable
 internal fun SetupLayout(
     theme: PanelTheme,
+    highContrast: Boolean,
+    reduceMotion: Boolean,
+    destination: Any,
     section: SetupSection,
     openSection: (SetupSection) -> Unit,
     detailTitle: String?,
     canSave: Boolean,
+    dirty: Boolean,
     busy: Boolean,
     back: () -> Unit,
     close: () -> Unit,
@@ -72,13 +77,13 @@ internal fun SetupLayout(
     content: @Composable () -> Unit,
 ) {
     Dialog(onDismissRequest = back, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        PanelColors(theme) {
+        PanelColors(theme, highContrast) {
             BoxWithConstraints(Modifier.padding(14.dp).widthIn(max = 1000.dp).fillMaxWidth()
                 .fillMaxHeight(.92f).imePadding()) {
                 val expanded = maxWidth >= 740.dp
                 val detail = detailTitle != null
                 val colors = MaterialTheme.colorScheme
-                Surface(Modifier.fillMaxSize(), color = colors.surface, shape = RoundedCornerShape(28.dp)) {
+                Surface(Modifier.fillMaxSize(), color = colors.surface, shape = MaterialTheme.shapes.extraLarge) {
                     Row {
                         if (expanded) SetupNavigation(section, openSection, close, busy)
                         Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -93,7 +98,7 @@ internal fun SetupLayout(
                                 Text(detailTitle ?: if (expanded) section.label else "Setup", Modifier.weight(1f).semantics { heading() },
                                     style = MaterialTheme.typography.headlineMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (canSave) Button(onClick = save, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text("Done")
+                                    Text(if (dirty) "Save changes" else "Done")
                                 }
                             }
                             if (!expanded && !detail) {
@@ -104,7 +109,9 @@ internal fun SetupLayout(
                                     }
                                 }
                             }
-                            content()
+                            Box(Modifier.weight(1f).fillMaxWidth().panelEntrance(destination, reduceMotion)) {
+                                content()
+                            }
                         }
                     }
                 }
@@ -116,7 +123,7 @@ internal fun SetupLayout(
 @Composable
 private fun SetupNavigation(section: SetupSection, open: (SetupSection) -> Unit, close: () -> Unit, busy: Boolean) {
     val colors = MaterialTheme.colorScheme
-    Column(Modifier.width(212.dp).fillMaxHeight().background(colors.surfaceContainer)
+    Column(Modifier.width(212.dp).fillMaxHeight().background(colors.surfaceContainerLow)
         .verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).selectableGroup(),
         verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 72.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -130,7 +137,7 @@ private fun SetupNavigation(section: SetupSection, open: (SetupSection) -> Unit,
                 onClick = { if (!busy) open(destination) },
                 icon = { Icon(destination.icon, null) },
                 modifier = Modifier.heightIn(min = 52.dp),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = NavigationDrawerItemDefaults.colors(
                     selectedContainerColor = colors.primaryContainer,
                     selectedTextColor = colors.onPrimaryContainer,

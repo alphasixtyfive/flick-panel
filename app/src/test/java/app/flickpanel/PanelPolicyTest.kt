@@ -113,6 +113,33 @@ class PanelPolicyTest {
             PanelConfigCodec.decode(PanelConfigCodec.encode(config)).favourites)
     }
 
+    @Test fun layoutPreservesAppearanceAndActionConfirmation() {
+        val action = TileSpec("script.night_mode", TileKind.ACTION, confirmAction = true)
+        val value = TileSpec("sensor.power", TileKind.VALUE, confirmAction = true)
+        val config = PanelConfig(favourites = listOf(action, value), idleSeconds = 0,
+            highContrast = true, reduceMotion = true)
+        assertEquals(config.copy(favourites = listOf(action, value.copy(confirmAction = false))),
+            PanelConfigCodec.decode(PanelConfigCodec.encode(config)))
+        val legacy = PanelConfigCodec.decode("""{"version":1,"tiles":[{"entity":"scene.home","kind":"ACTION"}]}""")
+        assertFalse(legacy.favourites.single().confirmAction)
+        assertFalse(legacy.reduceMotion)
+        assertFalse(legacy.highContrast)
+    }
+
+    @Test fun numberAndSelectorControlsUseHomeAssistantCapabilities() {
+        val setpoint = Entity("input_number.target", "0.2", JSONObject("""{"min":0,"max":0.3,"step":0.1}"""))
+        assertEquals(listOf(TileKind.NUMBER, TileKind.VALUE), setpoint.kinds())
+        val range = checkNotNull(setpoint.numberRange)
+        assertEquals("0.3", range.adjacent(checkNotNull(setpoint.numberValue), true)?.toPlainString())
+        assertEquals("0.2", range.adjacent("0.25".toBigDecimal(), false)?.toPlainString())
+        assertNull(range.adjacent("0.3".toBigDecimal(), true))
+        assertEquals(listOf(TileKind.VALUE), setpoint.copy(attributes = JSONObject()).kinds())
+        val input = Entity("input_select.mode", "Home", JSONObject("""{"options":["Home","Quiet","Home",4,""]}"""))
+        assertEquals(listOf("Home", "Quiet"), input.options)
+        assertEquals(listOf(TileKind.CHOICE, TileKind.VALUE), input.kinds())
+        assertEquals(listOf(TileKind.VALUE), Entity("binary_sensor.leak", "off").kinds())
+    }
+
     @Test fun countdownKeepsTheFinalSecondVisibleUntilItExpires() {
         assertEquals(listOf(2L, 1L, 0L, 0L), listOf(3_999L, 4_999L, 5_000L, 6_000L).map {
             timerSecondsRemaining(deadline = 5_000L, now = it)

@@ -50,7 +50,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var approachJob: Job? = null
     private val graphTimes = mutableMapOf<String, Long>()
     private val graphRequests = mutableSetOf<String>()
-    private var images = PanelImages()
+    private var images = PanelImages(viewModelScope)
     private data class MusicFolder(val player: String, val type: String?, val id: String?)
     private data class MusicPage(val choices: List<MediaChoice>, val fetchedAt: Long)
     private val musicPages = LruCache<MusicFolder, MusicPage>(16)
@@ -88,6 +88,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     fun touch() {
         if (!foreground || !_ui.value.configured || _ui.value.clock) return
         idleJob?.cancel()
+        if (_ui.value.config.idleSeconds == 0) return
         idleJob = viewModelScope.launch {
             delay(_ui.value.config.idleSeconds * 1000L)
             val current = _ui.value
@@ -279,6 +280,21 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    fun selectOption(entity: Entity, option: String) {
+        val current = _ui.value.entities[entity.id] ?: return
+        if (option == current.state || option !in current.options) return
+        send(current, "select_option", JSONObject().put("option", option), pending = option, matches = { it.state == option })
+    }
+
+    fun stepNumber(entity: Entity, increase: Boolean) {
+        val current = _ui.value.entities[entity.id] ?: return
+        val value = current.numberValue ?: return
+        val next = current.numberRange?.adjacent(value, increase) ?: return
+        val label = listOf(next.toPlainString(), current.unit).filter(String::isNotEmpty).joinToString(" ")
+        send(current, "set_value", JSONObject().put("value", next.toDouble()), pending = label,
+            matches = { it.numberValue?.compareTo(next) == 0 })
+    }
+
     private fun send(
         entity: Entity, service: String, payload: JSONObject = JSONObject(), pending: String = "Sending…",
         matches: ((Entity) -> Boolean)? = null
@@ -312,7 +328,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     suspend fun browsePhotos(id: String?) = client?.photoAlbum(id) ?: throw HaProblem("Home Assistant isn't connected")
 
-    suspend fun loadPhoto(id: String): Bitmap? = client?.photo(id)?.let { decodePanelImage(it, 2000) }
+    suspend fun loadPhoto(id: String): Bitmap? {
+        val active = client ?: return null
+        return images.photos.load(id) { active.photo(id) }
+    }
 
     suspend fun loadArtwork(reference: String): Bitmap? {
         val active = client ?: return null
@@ -364,12 +383,13 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         client?.stop()
         graphTimes.clear()
         graphRequests.clear()
-        images = PanelImages()
+        images.close()
+        images = PanelImages(viewModelScope)
         musicPages.evictAll()
         presence = null
         _ui.update { it.copy(
             entities = emptyMap(), layout = RoomLayout(it.config), graphs = emptyMap(),
-            pending = emptyMap(), link = Link.CONNECTING
+            pending = emptyMap(), link = Link.CONNECTING, serverAddress = credentials.server.toString()
         ) }
         val active = HaClient(credentials, viewModelScope)
         client = active

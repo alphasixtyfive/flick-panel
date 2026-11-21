@@ -11,7 +11,8 @@ enum class PanelTheme(val label: String) {
 
 enum class TileKind(val label: String) {
     TOGGLE("Switch"), VALUE("Value"), SLIDER("Slider"), TREND("Small graph"),
-    ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"), APP("Android app"), IMAGE("Image"), TIMER("Countdown");
+    ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"),
+    APP("Android app"), IMAGE("Image"), TIMER("Countdown"), CHOICE("Selector"), NUMBER("Number control");
 
     internal val resizable get() = this != CAMERA && this != WEATHER && this != APP
 }
@@ -24,6 +25,7 @@ data class TileSpec(
     val showOnHome: Boolean = true,
     val wideOnTablet: Boolean = false,
     val cameraGate: String? = null,
+    val confirmAction: Boolean = false,
 ) {
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
@@ -36,6 +38,8 @@ internal data class PanelConfig(
     val idleSeconds: Int = 60,
     val wallMode: Boolean = true,
     val roomIds: List<String>? = null,
+    val highContrast: Boolean = false,
+    val reduceMotion: Boolean = false,
     internal val idleAlbum: PhotoFolder? = null
 )
 
@@ -45,13 +49,18 @@ internal object PanelConfigCodec {
         .put("tiles", JSONArray(config.favourites.map { tile ->
             JSONObject().put("entity", tile.entity).put("kind", tile.kind.name).put("label", tile.label)
                 .put("status", tile.statusEntity).put("home", tile.showOnHome).put("gate", tile.cameraGate)
-                .apply { if (tile.wideOnTablet) put("wide", true) }
+                .apply {
+                    if (tile.wideOnTablet) put("wide", true)
+                    if (tile.confirmAction) put("confirm", true)
+                }
         }))
         .put("theme", config.theme.name)
         .put("message", config.messageEntity)
         .put("presence", config.presenceEntity)
         .put("idle", config.idleSeconds)
         .put("wall", config.wallMode)
+        .put("highContrast", config.highContrast)
+        .put("reduceMotion", config.reduceMotion)
         .put("rooms", config.roomIds?.let(::JSONArray))
         .put("idleAlbum", config.idleAlbum?.let { JSONObject().put("id", it.id).put("title", it.title) })
         .toString()
@@ -69,15 +78,18 @@ internal object PanelConfigCodec {
                 kind == TileKind.ACTION && validEntity(it) && it.startsWith("timer.")
             }, showOnHome = kind != TileKind.CAMERA || tile.optBoolean("home", true),
                 wideOnTablet = kind.resizable && tile.optBoolean("wide"),
-                cameraGate = tile.text("gate")?.takeIf { kind == TileKind.CAMERA && validEntity(it) && it.startsWith("cover.") })
+                cameraGate = tile.text("gate")?.takeIf { kind == TileKind.CAMERA && validEntity(it) && it.startsWith("cover.") },
+                confirmAction = kind == TileKind.ACTION && tile.optBoolean("confirm"))
         }.distinctBy { it.entity }
         return PanelConfig(
             favourites = tiles.take(48),
             theme = PanelTheme.entries.firstOrNull { it.name == obj.optString("theme") } ?: PanelTheme.SLATE,
             messageEntity = obj.text("message")?.takeIf(::validEntity),
             presenceEntity = obj.text("presence")?.takeIf { validEntity(it) && it.startsWith("binary_sensor.") },
-            idleSeconds = obj.optInt("idle", 60).coerceIn(15, 900),
+            idleSeconds = obj.optInt("idle", 60).let { if (it == 0) 0 else it.coerceIn(15, 900) },
             wallMode = obj.optBoolean("wall", true),
+            highContrast = obj.optBoolean("highContrast"),
+            reduceMotion = obj.optBoolean("reduceMotion"),
             roomIds = obj.optJSONArray("rooms")?.let { areas ->
                 (0 until areas.length()).mapNotNull { areas.optString(it).takeIf(::validAreaId) }.distinct().take(48)
             },

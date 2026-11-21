@@ -195,13 +195,14 @@ private fun ControlTile(
     when (tile.kind) {
         TileKind.TOGGLE, TileKind.ACTION -> {
             val action = tile.kind == TileKind.ACTION
+            val confirming = remember(tile.entity) { mutableStateOf(false) }
             val timer = tile.statusEntity?.let(state.entities::get)
             val running = timer?.state == "active" || timer?.state == "paused"
             val countdown = if (running) timerReadout(timer) else null
             val active = if (action) running else on
             val background by animateColorAsState(
                 if (active) colors.primaryContainer else colors.surfaceContainer,
-                animationSpec = tween(durationMillis = 140),
+                animationSpec = tween(durationMillis = if (state.config.reduceMotion) 0 else 140),
                 label = "Tile state",
             )
             val text = pending ?: when {
@@ -212,7 +213,13 @@ private fun ControlTile(
                 else -> "Off"
             }
             Surface(onClick = {
-                if (live != null) { if (action) model.action(live) else model.toggle(live, !on) }
+                if (live != null) {
+                    when {
+                        action && tile.confirmAction -> confirming.value = true
+                        action -> model.action(live)
+                        else -> model.toggle(live, !on)
+                    }
+                }
             }, enabled = ready, modifier = modifier.semantics {
                 stateDescription = text
             }, shape = panelCardShape, color = background,
@@ -228,10 +235,22 @@ private fun ControlTile(
                     Text(text, style = MaterialTheme.typography.titleMedium)
                 }
             }
+            if (confirming.value && live != null) {
+                ConfirmTileAction(label, ready, dismiss = { confirming.value = false }) {
+                    confirming.value = false
+                    model.action(live)
+                }
+            }
         }
         TileKind.SLIDER -> BrightnessTile(label, entity, live, pending, ready, model, modifier)
         TileKind.CLIMATE -> Climate(tile, state, model, modifier, live, ready, compact)
         TileKind.MEDIA -> MusicTile(label, entity, pending, ready, model, modifier)
+        TileKind.CHOICE -> ChoiceTile(label, entity, pending, ready, modifier) { option ->
+            live?.let { model.selectOption(it, option) }
+        }
+        TileKind.NUMBER -> NumberTile(label, entity, pending, ready, modifier) { increase ->
+            live?.let { model.stepNumber(it, increase) }
+        }
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, state.link == Link.ONLINE && entity?.available == true, model, modifier)
         TileKind.WEATHER -> Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
             Column(Modifier.fillMaxWidth().padding(19.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -326,7 +345,7 @@ private fun BrightnessTile(
     }
 }
 
-private fun displayValue(entity: Entity?): String {
+internal fun displayValue(entity: Entity?): String {
     if (entity == null || !entity.available) return "Unavailable"
     entity.binaryStatus()?.let { return it }
     val value = entity.state.take(120)

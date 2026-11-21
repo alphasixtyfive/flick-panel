@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
                     else show(WindowInsetsCompat.Type.systemBars())
                 }
             }
-            PanelColors(state.config.theme) {
+            PanelColors(state.config.theme, state.config.highContrast) {
                 val snacks = remember { SnackbarHostState() }
                 val dashboard = rememberSaveableStateHolder()
                 val error = state.error
@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
                                 when {
                                     state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                                     !state.configured -> ConnectionForm(state, model::connect)
-                                    state.clock -> AmbientClock(state.message, state.config.idleAlbum?.id, model)
+                                    state.clock -> AmbientClock(state.message, state.config.idleAlbum?.id, state.config.reduceMotion, model)
                                     else -> Dashboard(state, model)
                                 }
                             }

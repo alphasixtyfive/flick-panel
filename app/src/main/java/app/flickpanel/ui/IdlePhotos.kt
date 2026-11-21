@@ -57,6 +57,7 @@ internal fun IdlePhotos(
     albumId: String?,
     browse: suspend (String?) -> PhotoAlbum,
     load: suspend (String) -> Bitmap?,
+    reduceMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (albumId == null) return
@@ -83,7 +84,7 @@ internal fun IdlePhotos(
             if (!hasPhoto) delay(albumRetryMillis)
         }
     }
-    Crossfade(photo, modifier, animationSpec = tween(450), label = "Idle photo") { bitmap ->
+    Crossfade(photo, modifier, animationSpec = tween(if (reduceMotion) 0 else 400), label = "Idle photo") { bitmap ->
         if (bitmap != null) {
             Box(Modifier.fillMaxSize()) {
                 Image(
