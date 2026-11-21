@@ -6,9 +6,9 @@ controls for the selected room. The **Rooms** section in setup chooses which are
 this tablet displays, their order, and whether heating controls appear. Cameras
 shows pinned previews and opens one full-screen feed at a time.
 In setup, use **Cameras** to choose gallery feeds, edit their settings and star the
-ones you want on Home. Home groups controls, cameras, the agenda, people, shortcuts
-and graphs. Home fits two camera previews next to the agenda on four-column layouts
-with standard-size agenda cards.
+ones you want on Home. On wider tablets, the camera pair sits beside a two-by-two
+people grid. Swipe the people grid or use its arrows for more profiles. The agenda,
+app shortcuts and graphs sit below.
 Use **Add tile → Android apps** to pin a launcher shortcut to an app already installed on the tablet.
 On a dedicated tablet, **Setup → Panel → Android Home app** opens Android's default
 launcher settings. Choosing Flick Panel there makes the Android Home gesture return to it

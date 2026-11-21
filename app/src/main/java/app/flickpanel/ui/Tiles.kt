@@ -1,7 +1,6 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,9 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -19,8 +16,8 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
@@ -43,26 +40,35 @@ internal fun FavouritesTileGrid(
     val groups = remember(tiles, columns, compact, resizable) {
         homeTileGroups(tiles, columns, compact, resizable)
     }
+    val firstCameraRow = groups.cameras.firstOrNull()
+    val sharedRow = compact && firstCameraRow?.size == 2 && groups.people.isNotEmpty()
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(tileGap),
     ) {
         tileRows(groups.controls, state, model, columns, compact, resizable)
-        if (groups.overview.isNotEmpty()) {
-            item(key = "home-overview", contentType = "home-overview") {
-                TileRow(groups.overview, state, model, columns, compact, resizable, overview = true)
+        if (sharedRow) {
+            item(key = "home-glance", contentType = "home-glance") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
+                    HomeCameraRow(firstCameraRow, columns, state, model,
+                        modifier = Modifier.weight(1f), previewHeight = 186.dp)
+                    PeopleGrid(groups.people, resizable, Modifier.weight(1f)) { person, cell ->
+                        PanelTile(person, state, model, cell)
+                    }
+                }
             }
         }
-        items(groups.cameras, key = { "home-cameras:" + it.first().entity }, contentType = { "home-cameras" }) { cameras ->
+        val cameraRows = if (sharedRow) groups.cameras.drop(1) else groups.cameras
+        items(cameraRows, key = { "home-cameras:" + it.first().entity }, contentType = { "home-cameras" }) { cameras ->
             HomeCameraRow(cameras, columns, state, model)
         }
-        tileRows(groups.agenda, state, model, columns, compact, resizable)
-        if (groups.people.isNotEmpty()) {
+        if (!sharedRow && groups.people.isNotEmpty()) {
             item(key = "people", contentType = "people") {
-                PeopleRow(groups.people) { tile, cell -> PanelTile(tile, state, model, cell) }
+                PeopleGrid(groups.people, resizable) { person, cell -> PanelTile(person, state, model, cell) }
             }
         }
+        tileRows(groups.agenda, state, model, groups.agendaColumns, compact, resizable)
         val shortcutColumns = minOf(columns, groups.shortcuts.size).coerceAtLeast(1)
         tileRows(groups.shortcuts.chunked(shortcutColumns), state, model, shortcutColumns, compact, resizable,
             shortcutRow = true)
@@ -71,31 +77,19 @@ internal fun FavouritesTileGrid(
 }
 
 @Composable
-private fun HomeCameraRow(cameras: List<TileSpec>, columns: Int, state: PanelUi, model: PanelViewModel) {
-    val twoAcross = columns > 1
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
+private fun HomeCameraRow(
+    cameras: List<TileSpec>,
+    columns: Int,
+    state: PanelUi,
+    model: PanelViewModel,
+    modifier: Modifier = Modifier,
+    previewHeight: Dp = if (columns > 1) 142.dp else 180.dp,
+) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
         for (camera in cameras) {
-            CameraTile(camera, state, model, Modifier.weight(1f).height(if (twoAcross) 142.dp else 180.dp))
+            CameraTile(camera, state, model, Modifier.weight(1f).height(previewHeight))
         }
-        if (twoAcross && cameras.size == 1) Spacer(Modifier.weight(1f))
-    }
-}
-
-@Composable
-internal fun PeopleRow(people: List<TileSpec>, tile: @Composable (TileSpec, Modifier) -> Unit) {
-    val minWidth = 162.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val canResize = maxWidth >= mediumWindowWidthDp.dp
-        val columns = people.size + people.count { canResize && it.wideOnTablet }
-        val visible = ((maxWidth + tileGap) / (minWidth + tileGap)).toInt().coerceIn(1, columns)
-        val nextCardHint = if (visible < columns) 22.dp else 0.dp
-        val cellWidth = (maxWidth - (tileGap * (visible - 1)) - nextCardHint) / visible
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(tileGap)) {
-            items(people, key = TileSpec::entity) { person ->
-                val width = if (canResize && person.wideOnTablet) minOf(maxWidth, cellWidth * 2 + tileGap) else cellWidth
-                tile(person, Modifier.width(width).heightIn(min = 86.dp))
-            }
-        }
+        if (columns > 1 && cameras.size == 1) Spacer(Modifier.weight(1f))
     }
 }
 
@@ -111,7 +105,6 @@ internal fun LazyListScope.tileRows(
 @Composable
 private fun TileRow(
     row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean, resizeTiles: Boolean,
-    overview: Boolean = false,
     shortcutRow: Boolean = false,
 ) {
     Layout(modifier = Modifier.fillMaxWidth(), content = {
@@ -134,7 +127,7 @@ private fun TileRow(
         var column = 0
         val slots = row.map { tile ->
             val start = cells * column / columns + gap * column
-            column += if (overview) 1 else tileSpan(tile, columns, compact, resizeTiles)
+            column += tileSpan(tile, columns, compact, resizeTiles)
             val end = cells * column / columns + gap * (column - 1)
             start to (end - start)
         }

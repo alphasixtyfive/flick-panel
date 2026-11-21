@@ -5,6 +5,7 @@ import app.flickpanel.config.TileSpec
 import app.flickpanel.ui.dashboardTileColumns
 import app.flickpanel.ui.homeTileGroups
 import app.flickpanel.ui.packTileRows
+import app.flickpanel.ui.peopleGridPages
 import app.flickpanel.ui.roomTileColumns
 import app.flickpanel.ui.tileSpan
 import org.junit.Assert.assertEquals
@@ -55,7 +56,7 @@ class TileGridLayoutTest {
         }
     }
     @Test
-    fun homePairsSmallCamerasWithTheAgendaWhenFourColumnsFit() {
+    fun homeKeepsCameraPairsSeparateFromTheAgenda() {
         val gate = TileSpec("camera.front_gate", TileKind.CAMERA)
         val front = TileSpec("camera.front_left", TileKind.CAMERA)
         val tasks = TileSpec("todo.shopping", TileKind.TASKS)
@@ -64,13 +65,13 @@ class TileGridLayoutTest {
         val app = TileSpec("app:example.media", TileKind.APP)
         val tiles = listOf(person, gate, tasks, front, app, calendar)
         val wide = homeTileGroups(tiles, columns = 4, compact = true, resizeTiles = true)
-        assertEquals(listOf(gate, front, tasks, calendar), wide.overview)
-        assertEquals(emptyList<List<TileSpec>>(), wide.cameras)
+        assertEquals(listOf(listOf(gate, front)), wide.cameras)
+        assertEquals(listOf(listOf(tasks, calendar)), wide.agenda)
+        assertEquals(2, wide.agendaColumns)
         assertEquals(listOf(person), wide.people)
         assertEquals(listOf(app), wide.shortcuts)
 
         val narrow = homeTileGroups(tiles, columns = 2, compact = false, resizeTiles = true)
-        assertEquals(emptyList<TileSpec>(), narrow.overview)
         assertEquals(listOf(listOf(gate, front)), narrow.cameras)
         assertEquals(listOf(listOf(tasks, calendar)), narrow.agenda)
     }
@@ -88,5 +89,21 @@ class TileGridLayoutTest {
         assertEquals(5, roomTileColumns(1168f, 1f, 4, 5))
         assertEquals(4, roomTileColumns(768f, 1f, 4, 5))
         assertEquals(2, roomTileColumns(768f, 1.6f, 2, 5))
+    }
+
+    @Test
+    fun peopleGridKeepsFourProfilesOnTheFirstPageAndAllOthersReachable() {
+        val people = (1..6).map { TileSpec("person.profile_$it", TileKind.PERSON) }
+        assertEquals(listOf(people.take(4), people.drop(4)),
+            peopleGridPages(people, columns = 2, resizeTiles = true).map { it.flatten() })
+        assertEquals(people.chunked(2), peopleGridPages(people, columns = 1, resizeTiles = false).map { it.flatten() })
+    }
+
+    @Test
+    fun peopleGridKeepsTheConfiguredWideCardAndSavedOrder() {
+        val wide = TileSpec("person.profile_1", TileKind.PERSON, wideOnTablet = true)
+        val others = (2..4).map { TileSpec("person.profile_$it", TileKind.PERSON) }
+        assertEquals(listOf(listOf(listOf(wide), others.take(2)), listOf(others.takeLast(1))),
+            peopleGridPages(listOf(wide) + others, columns = 2, resizeTiles = true))
     }
 }

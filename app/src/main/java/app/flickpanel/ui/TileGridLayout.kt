@@ -54,7 +54,7 @@ internal fun packTileRows(
     return rows
 }
 
-internal enum class HomeGroup { CONTROLS, CAMERAS, AGENDA, PEOPLE, APPS, HISTORY }
+internal enum class HomeGroup { CONTROLS, CAMERAS, PEOPLE, AGENDA, APPS, HISTORY }
 
 internal val TileKind.homeGroup: HomeGroup
     get() = when {
@@ -68,9 +68,9 @@ internal val TileKind.homeGroup: HomeGroup
 
 internal data class HomeTileGroups(
     val controls: List<List<TileSpec>>,
-    val overview: List<TileSpec>,
     val cameras: List<List<TileSpec>>,
     val agenda: List<List<TileSpec>>,
+    val agendaColumns: Int,
     val people: List<TileSpec>,
     val shortcuts: List<TileSpec>,
     val history: List<List<TileSpec>>,
@@ -80,8 +80,8 @@ internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolea
     val groups = tiles.groupBy { it.kind.homeGroup }
     val cameras = groups[HomeGroup.CAMERAS].orEmpty()
     val agenda = groups[HomeGroup.AGENDA].orEmpty()
-    val pairWithAgenda = compact && cameras.size >= 2 && agenda.size >= 2 && agenda.take(2).none(TileSpec::wideOnTablet)
-    val overview = if (pairWithAgenda) cameras.take(2) + agenda.take(2) else emptyList()
+    val agendaSlots = agenda.sumOf { tileSpan(it, columns, compact, resizeTiles) }
+    val agendaColumns = agendaSlots.coerceIn(minOf(columns, 2), columns)
     val apps = groups[HomeGroup.APPS].orEmpty()
     val history = groups[HomeGroup.HISTORY].orEmpty()
     val compactGraph = if (compact && apps.size % columns == columns - 1) {
@@ -89,11 +89,14 @@ internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolea
     } else null
     return HomeTileGroups(
         controls = packTileRows(groups[HomeGroup.CONTROLS].orEmpty(), columns, compact, resizeTiles),
-        overview = overview,
-        cameras = (if (pairWithAgenda) cameras.drop(2) else cameras).chunked(if (columns > 1) 2 else 1),
-        agenda = packTileRows(if (pairWithAgenda) agenda.drop(2) else agenda, columns, compact, resizeTiles),
+        cameras = cameras.chunked(if (columns > 1) 2 else 1),
+        agenda = packTileRows(agenda, agendaColumns, compact, resizeTiles),
+        agendaColumns = agendaColumns,
         people = groups[HomeGroup.PEOPLE].orEmpty(),
         shortcuts = apps + listOfNotNull(compactGraph),
         history = packTileRows(history.filterNot { it == compactGraph }, columns, compact, resizeTiles),
     )
 }
+
+internal fun peopleGridPages(people: List<TileSpec>, columns: Int, resizeTiles: Boolean): List<List<List<TileSpec>>> =
+    packTileRows(people, columns, compact = true, resizeTiles).chunked(2)
