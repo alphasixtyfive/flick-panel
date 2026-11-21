@@ -150,6 +150,14 @@ class PanelPolicyTest {
         assertEquals(listOf(TileKind.CALENDAR), Entity(calendar.entity, "off").kinds())
     }
 
+    @Test fun readerLayoutsKeepTheirExplicitTextSource() {
+        val recipe = TileSpec("sensor.recipe", TileKind.READER, readerAttribute = "recipe_text")
+        val person = TileSpec("person.resident", TileKind.PERSON)
+        val invalid = TileSpec("sensor.private", TileKind.READER, readerAttribute = "access_token")
+        val config = PanelConfig(favourites = listOf(recipe, person, invalid))
+        assertEquals(listOf(recipe, person), PanelConfigCodec.decode(PanelConfigCodec.encode(config)).favourites)
+    }
+
     @Test fun countdownKeepsTheFinalSecondVisibleUntilItExpires() {
         assertEquals(listOf(2L, 1L, 0L, 0L), listOf(3_999L, 4_999L, 5_000L, 6_000L).map {
             timerSecondsRemaining(deadline = 5_000L, now = it)

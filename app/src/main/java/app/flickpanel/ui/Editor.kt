@@ -78,7 +78,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                     activeFormat != null -> format = null
                     activePicker != null -> picker = null
                     state.connectionEditor -> model.cancelConnectionChange()
-                    panelPage != null -> panelPage = null
+                    panelPage != null -> panelPage = if (panelPage == PanelPage.REMOTE_CONTROL) PanelPage.HOME_ASSISTANT else null
                     else -> finish()
                 }
             }
@@ -189,6 +189,8 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                             chooseMessage = { search = ""; picker = SetupPicker.MESSAGE },
                             choosePresence = { search = ""; picker = SetupPicker.PRESENCE },
                             changeConnection = model::changeConnection,
+                            linkPanel = model::linkPanel,
+                            unlinkPanel = model::unlinkPanel,
                         )
                     }
                 }

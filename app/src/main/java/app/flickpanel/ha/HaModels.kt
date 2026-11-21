@@ -52,8 +52,8 @@ internal data class Entity(
     val volumePercent get() = attributes.optDouble("volume_level", Double.NaN)
         .takeIf { it in 0.0..1.0 }?.let { (it * 100).roundToInt() }
 
-    val gateWithOpenControl get() = domain == "cover" && attributes.text("device_class") == "gate" &&
-        attributes.optLong("supported_features") and 1L != 0L
+    val isGate get() = domain == "cover" && attributes.text("device_class") == "gate"
+    val gateWithOpenControl get() = isGate && supportsCoverAction(CoverAction.OPEN)
     val brightness get() = if (state == "off") 0 else
         attributes.optInt("brightness", -1).takeIf { it in 0..255 }?.let { (it * 100 + 127) / 255 }
 
@@ -86,14 +86,20 @@ internal data class Entity(
             if (dimmable) listOf(TileKind.SLIDER, TileKind.TOGGLE) else listOf(TileKind.TOGGLE)
         }
         "switch", "input_boolean" -> listOf(TileKind.TOGGLE)
-        "sensor" -> if (state.toDoubleOrNull()?.isFinite() == true)
-            listOf(TileKind.VALUE, TileKind.TREND) else listOf(TileKind.VALUE)
+        "sensor" -> if (state.toDoubleOrNull()?.isFinite() == true) {
+            if (!hasReaderAttribute) listOf(TileKind.VALUE, TileKind.TREND)
+            else listOf(TileKind.VALUE, TileKind.TREND, TileKind.READER)
+        } else listOf(TileKind.VALUE, TileKind.READER)
         "input_number", "number" -> if (numberRange != null) listOf(TileKind.NUMBER, TileKind.VALUE) else listOf(TileKind.VALUE)
         "input_select", "select" -> if (options.isNotEmpty()) listOf(TileKind.CHOICE, TileKind.VALUE) else listOf(TileKind.VALUE)
         "timer" -> listOf(TileKind.TIMER, TileKind.VALUE)
         "todo" -> listOf(TileKind.TASKS)
         "calendar" -> listOf(TileKind.CALENDAR)
-        "binary_sensor", "input_text", "cover" -> listOf(TileKind.VALUE)
+        "cover" -> if (CoverAction.entries.any(::supportsCoverAction)) listOf(TileKind.COVER, TileKind.VALUE)
+            else listOf(TileKind.VALUE)
+        "binary_sensor" -> listOf(TileKind.VALUE)
+        "input_text" -> if (supportsReader) listOf(TileKind.VALUE, TileKind.READER) else listOf(TileKind.VALUE)
+        "person" -> listOf(TileKind.PERSON)
         "input_button", "button", "scene", "script" -> listOf(TileKind.ACTION)
         "camera" -> listOf(TileKind.CAMERA)
         "image" -> listOf(TileKind.IMAGE)
@@ -102,6 +108,34 @@ internal data class Entity(
             listOf(TileKind.MEDIA) else emptyList()
         "weather" -> listOf(TileKind.WEATHER)
         else -> emptyList()
+    }
+}
+
+internal enum class CoverAction(val feature: Long, val service: String, val label: String, val progress: String) {
+    OPEN(1L, "open_cover", "Open", "Opening…"),
+    STOP(8L, "stop_cover", "Stop", "Stopping…"),
+    CLOSE(2L, "close_cover", "Close", "Closing…"),
+}
+
+internal fun Entity.supportsCoverAction(action: CoverAction) =
+    domain == "cover" && attributes.optLong("supported_features") and action.feature != 0L
+
+internal fun Entity.requiresCoverConfirmation(action: CoverAction) = isGate && action != CoverAction.STOP
+
+internal fun Entity.coverPosition(): Int? {
+    if (domain != "cover" || !available) return null
+    val position = (attributes.opt("current_position") as? Number)?.toDouble() ?: return null
+    return position.takeIf { it in 0.0..100.0 && it == it.toInt().toDouble() }?.toInt()
+}
+
+internal fun Entity.canMoveCover(action: CoverAction, pending: String? = null): Boolean {
+    if (!supportsCoverAction(action) || state !in setOf("open", "closed", "opening", "closing")) return false
+    return when (action) {
+        CoverAction.OPEN -> pending == null &&
+            (state == "closed" || state == "open" && coverPosition()?.let { it in 1..99 } == true)
+        CoverAction.CLOSE -> pending == null && state == "open"
+        CoverAction.STOP -> pending != CoverAction.STOP.progress &&
+            (pending != null || state == "opening" || state == "closing")
     }
 }
 

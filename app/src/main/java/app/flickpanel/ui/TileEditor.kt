@@ -47,6 +47,7 @@ import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.readerAttributes
 
 internal enum class SetupPicker(val title: String) {
     TILE("Add tile"), APP("Add tile"), MESSAGE("Choose a message"), PRESENCE("Choose a presence sensor")
@@ -58,8 +59,8 @@ internal data class TileFormat(
 
 private enum class DeviceFilter(val label: String, private vararg val domains: String) {
     ALL("All"),
-    CONTROLS("Controls", "light", "switch", "input_boolean", "climate", "input_select", "select", "number", "input_number"),
-    SENSORS("Sensors", "sensor", "binary_sensor", "timer", "input_text", "weather", "image", "cover"),
+    CONTROLS("Controls", "light", "switch", "input_boolean", "climate", "input_select", "select", "number", "input_number", "cover"),
+    SENSORS("Sensors", "sensor", "binary_sensor", "timer", "input_text", "weather", "image", "person"),
     CAMERAS("Cameras", "camera"),
     MEDIA("Media", "media_player"),
     AGENDA("Tasks & calendar", "todo", "calendar"),
@@ -149,6 +150,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
     var wideOnTablet by remember(format) { mutableStateOf(format.current?.wideOnTablet ?: false) }
     var cameraGate by remember(format) { mutableStateOf(format.current?.cameraGate) }
     var confirmAction by remember(format) { mutableStateOf(format.current?.confirmAction ?: false) }
+    var readerAttribute by remember(format) { mutableStateOf(format.current?.readerAttribute) }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(setupPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -162,8 +164,11 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                         TileKind.APP -> "Open app"
                         TileKind.ACTION -> if (confirmAction) "Confirm to run" else "Run"
                         TileKind.CAMERA -> if (showOnHome) "Favourites and camera gallery" else "Camera gallery"
+                    TileKind.READER -> "Open full-screen reader"
+                    TileKind.PERSON -> "Open location in maps"
                         TileKind.TASKS -> "To-do list"
                         TileKind.CALENDAR -> "Upcoming events"
+                        TileKind.COVER -> preview.coverStatus().takeUnless { it == "Unavailable" } ?: kind.label
                         else -> displayValue(preview).takeUnless { it == "Unavailable" } ?: kind.label
                     }
                     Text(example, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -196,6 +201,10 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                 }
                 LinkedEntitySetting("Gate control", cameraGate, gates, state) { cameraGate = it }
             }
+            if (kind == TileKind.READER) {
+                val attributes = remember(preview.attributes) { preview.readerAttributes() }
+                ReaderSource(readerAttribute, attributes) { readerAttribute = it }
+            }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = setupPadding, vertical = 10.dp), horizontalArrangement = Arrangement.End) {
             Button(onClick = {
@@ -204,8 +213,25 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                     showOnHome = kind != TileKind.CAMERA || showOnHome, wideOnTablet = kind.resizable && wideOnTablet,
                     cameraGate = cameraGate.takeIf { kind == TileKind.CAMERA },
                     confirmAction = kind == TileKind.ACTION && confirmAction,
+                    readerAttribute = readerAttribute.takeIf { kind == TileKind.READER },
                 ))
             }) { Text(if (format.current == null) "Add tile" else "Apply") }
+        }
+    }
+}
+
+@Composable
+private fun ReaderSource(selected: String?, attributes: List<String>, change: (String?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val label = selected?.replace('_', ' ') ?: "Entity state"
+    Box {
+        SettingLink("Text source", label, { open = true })
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Entity state") }, onClick = { open = false; change(null) })
+            for (attribute in attributes) {
+                DropdownMenuItem(text = { Text(attribute.replace('_', ' ')) },
+                    onClick = { open = false; change(attribute) })
+            }
         }
     }
 }

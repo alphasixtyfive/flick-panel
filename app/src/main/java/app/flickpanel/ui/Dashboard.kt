@@ -57,6 +57,7 @@ import app.flickpanel.Page
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
+import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Link
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -86,17 +87,24 @@ internal fun AmbientClock(message: String?, albumId: String?, reduceMotion: Bool
     val shadow = if (albumId == null) null else Shadow(Color(0x66000000), Offset(0f, 2f), blurRadius = 10f)
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xff10151b))
         .clickable(interactionSource = null, indication = null, onClickLabel = "Open home controls", onClick = model::wake)) {
+        val short = maxHeight < 480.dp
+        val captionInset = if (short || maxWidth < mediumWindowWidthDp.dp) 14.dp else 34.dp
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
         IdlePhotos(albumId, model::browsePhotos, model::loadPhoto, reduceMotion, Modifier.matchParentSize())
         if (message != null) {
-            Text(message, color = Color(0xffeef4fa), fontSize = 23.sp, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
-                maxLines = 2, modifier = Modifier.align(Alignment.TopCenter).padding(horizontal = 34.dp, vertical = 34.dp))
+            Text(message, color = Color(0xffeef4fa), textAlign = TextAlign.Center,
+                style = (if (short) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).copy(shadow = shadow),
+                maxLines = if (short) 1 else 2, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.TopCenter).padding(captionInset))
         }
-        val size = (maxWidth.value * .18f).coerceIn(68f, 160f).sp
-        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+        val availableClock = minOf(maxWidth.value * .24f, maxHeight.value * .35f)
+        val size = minOf((maxWidth.value * .18f).coerceIn(68f, 160f), availableClock / fontScale).sp
+        Column(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(now.format(clockFormat), fontSize = size, lineHeight = size,
                 fontWeight = FontWeight.Medium, color = Color(0xfff1f6fb), style = MaterialTheme.typography.displayMedium.copy(shadow = shadow))
             Text(now.format(dateFormat), style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
-                color = Color(0xffedf3fa), modifier = Modifier.padding(top = 12.dp))
+                color = Color(0xffedf3fa), modifier = Modifier.padding(top = if (short) 4.dp else 12.dp),
+                textAlign = TextAlign.Center, maxLines = if (short) 1 else 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -108,35 +116,28 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     val weather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val wide = maxWidth >= tabletWidthDp.dp
-        val compactNavigation = maxWidth < mediumWindowWidthDp.dp
-        val tileColumns = dashboardTileColumns(maxWidth.value, LocalDensity.current.fontScale)
-        val cameraColumns = if (maxWidth >= 1100.dp) 4 else if (wide) 3 else 2
-        val side = if (wide) panelWidePadding else 20.dp
+        val compact = maxWidth < mediumWindowWidthDp.dp
+        val short = maxHeight < 480.dp
+        val fontScale = LocalDensity.current.fontScale
+        val tileColumns = dashboardTileColumns(maxWidth.value, fontScale)
+        val cameraColumns = minOf(tileColumns, if (maxWidth >= 1100.dp) 4 else if (wide) 3 else 2)
+        val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
-            Row(Modifier.fillMaxWidth().padding(top = if (wide) 34.dp else 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween) {
-                val title = if (state.page == Page.ROOMS) "Rooms" else "Home"
-                Text(title, style = if (wide) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f, fill = false).combinedClickable(
-                        interactionSource = null, indication = null, onClick = {},
-                        onLongClickLabel = "Unlock setup", onLongClick = model::showUnlock,
-                    )
-                        .heightIn(min = 48.dp).semantics { heading() })
-                Row(horizontalArrangement = Arrangement.spacedBy(if (wide) 34.dp else 15.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    if (weather != null) {
-                        WeatherSummary(state.entity(weather.entity), compact = !wide, prominent = wide)
-                    }
-                    HeaderClock(wide, model::showIdleScreen)
-                }
-            }
+            DashboardHeader(
+                if (state.page == Page.ROOMS) "Rooms" else "Home",
+                weather?.let { state.entity(it.entity) },
+                wide = wide,
+                short = short,
+                stacked = compact && !short && fontScale >= 1.3f,
+                unlock = model::showUnlock,
+                idle = model::showIdleScreen,
+            )
             state.message?.let { message ->
                 Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Notifications, null, tint = colors.primary, modifier = Modifier.size(21.dp))
-                    Text(message, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(message, style = MaterialTheme.typography.titleMedium, maxLines = if (short) 1 else 2,
+                        overflow = TextOverflow.Ellipsis)
                 }
             }
             val status = when (state.link) {
@@ -147,18 +148,66 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
             }
             if (status != null) Text(status, style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            DashboardNavigation(state.page, wide, compactNavigation, model::selectPage)
+            DashboardNavigation(state.page, wide, compact, short, model::selectPage)
             key(state.page) {
-                val body = Modifier.fillMaxSize().padding(top = 22.dp).panelEntrance(state.page, state.config.reduceMotion)
+                val body = Modifier.fillMaxSize().padding(top = if (short) 10.dp else 22.dp)
+                    .panelEntrance(state.page, state.config.reduceMotion)
                 when (state.page) {
                     Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
                     Page.ROOMS -> Rooms(state, model, tileColumns, body)
                     Page.FAVOURITES -> Column(body.verticalScroll(rememberScrollState()).padding(bottom = 20.dp),
                         verticalArrangement = Arrangement.spacedBy(tileGap)) {
-                        Favourites(state, model, tileColumns, resizeTiles = !compactNavigation)
+                        Favourites(state, model, tileColumns, resizeTiles = !compact)
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun DashboardHeader(
+    title: String, weather: Entity?, wide: Boolean, short: Boolean, stacked: Boolean,
+    unlock: () -> Unit, idle: () -> Unit,
+) {
+    val padding = if (short) 6.dp else if (wide) 34.dp else 18.dp
+    val prominent = wide && !short
+    val titleContent: @Composable (Modifier) -> Unit = { modifier ->
+        Text(
+            title,
+            style = when {
+                short -> MaterialTheme.typography.headlineSmall
+                wide -> MaterialTheme.typography.displayMedium
+                stacked -> MaterialTheme.typography.headlineMedium
+                else -> MaterialTheme.typography.displaySmall
+            },
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier.combinedClickable(
+                interactionSource = null, indication = null, onClick = {},
+                onLongClickLabel = "Unlock setup", onLongClick = unlock,
+            ).heightIn(min = 48.dp).semantics { heading() },
+        )
+    }
+    val details: @Composable () -> Unit = {
+        Row(horizontalArrangement = Arrangement.spacedBy(if (prominent) 34.dp else 11.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            WeatherSummary(weather, compact = !prominent, prominent = prominent)
+            HeaderClock(prominent, idle)
+        }
+    }
+    if (stacked) {
+        Column(Modifier.fillMaxWidth().padding(top = padding)) {
+            titleContent(Modifier.fillMaxWidth())
+            Box(Modifier.align(Alignment.End)) { details() }
+        }
+    } else {
+        Row(Modifier.fillMaxWidth().padding(top = padding), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            titleContent(Modifier.weight(1f))
+            details()
         }
     }
 }
@@ -174,10 +223,11 @@ private fun HeaderClock(wide: Boolean, showIdleScreen: () -> Unit) {
 }
 
 @Composable
-private fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, selectPage: (Page) -> Unit) {
+internal fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, short: Boolean, selectPage: (Page) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val scroll = if (compact) Modifier else Modifier.horizontalScroll(rememberScrollState())
-    Row(Modifier.fillMaxWidth().padding(top = if (wide) 28.dp else 20.dp)
+    val stacked = compact && !short && LocalDensity.current.fontScale < 1.3f
+    val scroll = if (stacked) Modifier else Modifier.horizontalScroll(rememberScrollState())
+    Row(Modifier.fillMaxWidth().padding(top = if (short) 6.dp else if (wide) 28.dp else 16.dp)
         .then(scroll).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (page in Page.entries) {
@@ -190,8 +240,8 @@ private fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, 
             Surface(selected = selected, onClick = { selectPage(page) }, shape = CircleShape,
                 color = if (selected) colors.primaryContainer else colors.surfaceContainer,
                 contentColor = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
-                modifier = (if (compact) Modifier.weight(1f) else Modifier).semantics { role = Role.Tab }) {
-                if (compact) {
+                modifier = (if (stacked) Modifier.weight(1f) else Modifier).semantics { role = Role.Tab }) {
+                if (stacked) {
                     Column(Modifier.heightIn(min = 56.dp).padding(horizontal = 4.dp, vertical = 6.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
@@ -200,7 +250,8 @@ private fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, 
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 } else {
-                    Row(Modifier.heightIn(min = 56.dp).padding(horizontal = 20.dp, vertical = 8.dp),
+                    Row(Modifier.heightIn(min = if (short) 48.dp else 56.dp)
+                        .padding(horizontal = if (wide) 20.dp else 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(icon, null, Modifier.size(24.dp))
                         Text(page.label, style = MaterialTheme.typography.titleMedium, maxLines = 1)

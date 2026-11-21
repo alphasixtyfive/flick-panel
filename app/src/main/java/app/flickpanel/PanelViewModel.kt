@@ -2,14 +2,17 @@ package app.flickpanel
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.os.Build
 import android.os.SystemClock
 import android.util.LruCache
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelStore
+import app.flickpanel.config.SavedRemote
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.validPin
+import app.flickpanel.ha.CoverAction
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.HaClient
 import app.flickpanel.ha.HaCredentials
@@ -18,12 +21,19 @@ import app.flickpanel.ha.Link
 import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MediaChoice
 import app.flickpanel.ha.MediaTransport
+import app.flickpanel.ha.PanelCommand
+import app.flickpanel.ha.PanelRegistration
+import app.flickpanel.ha.PanelRemoteState
 import app.flickpanel.ha.canAddTasks
 import app.flickpanel.ha.canBrowseMusic
+import app.flickpanel.ha.canMoveCover
 import app.flickpanel.ha.canUpdateTasks
+import app.flickpanel.ha.coverPosition
 import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.parseServer
+import app.flickpanel.ha.requiresCoverConfirmation
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -47,10 +57,12 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var client: HaClient? = null
     private var linkJob: Job? = null
     private var stateJob: Job? = null
+    private var remoteJob: Job? = null
     private var catalogueJob: Job? = null
     private var idleJob: Job? = null
     private var editorTimer: Job? = null
     private var approachJob: Job? = null
+    private val commandJobs = mutableMapOf<String, Job>()
     private val graphTimes = mutableMapOf<String, Long>()
     private val graphRequests = mutableSetOf<String>()
     private var images = PanelImages(viewModelScope)
@@ -66,7 +78,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             safely {
                 val saved = withContext(Dispatchers.IO) { store.read() }
                 _ui.update { it.copy(loading = false, configured = saved.configured, layout = RoomLayout(saved.config)) }
-                if (saved.credentials != null) setupClient(saved.credentials)
+                if (saved.credentials != null) setupClient(saved.credentials, saved.remote)
             }
             _ui.update { it.copy(loading = false) }
             touch()
@@ -85,30 +97,31 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             agenda.pause()
             presence = null
             relock()
-            _ui.update { it.copy(camera = null, musicBrowser = null, agendaOpen = null, pending = emptyMap()) }
+            _ui.update { it.copy(camera = null, musicBrowser = null, agendaOpen = null, contentOpen = null,
+                screenBlank = false, pending = emptyMap()) }
         }
     }
 
     fun touch() {
-        if (!foreground || !_ui.value.configured || _ui.value.clock) return
+        if (!foreground || !_ui.value.configured || _ui.value.clock || _ui.value.screenBlank) return
         idleJob?.cancel()
         if (_ui.value.config.idleSeconds == 0) return
         idleJob = viewModelScope.launch {
             delay(_ui.value.config.idleSeconds * 1000L)
             val current = _ui.value
-            if (foreground && !current.editor && !current.unlocking && current.camera == null && current.musicBrowser == null && current.agendaOpen == null &&
+            if (foreground && !current.editor && !current.unlocking && !current.hasViewer &&
                 presence != true) _ui.update { it.copy(clock = true) }
         }
     }
 
     fun wake() {
-        _ui.update { it.copy(clock = false) }
+        _ui.update { it.copy(clock = false, screenBlank = false) }
         selectPage(Page.FAVOURITES)
     }
 
     fun showIdleScreen() {
         val current = _ui.value
-        if (!current.configured || current.editor || current.unlocking || current.camera != null || current.musicBrowser != null || current.agendaOpen != null) return
+        if (!current.configured || current.editor || current.unlocking || current.hasViewer || current.screenBlank) return
         idleJob?.cancel()
         _ui.update { it.copy(clock = true) }
     }
@@ -160,6 +173,44 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         _ui.update { if (it.connectionEditor) it.copy(connectionEditor = false, error = null) else it }
     }
 
+    fun linkPanel(name: String) {
+        val active = client ?: return
+        val current = _ui.value
+        if (!foreground || !current.editor || current.busy || current.link != Link.ONLINE ||
+            current.remoteName != null && current.remoteState != PanelRemoteState.UNAVAILABLE) return
+        viewModelScope.launch {
+            _ui.update { it.copy(busy = true, error = null) }
+            safely {
+                val label = name.trim()
+                if (label.isEmpty() || label.length > 48 || label.any(Char::isISOControl)) {
+                    throw HaProblem("Enter a tablet name of up to 48 characters")
+                }
+                val device = withContext(Dispatchers.IO) { store.deviceId() }
+                val id = active.registerPanel(PanelRegistration(
+                    device, label, BuildConfig.VERSION_NAME, Build.MANUFACTURER, Build.MODEL, Build.VERSION.RELEASE,
+                ))
+                withContext(Dispatchers.IO) { store.saveRemote(SavedRemote(id, label)) }
+                _ui.update { it.copy(remoteName = label, remoteState = PanelRemoteState.CONNECTING) }
+                active.setPanelWebhook(id)
+            }
+            _ui.update { it.copy(busy = false) }
+        }
+    }
+
+    fun unlinkPanel() {
+        val current = _ui.value
+        if (!current.editor || current.busy || current.remoteName == null) return
+        viewModelScope.launch {
+            _ui.update { it.copy(busy = true, error = null) }
+            safely {
+                withContext(Dispatchers.IO) { store.clearRemote() }
+                _ui.update { it.copy(remoteName = null, remoteState = PanelRemoteState.DISABLED) }
+                client?.setPanelWebhook(null)
+            }
+            _ui.update { it.copy(busy = false) }
+        }
+    }
+
     fun connect(address: String, token: String, pin: String, confirmation: String) {
         val current = _ui.value
         if (current.busy || (current.configured && !current.editor)) return
@@ -177,11 +228,11 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
                 val credentials = HaCredentials(parseServer(address), secret)
                 HaClient.validate(credentials)
                 if (epoch != securityEpoch || !foreground) return@safely
-                withContext(Dispatchers.IO) {
+                val remote = withContext(Dispatchers.IO) {
                     store.connect(credentials, current.config, if (current.configured) null else pin)
                 }
                 _ui.update { it.copy(configured = true, connectionEditor = false, clock = false, error = null) }
-                setupClient(credentials)
+                setupClient(credentials, remote)
                 if (epoch == securityEpoch && foreground) openEditor()
             }
             _ui.update { it.copy(busy = false) }
@@ -204,10 +255,11 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun clearError() { _ui.update { it.copy(error = null) } }
     fun openCamera(id: String) {
-        if (_ui.value.config.favourites.any { it.entity == id && it.kind == TileKind.CAMERA }) {
-            idleJob?.cancel()
-            _ui.update { it.copy(camera = id, cameraOpenedAt = SystemClock.elapsedRealtime()) }
-        }
+        val current = _ui.value
+        val next = current.showCamera(id, SystemClock.elapsedRealtime())
+        if (next === current) return
+        idleJob?.cancel()
+        _ui.value = next
     }
     fun closeCamera() { _ui.update { it.copy(camera = null) }; touch() }
 
@@ -229,6 +281,19 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun closeMusic() { _ui.update { it.copy(musicBrowser = null) }; touch() }
 
+    fun openContent(id: String) {
+        val current = _ui.value
+        if (current.config.favourites.none { it.entity == id && it.kind.hasContentScreen }) return
+        if (current.editor || current.unlocking || current.screenBlank || current.hasViewer) return
+        idleJob?.cancel()
+        _ui.update { it.copy(contentOpen = id) }
+    }
+
+    fun closeContent() {
+        _ui.update { it.copy(contentOpen = null) }
+        touch()
+    }
+
     fun loadAgenda(id: String, force: Boolean = false) {
         val active = client ?: return
         val tile = agendaTile(id) ?: return
@@ -239,7 +304,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun openAgenda(id: String) {
         val current = _ui.value
-        if (agendaTile(id) == null || current.editor || current.unlocking || current.camera != null || current.musicBrowser != null) return
+        if (agendaTile(id) == null || current.editor || current.unlocking || current.hasViewer || current.screenBlank) return
         idleJob?.cancel()
         _ui.update { it.copy(agendaOpen = id) }
         loadAgenda(id)
@@ -327,6 +392,23 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    fun controlCover(id: String, action: CoverAction, confirmed: Boolean = false) {
+        val state = _ui.value
+        if (state.config.favourites.none { it.entity == id && it.kind == TileKind.COVER }) return
+        val cover = state.entities[id] ?: return
+        if (!cover.canMoveCover(action, state.pending[id])) return
+        if (cover.requiresCoverConfirmation(action) && !confirmed) return
+
+        val matches: ((Entity) -> Boolean)? = when (action) {
+            CoverAction.OPEN -> { result ->
+                result.state == "opening" || result.state == "open" && (result.coverPosition() ?: 100) == 100
+            }
+            CoverAction.CLOSE -> { result -> result.state == "closing" || result.state == "closed" }
+            CoverAction.STOP -> null
+        }
+        send(cover, action.service, pending = action.progress, matches = matches, interruptPending = action == CoverAction.STOP)
+    }
+
     fun selectOption(entity: Entity, option: String) {
         val current = _ui.value.entities[entity.id] ?: return
         if (option == current.state || option !in current.options) return
@@ -344,24 +426,34 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     private fun send(
         entity: Entity, service: String, payload: JSONObject = JSONObject(), pending: String = "Sending…",
-        matches: ((Entity) -> Boolean)? = null
+        matches: ((Entity) -> Boolean)? = null, interruptPending: Boolean = false,
     ) {
         val active = client ?: return
-        if (_ui.value.link != Link.ONLINE || !entity.available || entity.id in _ui.value.pending) return
-        _ui.update { it.copy(pending = it.pending + (entity.id to pending)) }
-        viewModelScope.launch {
+        val id = entity.id
+        if (_ui.value.link != Link.ONLINE || !entity.available || !interruptPending && id in _ui.value.pending) return
+        val previous = commandJobs[id]
+        val command = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
                 safely {
-                    active.command(entity.id, entity.domain, service, payload)
+                    active.command(id, entity.domain, service, payload)
                     if (matches != null) {
                         val reported = withTimeoutOrNull(4_500) {
-                            active.entities.first { it[entity.id]?.let(matches) == true }
+                            active.entities.first { it[id]?.let(matches) == true }
                         }
                         if (reported == null) throw HaProblem("Home Assistant hasn't confirmed the change")
                     }
                 }
-            } finally { _ui.update { it.copy(pending = it.pending - entity.id) } }
+            } finally {
+                if (commandJobs[id] === coroutineContext[Job]) {
+                    commandJobs.remove(id)
+                    _ui.update { it.copy(pending = it.pending - id) }
+                }
+            }
         }
+        commandJobs[id] = command
+        _ui.update { it.copy(pending = it.pending + (id to pending)) }
+        if (interruptPending) previous?.cancel()
+        command.start()
     }
 
     fun cachedSnapshot(id: String, revision: String = ""): Bitmap? = images.snapshots.cached("$id@$revision")
@@ -423,9 +515,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    private fun setupClient(credentials: HaCredentials) {
+    private fun setupClient(credentials: HaCredentials, remote: SavedRemote? = null) {
         linkJob?.cancel()
         stateJob?.cancel()
+        remoteJob?.cancel()
         catalogueJob?.cancel()
         agenda.keep(emptySet())
         client?.stop()
@@ -437,10 +530,13 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         presence = null
         _ui.update { it.copy(
             entities = emptyMap(), layout = RoomLayout(it.config), graphs = emptyMap(),
-            pending = emptyMap(), link = Link.CONNECTING, serverAddress = credentials.server.toString()
+            pending = emptyMap(), link = Link.CONNECTING, serverAddress = credentials.server.toString(),
+            remoteName = remote?.name,
+            remoteState = if (remote == null) PanelRemoteState.DISABLED else PanelRemoteState.CONNECTING,
         ) }
         val active = HaClient(credentials, viewModelScope)
         client = active
+        active.setPanelWebhook(remote?.webhookId)
         updateSelection()
         linkJob = viewModelScope.launch {
             active.link.collect { state ->
@@ -473,7 +569,30 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
                 if (before == true && nextPresence != true) touch()
             }
         }
+        remoteJob = viewModelScope.launch {
+            launch {
+                active.panelRemoteState.collect { status ->
+                    if (client === active) _ui.update { it.copy(remoteState = status) }
+                }
+            }
+            active.panelCommands.collect { command ->
+                if (client === active) applyRemoteCommand(command)
+            }
+        }
         if (foreground) active.start()
+    }
+
+    private fun applyRemoteCommand(command: PanelCommand) {
+        if (!foreground) return
+        val current = _ui.value
+        val next = current.remoteCommand(command, SystemClock.elapsedRealtime())
+        if (next === current) return
+        idleJob?.cancel()
+        _ui.value = next
+        if (command == PanelCommand.Wake) {
+            updateSelection()
+            touch()
+        }
     }
 
     private fun updateSelection() {

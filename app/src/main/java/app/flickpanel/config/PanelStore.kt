@@ -1,6 +1,7 @@
 package app.flickpanel.config
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -9,6 +10,7 @@ import app.flickpanel.ha.parseServer
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
+import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -20,13 +22,23 @@ private const val LAYOUT = "layout"
 private const val SERVER = "server"
 private const val TOKEN_IV = "token_iv"
 private const val TOKEN_DATA = "token_data"
+private const val REMOTE_IV = "remote_iv"
+private const val REMOTE_DATA = "remote_data"
+private const val REMOTE_NAME = "remote_name"
+private const val DEVICE_ID = "remote_device_id"
 private const val PIN_SALT = "pin_salt"
 private const val PIN_HASH = "pin_hash"
 private const val PIN_FAILURES = "pin_failures"
 private const val PIN_WAIT = "pin_wait"
 private const val TOKEN_CIPHER = "AES/GCM/NoPadding"
 
-internal data class SavedPanel(val configured: Boolean, val config: PanelConfig, val credentials: HaCredentials?)
+internal data class SavedPanel(
+    val configured: Boolean, val config: PanelConfig, val credentials: HaCredentials?, val remote: SavedRemote?,
+)
+
+internal class SavedRemote(val webhookId: String, val name: String) {
+    override fun toString() = "SavedRemote(redacted)"
+}
 
 internal class PanelStore(context: Context) {
     private val prefs = context.getSharedPreferences("panel", Context.MODE_PRIVATE)
@@ -34,33 +46,26 @@ internal class PanelStore(context: Context) {
     @Synchronized
     fun read(): SavedPanel {
         val config = prefs.getString(LAYOUT, null)?.let(PanelConfigCodec::decode) ?: PanelConfig()
-        return SavedPanel(prefs.contains(PIN_HASH), config, readCredentials())
+        val credentials = readCredentials()
+        return SavedPanel(prefs.contains(PIN_HASH), config, credentials, credentials?.let { readRemote(it.server.toString()) })
     }
 
     private fun readCredentials(): HaCredentials? {
         val url = prefs.getString(SERVER, null) ?: return null
-        return runCatching {
-            val iv = prefs.getString(TOKEN_IV, null)?.let(::decode) ?: return null
-            val data = prefs.getString(TOKEN_DATA, null)?.let(::decode) ?: return null
-            val cipher = Cipher.getInstance(TOKEN_CIPHER)
-            cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
-            cipher.updateAAD(url.toByteArray())
-            HaCredentials(parseServer(url), cipher.doFinal(data).toString(Charsets.UTF_8))
-        }.getOrNull()
+        val token = readSecret(TOKEN_IV, TOKEN_DATA, url) ?: return null
+        return runCatching { HaCredentials(parseServer(url), token) }.getOrNull()
     }
 
     @Synchronized
-    fun connect(credentials: HaCredentials, config: PanelConfig, newPin: String? = null) {
+    fun connect(credentials: HaCredentials, config: PanelConfig, newPin: String? = null): SavedRemote? {
         val url = credentials.server.toString()
-        val cipher = Cipher.getInstance(TOKEN_CIPHER)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        cipher.updateAAD(url.toByteArray())
-        val sealed = cipher.doFinal(credentials.token.toByteArray())
+        val prior = readCredentials()
+        val remote = if (prior != null && prior.server == credentials.server && prior.token == credentials.token) readRemote(url) else null
         val edit = prefs.edit()
             .putString(SERVER, url)
-            .putString(TOKEN_IV, encode(cipher.iv))
-            .putString(TOKEN_DATA, encode(sealed))
             .putString(LAYOUT, PanelConfigCodec.encode(config))
+        if (remote == null) edit.remove(REMOTE_IV).remove(REMOTE_DATA).remove(REMOTE_NAME)
+        writeSecret(edit, TOKEN_IV, TOKEN_DATA, url, credentials.token)
         if (newPin != null) {
             require(validPin(newPin)) { "Choose a PIN with 4 to 8 digits" }
             val salt = ByteArray(16).also(SecureRandom()::nextBytes)
@@ -70,6 +75,54 @@ internal class PanelStore(context: Context) {
                 .remove(PIN_WAIT)
         }
         check(edit.commit()) { "Couldn't save the connection" }
+        return remote
+    }
+
+    private fun readRemote(server: String): SavedRemote? {
+        val id = readSecret(REMOTE_IV, REMOTE_DATA, remoteBinding(server))
+        val name = prefs.getString(REMOTE_NAME, null)
+        return if (id.isNullOrBlank() || name.isNullOrBlank()) null else SavedRemote(id, name)
+    }
+
+    @Synchronized
+    fun deviceId(): String {
+        prefs.getString(DEVICE_ID, null)?.let { return it }
+        val id = UUID.randomUUID().toString()
+        check(prefs.edit().putString(DEVICE_ID, id).commit()) { "Couldn't save the tablet ID" }
+        return id
+    }
+
+    @Synchronized
+    fun saveRemote(registration: SavedRemote) {
+        val server = prefs.getString(SERVER, null) ?: error("Connect Home Assistant first")
+        val edit = prefs.edit().putString(REMOTE_NAME, registration.name)
+        writeSecret(edit, REMOTE_IV, REMOTE_DATA, remoteBinding(server), registration.webhookId)
+        check(edit.commit()) { "Couldn't save remote control" }
+    }
+
+    @Synchronized
+    fun clearRemote() {
+        check(prefs.edit().remove(REMOTE_IV).remove(REMOTE_DATA).remove(REMOTE_NAME).commit()) {
+            "Couldn't unlink remote control"
+        }
+    }
+
+    private fun remoteBinding(server: String) = "$server#panel-remote"
+
+    private fun readSecret(ivKey: String, dataKey: String, binding: String): String? = runCatching {
+        val iv = prefs.getString(ivKey, null)?.let(::decode) ?: return null
+        val data = prefs.getString(dataKey, null)?.let(::decode) ?: return null
+        val cipher = Cipher.getInstance(TOKEN_CIPHER)
+        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
+        cipher.updateAAD(binding.toByteArray())
+        cipher.doFinal(data).toString(Charsets.UTF_8)
+    }.getOrNull()
+
+    private fun writeSecret(edit: SharedPreferences.Editor, ivKey: String, dataKey: String, binding: String, value: String) {
+        val cipher = Cipher.getInstance(TOKEN_CIPHER)
+        cipher.init(Cipher.ENCRYPT_MODE, key())
+        cipher.updateAAD(binding.toByteArray())
+        edit.putString(ivKey, encode(cipher.iv)).putString(dataKey, encode(cipher.doFinal(value.toByteArray())))
     }
 
     @Synchronized

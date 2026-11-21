@@ -3,6 +3,7 @@ package app.flickpanel.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +17,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -25,12 +27,17 @@ import androidx.compose.ui.unit.dp
 internal fun TileSizePicker(wide: Boolean, change: (Boolean) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Tile size", style = MaterialTheme.typography.titleMedium)
-        Row(
-            Modifier.fillMaxWidth().selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TileSizeChoice("Standard", columns = 1, selected = !wide, modifier = Modifier.weight(1f)) { change(false) }
-            TileSizeChoice("Wide", columns = 2, selected = wide, modifier = Modifier.weight(1f)) { change(true) }
+        BoxWithConstraints(Modifier.fillMaxWidth().selectableGroup()) {
+            val equivalentWidth = maxWidth.value / LocalDensity.current.fontScale.coerceAtLeast(1f)
+            val choices: @Composable (Modifier) -> Unit = { modifier ->
+                TileSizeChoice("Standard", columns = 1, selected = !wide, modifier = modifier) { change(false) }
+                TileSizeChoice("Wide", columns = 2, selected = wide, modifier = modifier) { change(true) }
+            }
+            if (equivalentWidth < 230f) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { choices(Modifier.fillMaxWidth()) }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { choices(Modifier.weight(1f)) }
+            }
         }
         Text(
             "Wide spans up to two columns on larger windows.",

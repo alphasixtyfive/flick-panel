@@ -70,15 +70,48 @@ explicit private IPv4 addresses such as a local Home Assistant server at
 - **Calendar** shows upcoming events for the next seven days, including all-day and
   ongoing events. Tap the preview for the full agenda. Set either tile to **Wide** to
   give its preview more room.
+- **Cover** shows the state and position reported by Home Assistant. It offers the
+  Open, Close, and Stop actions advertised by the device. Gate movement asks
+  for confirmation.
+- **Person location** shows the Home Assistant zone and opens a map inside Panel
+  when the person has a reported position. The bundled geographic basemap works
+  without a map account or network tile requests.
+- **Content reader** opens a sensor or text helper in a full-screen reader. Select
+  the entity state or a text attribute as the source. A longer recipe or note can
+  live in a text attribute, with line breaks kept in the reader.
 - A camera can link an existing Home Assistant **gate** cover. The live viewer offers
   **Open gate** when that cover is closed and asks for confirmation. The cover's Home
   Assistant automation still controls when and how the gate moves.
+
+## Control the panel from Home Assistant
+
+In PIN-protected setup, open **Panel → Home Assistant → Remote control**, name the
+tablet, and choose **Link tablet**. Home Assistant's built-in Mobile App
+integration adds a notification action for the tablet. Use that device's
+`notify.mobile_app_…` action in scripts or automations.
+
+```yaml
+action: notify.mobile_app_kitchen_panel
+data:
+  message: command_flick_panel
+  data:
+    command: open_camera
+    camera: camera.front_gate
+```
+
+Replace the action with the one Home Assistant created for your tablet.
+To blank Panel or bring it back, use `command: sleep` or `command: wake` and omit
+`camera`. Only cameras saved under **Cameras** can be opened remotely.
+Blanking dims the display to Android's minimum and keeps Panel connected in the
+foreground. A tap restores it locally. Android's lock screen and display power
+are managed separately by the device.
 
 ## Data flow
 
 `ha` owns the authenticated connection and entity capabilities. `config` stores the
 versioned tablet layout and local setup. `PanelUi.kt` resolves configured areas into room
-sections. `ui/Tiles.kt` renders the shared dashboard tiles. Home Assistant owns device
+sections. `ui/Tiles.kt` arranges the dashboard grid, and `ui/PanelTile.kt` dispatches to
+individual tile implementations. Home Assistant owns device
 state and actions. The panel loads configured areas after connecting and subscribes to
 their controls alongside pinned entities. `PanelImages.kt` bounds image memory and decodes
 scaled copies off the UI thread. Concurrent requests for the same image share the

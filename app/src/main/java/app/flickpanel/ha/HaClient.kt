@@ -16,8 +16,10 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
@@ -39,6 +41,9 @@ internal class HaClient(
     val link = _link.asStateFlow()
     private val _entities = MutableStateFlow<Map<String, Entity>>(emptyMap())
     val entities = _entities.asStateFlow()
+    private val panelRemote = HaPanelRemote()
+    val panelRemoteState = panelRemote.state
+    val panelCommands = panelRemote.commands
     private var job: Job? = null
 
     fun select(ids: Set<String>) {
@@ -51,10 +56,12 @@ internal class HaClient(
             var wait = 750L
             while (isActive) {
                 _link.value = Link.CONNECTING
+                panelRemote.updateConnection(PanelRemoteState.CONNECTING)
                 val session = HaSocket(events, credentials)
                 try {
                     if (!session.authenticate()) {
                         _link.value = Link.AUTH_REJECTED
+                        panelRemote.updateConnection(PanelRemoteState.UNAVAILABLE)
                         break
                     }
                     wait = 750
@@ -64,6 +71,7 @@ internal class HaClient(
                     throw cancelled
                 } catch (_: Exception) {
                     _link.value = Link.OFFLINE
+                    panelRemote.updateConnection(PanelRemoteState.UNAVAILABLE)
                 } finally {
                     socket.compareAndSet(session, null)
                     session.close()
@@ -79,12 +87,35 @@ internal class HaClient(
         job = null
         socket.getAndSet(null)?.close()
         _link.value = Link.OFFLINE
+        panelRemote.updateConnection(PanelRemoteState.UNAVAILABLE)
+    }
+
+    fun setPanelWebhook(webhookId: String?) = panelRemote.setWebhook(webhookId)
+
+    suspend fun registerPanel(registration: PanelRegistration): String {
+        val endpoint = checkNotNull(credentials.server.resolve("api/mobile_app/registrations"))
+        val body = registration.requestBody().toString().toRequestBody("application/json".toMediaType())
+        return exchange(Request.Builder().url(endpoint).post(body), credentials.token) { response ->
+            if (response.code != 201) throw HaProblem(when (response.code) {
+                401, 403 -> "Home Assistant did not allow this panel to register"
+                404 -> "Enable the Mobile App integration in Home Assistant to link this panel"
+                else -> "Home Assistant could not register this panel"
+            })
+            val source = response.body?.source() ?: throw HaProblem("Home Assistant did not return a panel link")
+            if (source.request(16_385)) throw HaProblem("Home Assistant returned an invalid panel link")
+            val result = try { JSONObject(source.readUtf8()) }
+                catch (_: org.json.JSONException) { throw HaProblem("Home Assistant returned an invalid panel link") }
+            (result.opt("webhook_id") as? String)?.takeIf(::validPanelWebhook)
+                ?: throw HaProblem("Home Assistant returned an invalid panel link")
+        }
     }
 
     private data class Subscription(val id: Int, val selected: Set<String>, var first: Boolean = true)
 
     private suspend fun serve(session: HaSocket) = coroutineScope {
         val subscription = AtomicReference<Subscription?>()
+        val panelChannel = panelRemote.Channel(session) { socket.get() === session }
+        launch { panelChannel.subscribe() }
         launch {
             selected.collect { ids ->
                 val previous = subscription.get()
@@ -105,11 +136,12 @@ internal class HaClient(
         session.pump { message ->
             val current = subscription.get()
             val event = message.optJSONObject("event")
-            if (current != null && event != null && current.id == message.optInt("id")) {
+            val id = message.optInt("id")
+            if (event != null && current != null && current.id == id) {
                 _entities.value = reduceEntities(_entities.value, event, current.selected, current.first)
                 current.first = false
                 _link.value = Link.ONLINE
-            }
+            } else if (event != null) panelChannel.dispatch(id, event)
         }
     }
 
@@ -327,8 +359,10 @@ internal class HaClient(
         }
 
         private suspend fun <T> get(url: HttpUrl, token: String?, read: (Response) -> T): T =
+            exchange(Request.Builder().url(url), token, read)
+
+        private suspend fun <T> exchange(request: Request.Builder, token: String?, read: (Response) -> T): T =
             suspendCancellableCoroutine { continuation ->
-                val request = Request.Builder().url(url)
                 if (token != null) request.header("Authorization", "Bearer $token")
                 val call = http.newCall(request.build())
                 continuation.invokeOnCancellation { call.cancel() }

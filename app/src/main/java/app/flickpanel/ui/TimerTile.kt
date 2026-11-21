@@ -1,17 +1,42 @@
 package app.flickpanel.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.text
 import kotlinx.coroutines.delay
 import java.time.Instant
 
 internal data class TimerReadout(val label: String, val progress: Float? = null)
+
+@Composable
+internal fun TimerTile(label: String, entity: Entity?, modifier: Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val countdown = timerReadout(entity)
+    Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
+        Column(
+            Modifier.fillMaxSize().tileFill(countdown.progress ?: 0f, colors.primaryContainer).padding(19.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(countdown.label, style = MaterialTheme.typography.titleLarge)
+        }
+    }
+}
 
 @Composable
 internal fun timerReadout(timer: Entity?): TimerReadout {

@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -34,7 +38,13 @@ import app.flickpanel.ui.EditPanel
 import app.flickpanel.ui.MusicBrowser
 import app.flickpanel.ui.OpenAgenda
 import app.flickpanel.ui.PanelColors
+import app.flickpanel.ui.PersonMapScreen
+import app.flickpanel.ui.ReaderScreen
 import app.flickpanel.ui.UnlockEditor
+import app.flickpanel.config.TileKind
+import app.flickpanel.ha.Link
+import app.flickpanel.ha.PersonLocation
+import app.flickpanel.ha.readContent
 
 class MainActivity : ComponentActivity() {
     private val model by viewModels<PanelViewModel>()
@@ -46,12 +56,15 @@ class MainActivity : ComponentActivity() {
             val state by model.ui.collectAsStateWithLifecycle()
             val wall = state.config.wallMode && state.configured
             val hasPhotos = state.config.idleAlbum != null
-            LaunchedEffect(state.configured, state.clock, wall, hasPhotos) {
-                if (wall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            val blank = state.screenBlank
+            LaunchedEffect(state.configured, state.clock, wall, hasPhotos, blank) {
+                if (wall || blank) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                val brightness = if (wall && state.clock) {
-                    if (hasPhotos) .22f else .13f
-                } else -1f
+                val brightness = when {
+                    blank -> 0f
+                    wall && state.clock -> if (hasPhotos) .22f else .13f
+                    else -> -1f
+                }
                 if (window.attributes.screenBrightness != brightness) {
                     window.attributes = window.attributes.apply { screenBrightness = brightness }
                 }
@@ -73,7 +86,15 @@ class MainActivity : ComponentActivity() {
                 }
                 val camera = state.camera
                 val music = state.musicBrowser
+                val content = state.config.favourites.firstOrNull { it.entity == state.contentOpen && it.kind.hasContentScreen }
                 when {
+                    blank -> {
+                        Box(Modifier.fillMaxSize().background(Color.Black).clickable(
+                            interactionSource = null, indication = null, onClickLabel = "Wake panel",
+                            role = Role.Button, onClick = model::wake,
+                        ))
+                        BackHandler(onBack = model::wake)
+                    }
                     camera != null -> {
                         val tile = state.config.favourites.firstOrNull { it.entity == camera }
                         val title = tile?.let(state::label)
@@ -83,6 +104,19 @@ class MainActivity : ComponentActivity() {
                         BackHandler(onBack = model::closeCamera)
                     }
                     music != null -> MusicBrowser(music, state.entity(music)?.name, model)
+                    content != null -> {
+                        val title = state.label(content)
+                        when (content.kind) {
+                            TileKind.PERSON -> {
+                                val live = state.entities[content.entity]?.takeIf { state.link == Link.ONLINE }
+                                PersonMapScreen(title, live?.let(PersonLocation::from), model::closeContent)
+                            }
+                            TileKind.READER -> ReaderScreen(title,
+                                readContent(state.entity(content.entity), content.readerAttribute), model::closeContent)
+                            else -> Unit
+                        }
+                        BackHandler(onBack = model::closeContent)
+                    }
                     else -> dashboard.SaveableStateProvider("dashboard") {
                         val insets = if (state.configured) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets
                         Scaffold(snackbarHost = { SnackbarHost(snacks) }, contentWindowInsets = insets) { padding ->
@@ -102,8 +136,8 @@ class MainActivity : ComponentActivity() {
                 state.config.favourites.firstOrNull { it.entity == state.agendaOpen && it.kind.isAgenda }?.let { tile ->
                     OpenAgenda(tile, state, model)
                 }
-                BackHandler(state.configured && state.page != Page.FAVOURITES && !state.clock &&
-                    !state.editor && !state.unlocking && state.camera == null && state.musicBrowser == null && state.agendaOpen == null) {
+                BackHandler(state.configured && state.page != Page.FAVOURITES && !state.clock && !state.screenBlank &&
+                    !state.editor && !state.unlocking && !state.hasViewer) {
                     model.selectPage(Page.FAVOURITES)
                 }
             }

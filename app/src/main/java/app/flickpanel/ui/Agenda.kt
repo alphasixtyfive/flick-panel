@@ -1,6 +1,5 @@
 package app.flickpanel.ui
 
-import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,11 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowOutward
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -25,30 +20,20 @@ import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -60,18 +45,11 @@ import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
-import app.flickpanel.ha.AgendaEvent
-import app.flickpanel.ha.AgendaMoment
 import app.flickpanel.ha.AgendaTask
 import app.flickpanel.ha.Link
-import app.flickpanel.ha.MAX_TASK_TITLE_LENGTH
 import app.flickpanel.ha.canAddTasks
 import app.flickpanel.ha.canUpdateTasks
-import app.flickpanel.ha.normalizedTaskTitle
 import kotlinx.coroutines.delay
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 @Composable
 internal fun AgendaTile(tile: TileSpec, panel: PanelUi, model: PanelViewModel, modifier: Modifier) {
@@ -185,82 +163,13 @@ internal fun AgendaDialog(
 }
 
 @Composable
-private fun AddTaskField(state: AgendaState, ready: Boolean, add: (String) -> Boolean) {
-    var draft by rememberSaveable { mutableStateOf("") }
-    var submittedAt by rememberSaveable { mutableStateOf<Long?>(null) }
-    val valid = normalizedTaskTitle(draft)
-    val submit = {
-        if (ready && valid != null && add(valid)) submittedAt = state.savedRevision
-    }
-    LaunchedEffect(state.saving, state.savedRevision) {
-        val revision = submittedAt
-        if (!state.saving && revision != null) {
-            if (revision != state.savedRevision) draft = ""
-            submittedAt = null
-        }
-    }
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(draft, { draft = it.take(MAX_TASK_TITLE_LENGTH) }, Modifier.weight(1f), singleLine = true,
-            enabled = !state.saving, label = { Text("New task") }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { submit() }))
-        Button(onClick = submit, enabled = ready && valid != null, modifier = Modifier.heightIn(min = 48.dp)) { Text("Add") }
-    }
-}
-
-private fun LazyListScope.taskRows(
-    tasks: List<AgendaTask>, dates: AgendaDates, canComplete: Boolean, ready: Boolean, complete: (String, Boolean) -> Unit,
-) {
-    items(tasks.filterNot(AgendaTask::completed), key = { "open:${it.uid}" }) { task ->
-        TaskRow(task, dates, canComplete, ready) { complete(task.uid, it) }
-    }
-    val completed = tasks.filter(AgendaTask::completed)
-    if (completed.isNotEmpty()) {
-        item(key = "completed-header") { AgendaSection("Completed") }
-        items(completed, key = { "completed:${it.uid}" }) { task ->
-            TaskRow(task, dates, canComplete, ready) { complete(task.uid, it) }
-        }
-    }
-}
-
-@Composable
-private fun TaskRow(task: AgendaTask, dates: AgendaDates, writable: Boolean, ready: Boolean, change: (Boolean) -> Unit) {
-    val interaction = if (writable) Modifier.toggleable(task.completed, enabled = ready, role = Role.Checkbox, onValueChange = change)
-    else Modifier.semantics(mergeDescendants = true) { stateDescription = if (task.completed) "Completed" else "Open" }
-    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).then(interaction).padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Checkbox(checked = task.completed, onCheckedChange = null, enabled = !writable || ready)
-            Column(Modifier.weight(1f)) {
-                Text(task.summary, style = MaterialTheme.typography.titleMedium)
-                task.due?.let { date -> AgendaSubtitle(dates.dueText(date)) }
-            }
-        }
-    }
-}
-
-private fun LazyListScope.calendarRows(events: List<AgendaEvent>, dates: AgendaDates) {
-    for ((day, grouped) in events.groupBy(dates::eventDay)) {
-        item { AgendaSection(dates.dayName(day)) }
-        items(grouped) { event ->
-            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
-                Column(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    Text(event.summary, style = MaterialTheme.typography.titleMedium)
-                    AgendaSubtitle(dates.eventTime(event))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AgendaSection(title: String) {
+internal fun AgendaSection(title: String) {
     Text(title, Modifier.padding(start = 6.dp, top = 10.dp, bottom = 4.dp).semantics { heading() },
         style = MaterialTheme.typography.titleMedium)
 }
 
 @Composable
-private fun AgendaSubtitle(value: String) {
+internal fun AgendaSubtitle(value: String) {
     Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
@@ -271,63 +180,4 @@ private fun agendaMessage(kind: TileKind, state: AgendaState, online: Boolean) =
     kind == TileKind.TASKS && (state.content as? AgendaContent.Tasks)?.items.orEmpty().all(AgendaTask::completed) -> "No open tasks"
     kind == TileKind.CALENDAR && (state.content as? AgendaContent.Calendar)?.events.orEmpty().isEmpty() -> "No events in the next 7 days"
     else -> null
-}
-
-@Composable
-private fun rememberAgendaDates(): AgendaDates {
-    val zone = ZoneId.systemDefault()
-    val today = LocalDate.now(zone)
-    val use24Hour = DateFormat.is24HourFormat(LocalContext.current)
-    return remember(zone, today, use24Hour) { AgendaDates(zone, today, use24Hour) }
-}
-
-private class AgendaDates(private val zone: ZoneId, private val today: LocalDate, use24Hour: Boolean) {
-    private val shortDate = DateTimeFormatter.ofPattern("EEE d MMM")
-    private val clock = DateTimeFormatter.ofPattern(if (use24Hour) "HH:mm" else "h:mm a")
-
-    fun day(value: AgendaMoment): LocalDate = when (value) {
-        is AgendaMoment.AllDay -> value.date
-        is AgendaMoment.Timed -> value.instant.atZone(zone).toLocalDate()
-    }
-
-    fun eventDay(event: AgendaEvent) = maxOf(today, day(event.start))
-
-    fun dayName(date: LocalDate) = when (date) {
-        today -> "Today"
-        today.plusDays(1) -> "Tomorrow"
-        else -> date.format(shortDate)
-    }
-
-    fun startTime(value: AgendaMoment): String = when (value) {
-        is AgendaMoment.AllDay -> "All day"
-        is AgendaMoment.Timed -> value.instant.atZone(zone).format(clock)
-    }
-
-    fun dueText(value: AgendaMoment): String {
-        val date = day(value)
-        val name = if (date == today || date == today.plusDays(1)) dayName(date).lowercase() else dayName(date)
-        val time = if (value is AgendaMoment.Timed) " · ${startTime(value)}" else ""
-        return "Due $name$time"
-    }
-
-    fun eventSubtitle(event: AgendaEvent): String {
-        val caption = if (event.start is AgendaMoment.Timed && day(event.start) < today) "In progress"
-        else startTime(event.start)
-        return "${dayName(eventDay(event))} · $caption"
-    }
-
-    fun eventTime(event: AgendaEvent): String {
-        val startDay = day(event.start)
-        val endDay = day(event.end)
-        if (event.start is AgendaMoment.AllDay) {
-            val lastDay = endDay.minusDays(1)
-            return if (startDay == lastDay) "All day"
-            else "All day · ${startDay.format(shortDate)} – ${lastDay.format(shortDate)}"
-        }
-        if (event.start == event.end) return startTime(event.start)
-        val start = if (startDay < today) "${startDay.format(shortDate)} ${startTime(event.start)}" else startTime(event.start)
-        val end = if (startDay == endDay) startTime(event.end)
-        else "${endDay.format(shortDate)} ${startTime(event.end)}"
-        return "$start – $end"
-    }
 }

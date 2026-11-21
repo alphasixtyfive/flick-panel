@@ -2,6 +2,7 @@ package app.flickpanel.config
 
 import app.flickpanel.ha.PhotoFolder
 import app.flickpanel.ha.isPhotoSourceId
+import app.flickpanel.ha.validReaderAttribute
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -13,10 +14,11 @@ enum class TileKind(val label: String) {
     TOGGLE("Switch"), VALUE("Value"), SLIDER("Slider"), TREND("Small graph"),
     ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"),
     APP("Android app"), IMAGE("Image"), TIMER("Countdown"), CHOICE("Selector"), NUMBER("Number control"),
-    TASKS("Tasks"), CALENDAR("Calendar");
+    TASKS("Tasks"), CALENDAR("Calendar"), COVER("Cover"), PERSON("Person location"), READER("Content reader");
 
     internal val resizable get() = this != CAMERA && this != WEATHER && this != APP
     internal val isAgenda get() = this == TASKS || this == CALENDAR
+    internal val hasContentScreen get() = this == PERSON || this == READER
 }
 
 data class TileSpec(
@@ -28,6 +30,7 @@ data class TileSpec(
     val wideOnTablet: Boolean = false,
     val cameraGate: String? = null,
     val confirmAction: Boolean = false,
+    val readerAttribute: String? = null,
 ) {
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
@@ -54,6 +57,7 @@ internal object PanelConfigCodec {
                 .apply {
                     if (tile.wideOnTablet) put("wide", true)
                     if (tile.confirmAction) put("confirm", true)
+                    tile.readerAttribute?.let { put("readerAttribute", it) }
                 }
         }))
         .put("theme", config.theme.name)
@@ -77,13 +81,20 @@ internal object PanelConfigCodec {
             val entity = tile.optString("entity")
                 .takeIf { if (kind == TileKind.APP) validAppTarget(it) else validEntity(it) } ?: return@mapNotNull null
             if (kind == TileKind.TASKS && !entity.startsWith("todo.") ||
-                kind == TileKind.CALENDAR && !entity.startsWith("calendar.")) return@mapNotNull null
+                kind == TileKind.CALENDAR && !entity.startsWith("calendar.") ||
+                kind == TileKind.COVER && !entity.startsWith("cover.") ||
+                kind == TileKind.PERSON && !entity.startsWith("person.") ||
+                kind == TileKind.READER && entity.substringBefore('.') !in setOf("sensor", "input_text")) return@mapNotNull null
+            val readerAttribute = if (kind == TileKind.READER && !tile.isNull("readerAttribute")) {
+                (tile.opt("readerAttribute") as? String)?.takeIf(::validReaderAttribute) ?: return@mapNotNull null
+            } else null
             TileSpec(entity, kind, tile.text("label")?.take(72), tile.text("status")?.takeIf {
                 kind == TileKind.ACTION && validEntity(it) && it.startsWith("timer.")
             }, showOnHome = kind != TileKind.CAMERA || tile.optBoolean("home", true),
                 wideOnTablet = kind.resizable && tile.optBoolean("wide"),
                 cameraGate = tile.text("gate")?.takeIf { kind == TileKind.CAMERA && validEntity(it) && it.startsWith("cover.") },
-                confirmAction = kind == TileKind.ACTION && tile.optBoolean("confirm"))
+                confirmAction = kind == TileKind.ACTION && tile.optBoolean("confirm"),
+                readerAttribute = readerAttribute)
         }.distinctBy { it.entity }
         return PanelConfig(
             favourites = tiles.take(48),

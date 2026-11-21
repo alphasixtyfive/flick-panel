@@ -23,17 +23,22 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.SettingsRemote
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,9 +54,10 @@ import app.flickpanel.PanelUi
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelTheme
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.PanelRemoteState
 
 internal enum class PanelPage(val label: String) {
-    DISPLAY("Display"), APPEARANCE("Appearance"), HOME_ASSISTANT("Home Assistant"),
+    DISPLAY("Display"), APPEARANCE("Appearance"), HOME_ASSISTANT("Home Assistant"), REMOTE_CONTROL("Remote control"),
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -59,6 +65,7 @@ internal enum class PanelPage(val label: String) {
 internal fun PanelSettings(
     page: PanelPage?, draft: PanelConfig, state: PanelUi, open: (PanelPage) -> Unit, change: (PanelConfig) -> Unit,
     choosePhotos: () -> Unit, chooseMessage: () -> Unit, choosePresence: () -> Unit, changeConnection: () -> Unit,
+    linkPanel: (String) -> Unit, unlinkPanel: () -> Unit,
 ) {
     val context = LocalContext.current
     val album = draft.idleAlbum?.title ?: "Clock only"
@@ -114,14 +121,63 @@ internal fun PanelSettings(
                 }
             }
             PanelPage.HOME_ASSISTANT -> {
+                SettingLink("Remote control", state.remoteLabel(), { open(PanelPage.REMOTE_CONTROL) }, Icons.Rounded.SettingsRemote)
                 SettingLink("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", chooseMessage,
                     clear = draft.messageEntity?.let { { change(draft.copy(messageEntity = null)) } })
                 SettingLink("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", choosePresence,
                     clear = draft.presenceEntity?.let { { change(draft.copy(presenceEntity = null)) } })
                 SettingLink("Home Assistant connection", state.serverAddress, changeConnection, Icons.Rounded.Hub)
             }
+            PanelPage.REMOTE_CONTROL -> RemoteControlSettings(state, linkPanel, unlinkPanel)
         }
     }
+}
+
+@Composable
+private fun RemoteControlSettings(state: PanelUi, link: (String) -> Unit, unlink: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val linkedName = state.remoteName
+    var name by remember { mutableStateOf("Flick Panel") }
+    var confirmUnlink by remember { mutableStateOf(false) }
+    if (linkedName == null) {
+        Text("Link this tablet to blank or wake Panel and open its cameras from Home Assistant.",
+            color = colors.onSurfaceVariant)
+        OutlinedTextField(name, { name = it.take(48) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+            enabled = !state.busy, label = { Text("Tablet name") })
+        Button(onClick = { link(name) }, enabled = !state.busy && state.link == Link.ONLINE && name.isNotBlank()) {
+            Text(if (state.busy) "Linking…" else "Link tablet")
+        }
+    } else {
+        Surface(shape = MaterialTheme.shapes.large, color = colors.surfaceContainer) {
+            ListItem(headlineContent = { Text(linkedName, style = MaterialTheme.typography.titleMedium) },
+                supportingContent = { Text(state.remoteLabel()) },
+                leadingContent = { Icon(Icons.Rounded.SettingsRemote, null, tint = colors.primary) },
+                colors = ListItemDefaults.colors(containerColor = colors.surfaceContainer))
+        }
+        Text("Send commands to the tablet’s Mobile App notification action in Home Assistant.",
+            color = colors.onSurfaceVariant)
+        Text("Panel stays reachable while its display is blank. A tap wakes it locally.",
+            color = colors.onSurfaceVariant)
+        if (state.remoteState == PanelRemoteState.UNAVAILABLE) {
+            TextButton(onClick = { link(linkedName) }, enabled = !state.busy && state.link == Link.ONLINE) {
+                Text("Relink tablet")
+            }
+        }
+        TextButton(onClick = { confirmUnlink = true }, enabled = !state.busy) { Text("Unlink tablet") }
+    }
+    if (confirmUnlink) AlertDialog(
+        onDismissRequest = { confirmUnlink = false },
+        title = { Text("Unlink this tablet?") },
+        text = { Text("You can remove its Mobile App entry in Home Assistant after unlinking.") },
+        confirmButton = { TextButton(onClick = { confirmUnlink = false; unlink() }) { Text("Unlink") } },
+        dismissButton = { TextButton(onClick = { confirmUnlink = false }) { Text("Cancel") } },
+    )
+}
+
+private fun PanelUi.remoteLabel(): String = if (remoteName == null) "Not linked" else when (remoteState) {
+    PanelRemoteState.READY -> "Ready"
+    PanelRemoteState.UNAVAILABLE -> "Unavailable"
+    PanelRemoteState.CONNECTING, PanelRemoteState.DISABLED -> "Connecting…"
 }
 
 private fun idleDelay(seconds: Int) = when {
