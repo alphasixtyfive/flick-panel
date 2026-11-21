@@ -1,11 +1,11 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Air
 import androidx.compose.material.icons.rounded.BatteryStd
@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.config.TileSpec
@@ -40,23 +41,17 @@ internal fun GlanceTile(label: String, entity: Entity?, available: Boolean, modi
 }
 
 @Composable
-internal fun HomeGlanceReadings(
-    tiles: List<TileSpec>, state: PanelUi, modifier: Modifier = Modifier,
-) {
-    Box(modifier, contentAlignment = Alignment.CenterEnd) {
-        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
-            Row(Modifier.padding(horizontal = 4.dp)) {
-                for (tile in tiles) key(tile.entity) {
-                    val available = state.link == Link.ONLINE && state.entities[tile.entity]?.available == true
-                    GlanceValue(state.label(tile), state.entity(tile.entity), available)
-                }
-            }
+internal fun HomeGlanceReadings(tiles: List<TileSpec>, state: PanelUi) {
+    Row(horizontalArrangement = Arrangement.spacedBy(26.dp), verticalAlignment = Alignment.CenterVertically) {
+        for (tile in tiles) key(tile.entity) {
+            val available = state.link == Link.ONLINE && state.entities[tile.entity]?.available == true
+            GlanceValue(state.label(tile), state.entity(tile.entity), available, prominent = true)
         }
     }
 }
 
 @Composable
-private fun GlanceValue(label: String, entity: Entity?, available: Boolean) {
+private fun GlanceValue(label: String, entity: Entity?, available: Boolean, prominent: Boolean = false) {
     val colors = MaterialTheme.colorScheme
     val reading = entity?.glanceReading
     val icon = when (reading) {
@@ -69,11 +64,15 @@ private fun GlanceValue(label: String, entity: Entity?, available: Boolean) {
         null -> Icons.Rounded.Sensors
     }
     val value = entity?.takeIf { available }?.let { glanceValue(it, reading) }
-    Row(Modifier.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 6.dp)
+    val style = if (prominent) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleMedium
+    Row(Modifier.heightIn(min = 48.dp)
+        .padding(horizontal = if (prominent) 0.dp else 12.dp, vertical = if (prominent) 0.dp else 6.dp)
         .clearAndSetSemantics { contentDescription = "$label, ${value ?: "Unavailable"}" },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(icon, null, Modifier.size(23.dp), tint = if (value == null) colors.onSurfaceVariant else colors.primary)
-        Text(value ?: "—", style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "'tnum'"), maxLines = 1)
+        Icon(icon, null, Modifier.size(if (prominent) 38.dp else 23.dp),
+            tint = if (value == null) colors.onSurfaceVariant else colors.primary)
+        Text(value ?: "—", if (prominent) Modifier.widthIn(max = 162.dp) else Modifier,
+            style = style.copy(fontFeatureSettings = "'tnum'"), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

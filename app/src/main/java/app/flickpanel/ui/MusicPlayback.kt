@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.Entity
+import app.flickpanel.ha.MEDIA_VOLUME_MUTE
 import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MediaTransport
 import app.flickpanel.ha.canBrowseMusic
@@ -29,6 +30,7 @@ internal data class MusicPlayback(
     val title = current?.attributes?.text("media_title") ?: if (available) "Nothing playing" else "Player unavailable"
     val artist = current?.attributes?.let { it.text("media_artist") ?: it.text("media_album_name") }
     val volume = entity?.volumePercent?.takeIf { features.hasMediaFeature(MEDIA_VOLUME_SET) }
+    val muted = entity?.volumeMuted?.takeIf { features.hasMediaFeature(MEDIA_VOLUME_MUTE) }
 }
 
 @Composable

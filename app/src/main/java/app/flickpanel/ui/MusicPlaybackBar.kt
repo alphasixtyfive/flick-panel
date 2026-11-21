@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,7 +32,7 @@ internal fun MusicPlaybackBar(
 ) {
     val colors = MaterialTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxWidth().clip(panelCardShape).background(colors.surfaceContainerHigh)) {
-        val inlineVolume = maxWidth >= 440.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val inlineVolume = maxWidth >= 500.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
         Column {
             Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f).clickable(enabled = !starting, role = Role.Button,
@@ -46,10 +48,17 @@ internal fun MusicPlaybackBar(
                     }
                 }
                 PlayPauseButton(playback, transport, Modifier.size(48.dp), enabled = !starting)
-                if (inlineVolume && volume != null) PlayerVolumeControl(volume, enabled = !starting)
+                if (inlineVolume && volume != null) {
+                    PlayerVolumeControl(volume, Modifier.padding(start = 16.dp).width(208.dp), enabled = !starting)
+                }
             }
             if (!inlineVolume && volume != null) {
-                PlayerVolumeControl(volume, Modifier.align(Alignment.End).padding(end = 8.dp, bottom = 4.dp), enabled = !starting)
+                PlayerVolumeControl(
+                    volume,
+                    Modifier.align(Alignment.End).widthIn(max = 232.dp).fillMaxWidth()
+                        .padding(start = 8.dp, end = 12.dp, bottom = 8.dp),
+                    enabled = !starting,
+                )
             }
         }
     }

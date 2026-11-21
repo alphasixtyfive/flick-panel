@@ -53,6 +53,7 @@ internal data class Entity(
     val playingMedia get() = state == "playing" || state == "buffering"
     val volumePercent get() = attributes.optDouble("volume_level", Double.NaN)
         .takeIf { it in 0.0..1.0 }?.let { (it * 100).roundToInt() }
+    val volumeMuted get() = attributes.opt("is_volume_muted") as? Boolean
 
     val isGate get() = domain == "cover" && attributes.text("device_class") == "gate"
     val gateWithOpenControl get() = isGate && supportsCoverAction(CoverAction.OPEN)
@@ -201,6 +202,7 @@ internal enum class MediaTransport(val bit: Long, val service: String) {
 
 internal const val MEDIA_SEEK = 2L
 internal const val MEDIA_VOLUME_SET = 4L
+internal const val MEDIA_VOLUME_MUTE = 8L
 
 internal fun Long.hasMediaFeature(bit: Long) = this and bit != 0L
 internal fun Long.canBrowseMusic() = hasMediaFeature(131_072L) && hasMediaFeature(512L)

@@ -2,6 +2,7 @@ package app.flickpanel.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -40,7 +42,7 @@ import app.flickpanel.ha.text
 @Composable
 internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel) {
     val entity = state.entities[id]
-    val label = state.config.favourites.firstOrNull { it.entity == id }?.let(state::label) ?: "Music"
+    val label = state.entity(id)?.name ?: "Music"
     val playback = MusicPlayback(label, entity, state.link == Link.ONLINE && entity?.available == true, id in state.pending)
     val artwork = rememberPanelImage(playback.current?.attributes?.text("entity_picture"),
         model::cachedArtwork, model::loadArtwork)
@@ -48,38 +50,52 @@ internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel
     var browsing by rememberSaveable(id) { mutableStateOf(false) }
     val transport: (MediaTransport) -> Unit = { model.mediaTransport(id, it) }
     val volume = if (entity == null) null else playback.volume?.let { level ->
-        SpeakerVolume(level, playback.ready) { model.setVolume(entity, it) }
+        SpeakerVolume(
+            level, playback.muted, playback.ready, playback.pending,
+            change = { model.setVolume(entity, it) }, mute = { model.setSpeakerMuted(entity, it) },
+        )
     }
 
     BackHandler(enabled = !browsing, onBack = model::closeMusic)
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-        if (browsing) {
-            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
-                val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-                val wide = minOf(maxWidth, 1080.dp) >= 760.dp * fontScale
-                Column(Modifier.widthIn(max = 1080.dp).fillMaxSize()
-                    .padding(horizontal = if (wide) 28.dp else 16.dp, vertical = if (maxHeight < 460.dp) 8.dp else 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Music library", Modifier.weight(1f).semantics { heading() },
-                            style = MaterialTheme.typography.headlineSmall)
-                        IconButton(onClick = model::closeMusic, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Rounded.Close, "Close music")
-                        }
-                    }
-                    MusicBrowser(
-                        id, library, model, wide, playback, artwork, transport, volume,
-                        showPlayer = { browsing = false }, modifier = Modifier.weight(1f),
-                    )
+        Box(Modifier.fillMaxSize().panelEntrance(browsing, state.config.reduceMotion)) {
+            if (browsing) {
+                MusicLibraryScreen(id, library, model, playback, artwork, transport, volume) { browsing = false }
+            } else {
+                NowPlaying(
+                    playback, artwork, browse = if (playback.canBrowse) ({ browsing = true }) else null,
+                    close = model::closeMusic,
+                    transport = transport, seek = { model.seekMusic(id, it) }, volume = volume,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicLibraryScreen(
+    id: String, library: MusicLibraryState, model: PanelViewModel, playback: MusicPlayback,
+    artwork: ImageBitmap?, transport: (MediaTransport) -> Unit, volume: SpeakerVolume?, showPlayer: () -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding(), contentAlignment = Alignment.TopCenter) {
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val wide = minOf(maxWidth, 1080.dp) >= 760.dp * fontScale
+        val sidePadding = if (wide) 28.dp else 16.dp
+        val verticalPadding = if (maxHeight < 460.dp) 8.dp else 18.dp
+        Column(
+            Modifier.widthIn(max = 1080.dp).fillMaxSize().padding(horizontal = sidePadding, vertical = verticalPadding),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Music library", Modifier.weight(1f).semantics { heading() },
+                    style = MaterialTheme.typography.headlineSmall)
+                IconButton(onClick = model::closeMusic, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.Close, "Close music")
                 }
             }
-        } else {
-            NowPlaying(
-                playback, artwork, browse = if (playback.canBrowse) ({ browsing = true }) else null,
-                close = model::closeMusic,
-                transport = transport, seek = { model.seekMusic(id, it) }, volume = volume,
-                modifier = Modifier.fillMaxSize(),
+            MusicBrowser(
+                id, library, model, wide, playback, artwork, transport, volume, showPlayer, Modifier.weight(1f),
             )
         }
     }

@@ -42,6 +42,7 @@ import androidx.compose.ui.window.DialogProperties
 import app.flickpanel.PanelUi
 
 private val keypadRows = listOf("123", "456", "789", " 0⌫")
+private val keypadWidth = 322.dp
 
 @Composable
 internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -> Unit) {
@@ -54,24 +55,24 @@ internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -
     Dialog(onDismissRequest = cancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BoxWithConstraints(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
             val sideBySide = maxWidth >= 560.dp && maxHeight < 500.dp
-            Surface(Modifier.widthIn(max = if (sideBySide) 620.dp else 428.dp).fillMaxWidth(),
+            Surface(Modifier.widthIn(max = if (sideBySide) 640.dp else 448.dp).fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.extraLarge) {
                 if (sideBySide) {
-                    Row(Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Row(Modifier.verticalScroll(rememberScrollState()).padding(28.dp),
+                        horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                             PinPrompt(pin.length, state.error)
                             PinActions(state.busy, pin.length >= 4, cancel, submit)
                         }
                         PinKeys(pin.length, state.busy, 52.dp, { pin += it }, { pin = pin.dropLast(1) }, Modifier.weight(1f))
                     }
                 } else {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 28.dp),
-                        verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         PinPrompt(pin.length, state.error)
                         PinKeys(pin.length, state.busy, 62.dp, { pin += it }, { pin = pin.dropLast(1) },
-                            Modifier.widthIn(max = 322.dp).fillMaxWidth())
-                        PinActions(state.busy, pin.length >= 4, cancel, submit)
+                            Modifier.widthIn(max = keypadWidth).fillMaxWidth())
+                        PinActions(state.busy, pin.length >= 4, cancel, submit, Modifier.widthIn(max = keypadWidth))
                     }
                 }
             }
@@ -82,7 +83,7 @@ internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -
 @Composable
 private fun PinPrompt(length: Int, error: String?) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Unlock setup", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center)
         Box(Modifier.heightIn(min = 38.dp), contentAlignment = Alignment.Center) {
@@ -98,9 +99,9 @@ private fun PinPrompt(length: Int, error: String?) {
 
 @Composable
 private fun PinKeys(length: Int, busy: Boolean, keyHeight: Dp, add: (Char) -> Unit, delete: () -> Unit, modifier: Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         for (digits in keypadRows) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 for (digit in digits) {
                     val key = Modifier.weight(1f).heightIn(min = keyHeight)
                     if (digit == ' ') {
@@ -124,8 +125,8 @@ private fun PinKeys(length: Int, busy: Boolean, keyHeight: Dp, add: (Char) -> Un
 }
 
 @Composable
-private fun PinActions(busy: Boolean, valid: Boolean, cancel: () -> Unit, submit: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+private fun PinActions(busy: Boolean, valid: Boolean, cancel: () -> Unit, submit: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = cancel, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel") }
         Button(onClick = submit, enabled = valid && !busy, modifier = Modifier.heightIn(min = 48.dp)) {

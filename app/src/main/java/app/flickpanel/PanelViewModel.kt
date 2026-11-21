@@ -21,6 +21,7 @@ import app.flickpanel.ha.HaProblem
 import app.flickpanel.ha.MEDIA_SEEK
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.MEDIA_VOLUME_SET
+import app.flickpanel.ha.MEDIA_VOLUME_MUTE
 import app.flickpanel.ha.MediaChoice
 import app.flickpanel.ha.MediaTransport
 import app.flickpanel.ha.PanelCommand
@@ -416,6 +417,12 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val value = percent.coerceIn(0, 100)
         send(entity, "volume_set", JSONObject().put("volume_level", value / 100.0), pending = "$value%",
             matches = { it.volumePercent?.let { reported -> abs(reported - value) <= 1 } == true })
+    }
+
+    fun setSpeakerMuted(entity: Entity, muted: Boolean) {
+        if (entity.domain != "media_player" || !entity.mediaFeatures.hasMediaFeature(MEDIA_VOLUME_MUTE)) return
+        send(entity, "volume_mute", JSONObject().put("is_volume_muted", muted),
+            pending = if (muted) "Muting…" else "Unmuting…", matches = { it.volumeMuted == muted })
     }
 
     suspend fun playMusic(id: String, media: MediaChoice) {

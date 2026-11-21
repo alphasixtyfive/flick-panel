@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.PlaybackProgress
@@ -57,11 +58,11 @@ internal fun PlaybackTimeline(
     val colors = MaterialTheme.colorScheme
     Column {
         if (canSeek) {
-            MediaSlider(progress, "Playback position", enabled, change = { drag = it }) {
+            MediaSlider(progress, "Playback position", enabled, change = { drag = it }, finish = {
                 val dragged = drag
                 drag = null
                 dragged?.let { seek(it * timeline.duration) }
-            }
+            })
         } else {
             Box(
                 Modifier.fillMaxWidth().height(48.dp).semantics {
@@ -86,18 +87,24 @@ private fun playbackTime(seconds: Double): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MediaSlider(value: Float, label: String, enabled: Boolean, change: (Float) -> Unit, finish: () -> Unit) {
+internal fun MediaSlider(
+    value: Float, label: String, enabled: Boolean, change: (Float) -> Unit, finish: () -> Unit,
+    modifier: Modifier = Modifier, stateLabel: String? = null,
+) {
     val interaction = remember { MutableInteractionSource() }
     val dragging by interaction.collectIsDraggedAsState()
     val focused by interaction.collectIsFocusedAsState()
     Slider(
         value = value,
         onValueChange = change,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = label },
+        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
+            contentDescription = label
+            if (stateLabel != null) stateDescription = stateLabel
+        },
         enabled = enabled,
         interactionSource = interaction,
         onValueChangeFinished = finish,
-        thumb = { Spacer(Modifier.size(width = 14.dp, height = 24.dp)) },
+        thumb = { Spacer(Modifier.size(width = 14.dp, height = 48.dp)) },
         track = { MediaTrack(it.value, enabled, showThumb = true, highlight = dragging || focused) },
     )
 }

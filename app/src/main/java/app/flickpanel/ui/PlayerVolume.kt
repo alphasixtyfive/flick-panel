@@ -1,77 +1,70 @@
 package app.flickpanel.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-
-private const val speakerVolumeStep = 5
+import kotlin.math.roundToInt
 
 internal data class SpeakerVolume(
     val level: Int,
-    val enabled: Boolean,
+    val muted: Boolean?,
+    val ready: Boolean,
+    val pending: Boolean,
     val change: (Int) -> Unit,
+    val mute: (Boolean) -> Unit,
 )
 
 @Composable
-internal fun PlayerVolumeControl(
-    volume: SpeakerVolume, modifier: Modifier = Modifier, enabled: Boolean = true, vertical: Boolean = false,
-) {
-    val level = volume.level
-    val ready = enabled && volume.enabled
-    val colors = MaterialTheme.colorScheme
-    val down: @Composable () -> Unit = {
-        IconButton(
-            onClick = { volume.change((level - speakerVolumeStep).coerceAtLeast(0)) },
-            enabled = ready && level > 0, modifier = Modifier.size(56.dp),
-        ) {
-            Icon(Icons.Rounded.Remove, "Lower speaker volume", Modifier.size(28.dp))
-        }
+internal fun PlayerVolumeControl(volume: SpeakerVolume, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val ready = enabled && volume.ready
+    var preview by remember { mutableStateOf<Float?>(null) }
+    var requested by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(ready, volume.pending) {
+        if (!ready) preview = null
+        if (!volume.pending) requested = null
     }
-    val up: @Composable () -> Unit = {
-        IconButton(
-            onClick = { volume.change((level + speakerVolumeStep).coerceAtMost(100)) },
-            enabled = ready && level < 100, modifier = Modifier.size(56.dp),
-        ) {
-            Icon(Icons.Rounded.Add, "Raise speaker volume", Modifier.size(28.dp))
-        }
-    }
-    val speaker: @Composable () -> Unit = {
-        Icon(
-            if (level == 0) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
-            "Speaker volume", Modifier.size(21.dp).semantics { stateDescription = "$level percent" },
-            tint = colors.onSurfaceVariant,
-        )
-    }
-    Surface(modifier, shape = CircleShape, color = colors.surfaceContainerHighest, contentColor = colors.onSurface) {
-        if (vertical) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                up()
-                speaker()
-                down()
+    val level = preview ?: requested?.takeIf { volume.pending }?.toFloat() ?: volume.level.toFloat()
+    val icon = if (volume.muted == true || level == 0f) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (volume.muted != null) {
+            IconButton(onClick = { volume.mute(!volume.muted) }, enabled = ready, modifier = Modifier.size(48.dp)) {
+                Icon(icon, if (volume.muted) "Unmute speaker" else "Mute speaker")
             }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                down()
-                speaker()
-                up()
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.CenterStart) {
+                Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        MediaSlider(
+            value = level / 100f,
+            label = "Speaker volume",
+            enabled = ready,
+            change = { preview = it * 100f },
+            finish = {
+                val next = preview?.roundToInt()
+                preview = null
+                if (ready && next != null && next != volume.level) {
+                    requested = next
+                    volume.change(next)
+                }
+            },
+            modifier = Modifier.weight(1f),
+            stateLabel = "${level.roundToInt()} percent",
+        )
     }
 }

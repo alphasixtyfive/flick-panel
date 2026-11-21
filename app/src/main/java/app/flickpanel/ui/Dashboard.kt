@@ -71,7 +71,9 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val tileColumns = dashboardTileColumns(maxWidth.value, fontScale)
         val cameraColumns = minOf(tileColumns, if (maxWidth >= 1100.dp) 4 else if (wide) 3 else 2)
         val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
-        val readingsInHeader = tileColumns == 4 && readings.size in 1..2
+        val headerWidth = minOf(maxWidth, panelMaxWidth) - side * 2
+        val readingsInHeader = state.page == Page.FAVOURITES && !short && tileColumns == 4 &&
+            readings.size in 1..2 && headerWidth >= 940.dp * fontScale.coerceAtLeast(1f)
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
                 "Home",
@@ -79,6 +81,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 wide = wide,
                 short = short,
                 stacked = compact && !short && fontScale >= 1.3f,
+                readings = { if (readingsInHeader) HomeGlanceReadings(readings, state) },
                 unlock = model::showUnlock,
                 idle = model::showIdleScreen,
             )
@@ -98,19 +101,16 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
             }
             if (status != null) Text(status, style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            Row(
+            Box(
                 Modifier.fillMaxWidth().padding(top = if (short) 4.dp else 10.dp)
                     .heightIn(min = if (short) 48.dp else 56.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                contentAlignment = Alignment.CenterStart,
             ) {
-                DashboardNavigation(state.page, short, model::selectPage, Modifier.weight(1f))
-                if (state.page == Page.FAVOURITES && readingsInHeader) {
-                    HomeGlanceReadings(readings, state, Modifier.weight(1f))
-                }
+                DashboardNavigation(state.page, short, model::selectPage, Modifier.fillMaxWidth())
             }
             pages.SaveableStateProvider(state.page.name) {
-                val body = Modifier.fillMaxSize().padding(top = if (short) 10.dp else 16.dp)
+                val body = Modifier.fillMaxSize().panelEntrance(state.page, state.config.reduceMotion)
+                    .padding(top = if (short) 10.dp else 16.dp)
                 when (state.page) {
                     Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
                     Page.ROOMS -> Rooms(state, model, roomId, { roomId = it }, body)
@@ -123,9 +123,9 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun DashboardHeader(
+private fun DashboardHeader(
     title: String, weather: Entity?, wide: Boolean, short: Boolean, stacked: Boolean,
-    unlock: () -> Unit, idle: () -> Unit,
+    readings: @Composable () -> Unit, unlock: () -> Unit, idle: () -> Unit,
 ) {
     val padding = if (short) 6.dp else if (wide) 22.dp else 18.dp
     val prominent = wide && !short
@@ -150,6 +150,7 @@ internal fun DashboardHeader(
     val details: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.spacedBy(if (prominent) 34.dp else 11.dp),
             verticalAlignment = Alignment.CenterVertically) {
+            readings()
             WeatherSummary(weather, compact = !prominent, prominent = prominent)
             HeaderClock(prominent, idle)
         }

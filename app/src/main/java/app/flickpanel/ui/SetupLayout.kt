@@ -22,7 +22,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MeetingRoom
@@ -30,7 +29,6 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +36,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -71,8 +68,7 @@ internal fun SetupLayout(
     section: SetupSection,
     openSection: (SetupSection) -> Unit,
     detailTitle: String?,
-    canSave: Boolean,
-    dirty: Boolean,
+    showSave: Boolean,
     busy: Boolean,
     back: () -> Unit,
     close: () -> Unit,
@@ -85,7 +81,6 @@ internal fun SetupLayout(
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
                 val fontScale = LocalDensity.current.fontScale
                 val twoPanes = maxWidth >= tabletWidthDp.dp && maxWidth >= 640.dp * fontScale
-                val iconOnlySave = maxWidth < 360.dp || (!twoPanes && fontScale >= 1.3f)
                 val categoryWidth = (224.dp * fontScale.coerceAtLeast(1f)).coerceAtMost(maxWidth / 3)
                 Row(Modifier.fillMaxSize()) {
                     if (twoPanes) {
@@ -98,15 +93,21 @@ internal fun SetupLayout(
                                 title = detailTitle ?: section.label,
                                 detail = detailTitle != null,
                                 showNavigation = detailTitle != null || !twoPanes,
-                                canSave = canSave,
-                                dirty = dirty,
                                 busy = busy,
-                                iconOnlySave = iconOnlySave,
                                 navigate = if (detailTitle != null) back else close,
-                                save = save,
                             )
                             Box(Modifier.weight(1f).fillMaxWidth().panelEntrance(destination, reduceMotion)) {
                                 content()
+                            }
+                            if (showSave) {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = setupPadding, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.End,
+                                ) {
+                                    Button(onClick = save, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
+                                        Text("Save changes")
+                                    }
+                                }
                             }
                             if (!twoPanes && detailTitle == null) SetupNavigationBar(section, busy, openSection)
                         }
@@ -123,12 +124,8 @@ private fun SetupToolbar(
     title: String,
     detail: Boolean,
     showNavigation: Boolean,
-    canSave: Boolean,
-    dirty: Boolean,
     busy: Boolean,
-    iconOnlySave: Boolean,
     navigate: () -> Unit,
-    save: () -> Unit,
 ) {
     TopAppBar(
         title = {
@@ -143,19 +140,8 @@ private fun SetupToolbar(
                 IconButton(onClick = navigate, enabled = !busy) {
                     Icon(
                         if (detail) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Close,
-                        if (detail) "Back" else "Cancel editing",
+                        if (detail) "Back" else "Close settings",
                     )
-                }
-            }
-        },
-        actions = {
-            if (canSave) {
-                if (!dirty) {
-                    TextButton(onClick = save, enabled = !busy) { Text("Done") }
-                } else if (iconOnlySave) {
-                    FilledIconButton(onClick = save, enabled = !busy) { Icon(Icons.Rounded.Check, "Save changes") }
-                } else {
-                    Button(onClick = save, enabled = !busy) { Text("Save changes") }
                 }
             }
         },
@@ -170,7 +156,7 @@ private fun SetupCategoryPane(
     val colors = MaterialTheme.colorScheme
     Column(modifier.fillMaxHeight().background(colors.surfaceContainerLow).padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = close, enabled = !busy) { Icon(Icons.Rounded.Close, "Cancel editing") }
+            IconButton(onClick = close, enabled = !busy) { Icon(Icons.Rounded.Close, "Close settings") }
             Text("Settings", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
         }
         Column(
@@ -189,7 +175,7 @@ private fun SetupCategoryPane(
                     contentColor = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant,
                 ) {
                     Row(
-                        Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+                        Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(destination.icon, null)

@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,6 +56,21 @@ internal fun openHomeAppSettings(context: Context) {
         context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
     } catch (_: ActivityNotFoundException) {
         Toast.makeText(context, "Home app settings are unavailable", Toast.LENGTH_SHORT).show()
+    }
+}
+
+@Composable
+internal fun rememberOpenWebLink(): (String) -> Unit {
+    val handler = LocalUriHandler.current
+    val context = LocalContext.current
+    return remember(handler, context) {
+        { link ->
+            try {
+                handler.openUri(link)
+            } catch (_: IllegalArgumentException) {
+                Toast.makeText(context, "No browser available", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 }
 

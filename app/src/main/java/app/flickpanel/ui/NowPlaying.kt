@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -48,7 +47,6 @@ import app.flickpanel.ha.playbackProgress
 import app.flickpanel.ha.text
 
 private val playerWidth = 540.dp
-private val speakerControlInset = 100.dp
 
 @Composable
 internal fun NowPlaying(
@@ -74,50 +72,45 @@ internal fun NowPlaying(
             .safeDrawingPadding().padding(horizontal = 18.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        val artworkHeight = (maxHeight * .51f).coerceIn(146.dp, 380.dp)
-        val speakerBesidePlayer = volume != null && maxWidth >= playerWidth + speakerControlInset * 2
-        val width = if (speakerBesidePlayer) playerWidth + speakerControlInset * 2 else playerWidth
-        Row(
-            Modifier.widthIn(max = width).fillMaxWidth().verticalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically,
+        val artworkHeight = (maxHeight * if (volume == null) .51f else .46f).coerceIn(146.dp, 380.dp)
+        Column(
+            Modifier.widthIn(max = playerWidth).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (speakerBesidePlayer) Spacer(Modifier.width(speakerControlInset))
-            Column(Modifier.weight(1f).padding(vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(playback.speaker, Modifier.weight(1f).semantics { heading() },
-                        style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    IconButton(onClick = close, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Rounded.Close, "Close music")
-                    }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(playback.speaker, Modifier.weight(1f).semantics { heading() },
+                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                IconButton(onClick = close, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Rounded.Close, "Close music")
                 }
-                val current = playback.current
-                MusicArtwork(artwork, Modifier.fillMaxWidth().height(artworkHeight), fallbackSize = 52.dp,
-                    shape = MaterialTheme.shapes.large)
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        playback.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = if (current == null) colors.onSurfaceVariant else colors.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    playback.artist?.let { artist ->
-                        Text(artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    current?.playbackProgress()?.let { timeline ->
-                        val track = current.attributes.text("media_content_id") ?: playback.title
-                        PlaybackTimeline(timeline, track, playback.features.hasMediaFeature(MEDIA_SEEK), playback.ready, seek)
-                    }
-                }
-                PlayerActionRow(playback, browse, transport, if (speakerBesidePlayer) null else volume)
             }
-            if (speakerBesidePlayer) {
-                Box(Modifier.width(speakerControlInset), contentAlignment = Alignment.CenterEnd) {
-                    PlayerVolumeControl(volume, vertical = true)
+            val current = playback.current
+            MusicArtwork(artwork, Modifier.fillMaxWidth().height(artworkHeight), fallbackSize = 52.dp,
+                shape = MaterialTheme.shapes.large)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    playback.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = if (current == null) colors.onSurfaceVariant else colors.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                playback.artist?.let { artist ->
+                    Text(artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                current?.playbackProgress()?.let { timeline ->
+                    val track = current.attributes.text("media_content_id") ?: playback.title
+                    PlaybackTimeline(timeline, track, playback.features.hasMediaFeature(MEDIA_SEEK), playback.ready, seek)
+                }
+            }
+            PlayerActionRow(playback, browse, transport)
+            if (volume != null) {
+                PlayerVolumeControl(
+                    volume,
+                    Modifier.align(Alignment.CenterHorizontally).widthIn(max = 300.dp).fillMaxWidth().padding(top = 40.dp),
+                )
             }
         }
     }
@@ -125,7 +118,7 @@ internal fun NowPlaying(
 
 @Composable
 private fun PlayerActionRow(
-    playback: MusicPlayback, browse: (() -> Unit)?, transport: (MediaTransport) -> Unit, volume: SpeakerVolume?,
+    playback: MusicPlayback, browse: (() -> Unit)?, transport: (MediaTransport) -> Unit,
 ) {
     val libraryAction: @Composable () -> Unit = {
         if (browse != null) {
@@ -147,12 +140,7 @@ private fun PlayerActionRow(
                 }
                 TransportButtons(playback, transport)
             }
-            if (volume != null || !browseBesidePlayback && browse != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (!browseBesidePlayback) libraryAction()
-                    if (volume != null) PlayerVolumeControl(volume)
-                }
-            }
+            if (!browseBesidePlayback) libraryAction()
         }
     }
 }

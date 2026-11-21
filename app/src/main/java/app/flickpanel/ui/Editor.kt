@@ -83,9 +83,8 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
             section = it
         },
         detailTitle = detailTitle,
-        canSave = activeFormat == null && activePicker == null && activeBadge == null &&
+        showSave = dirty && activeFormat == null && activePicker == null && activeBadge == null &&
             !state.connectionEditor && panelPage?.readOnly != true,
-        dirty = dirty,
         busy = state.busy,
         back = {
             if (!state.busy) {
@@ -105,7 +104,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
             }
         },
         close = finish,
-        save = { if (dirty) model.save(draft) else model.relock() },
+        save = { model.save(draft) },
     ) {
         when {
             state.connectionEditor -> ConnectionForm(state, model::connect)

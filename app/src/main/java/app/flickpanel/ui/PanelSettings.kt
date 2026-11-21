@@ -18,7 +18,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DisplaySettings
 import androidx.compose.material.icons.rounded.Home
@@ -63,7 +63,7 @@ internal enum class PanelPage(val label: String, val readOnly: Boolean = false) 
     HOME_ASSISTANT("Home Assistant"),
     REMOTE_CONTROL("Tablet link"),
     HOME_BADGES("Warning badges"),
-    ABOUT("About Flick Panel", readOnly = true),
+    ABOUT("About", readOnly = true),
     FONT_LICENCE("Google Sans Flex licence", readOnly = true),
 }
 
@@ -99,7 +99,7 @@ internal fun PanelSettings(
                     }
                     SettingLink(PanelPage.HOME_ASSISTANT.label, connection, { open(PanelPage.HOME_ASSISTANT) }, Icons.Rounded.Hub)
                     SettingLink("Android Home app", "Return from other apps with the Home gesture",
-                        { openHomeAppSettings(context) }, Icons.Rounded.Home)
+                        { openHomeAppSettings(context) }, Icons.Rounded.Home, opensAndroid = true)
                 }
                 SettingsListGroup {
                     SettingLink(PanelPage.ABOUT.label, null, { open(PanelPage.ABOUT) }, Icons.Rounded.Info)
@@ -161,7 +161,7 @@ internal fun SettingsListGroup(title: String? = null, content: @Composable Colum
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (title != null) Text(
             title, Modifier.padding(start = 16.dp).semantics { heading() },
-            color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium,
         )
         Surface(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceContainerLow) {
@@ -209,8 +209,8 @@ private fun idleDelay(seconds: Int) = when {
 private fun ThemeChoice(theme: PanelTheme, selected: Boolean, contrast: Boolean, choose: () -> Unit) {
     val sample = panelColorScheme(theme, contrast)
     ListItem(
-        modifier = Modifier.selectable(selected, role = Role.RadioButton, onClick = choose),
-        headlineContent = { Text(theme.label) },
+        modifier = Modifier.selectable(selected, role = Role.RadioButton, onClick = choose).heightIn(min = 64.dp),
+        headlineContent = { Text(theme.label, style = MaterialTheme.typography.titleMedium) },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -228,8 +228,8 @@ private fun ThemeChoice(theme: PanelTheme, selected: Boolean, contrast: Boolean,
 @Composable
 internal fun SetupSwitchRow(title: String, subtitle: String?, checked: Boolean, change: (Boolean) -> Unit) {
     ListItem(
-        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = change),
-        headlineContent = { Text(title) },
+        modifier = Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = change).heightIn(min = 64.dp),
+        headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
         supportingContent = subtitle?.let { { Text(it) } },
         trailingContent = { Switch(checked = checked, onCheckedChange = null) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -237,14 +237,19 @@ internal fun SetupSwitchRow(title: String, subtitle: String?, checked: Boolean, 
 }
 
 @Composable
-internal fun SettingLink(title: String, subtitle: String?, open: () -> Unit, icon: ImageVector? = null, clear: (() -> Unit)? = null) {
+internal fun SettingLink(
+    title: String, subtitle: String?, open: () -> Unit, icon: ImageVector? = null,
+    clear: (() -> Unit)? = null, opensAndroid: Boolean = false,
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         ListItem(
-            modifier = Modifier.weight(1f).clickable(role = Role.Button, onClick = open),
-            headlineContent = { Text(title) },
+            modifier = Modifier.weight(1f).clickable(role = Role.Button, onClick = open).heightIn(min = 64.dp),
+            headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
             supportingContent = subtitle?.let { { Text(it) } },
             leadingContent = icon?.let { { Icon(it, null, tint = MaterialTheme.colorScheme.primary) } },
-            trailingContent = { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null) },
+            trailingContent = if (opensAndroid) {
+                { Icon(Icons.AutoMirrored.Rounded.OpenInNew, "Opens Android settings") }
+            } else null,
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         )
         if (clear != null) IconButton(onClick = clear) { Icon(Icons.Rounded.Close, "Clear $title") }

@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.PersonLocation
@@ -41,8 +40,8 @@ import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private enum class MapCredits(val label: String, val link: String) {
-    NATURAL_EARTH("Made with Natural Earth", "https://www.naturalearthdata.com"),
+internal enum class MapCredits(val label: String, val link: String) {
+    NATURAL_EARTH("Made with Natural Earth", "https://www.naturalearthdata.com/about/terms-of-use/"),
     OPEN_STREET_MAP("© OpenStreetMap contributors", "https://www.openstreetmap.org/copyright"),
 }
 
@@ -169,8 +168,8 @@ private fun MapViewerControls(
                         overflow = TextOverflow.Ellipsis)
                 }
                 if (attribution != null) {
-                    val uri = LocalUriHandler.current
-                    Text(attribution.label, Modifier.clickable(onClickLabel = "Map data credits") { uri.openUri(attribution.link) },
+                    val openLink = rememberOpenWebLink()
+                    Text(attribution.label, Modifier.clickable(onClickLabel = "Map data credits") { openLink(attribution.link) },
                         style = MaterialTheme.typography.labelSmall, color = Color(0xffccd5de))
                 }
             }
