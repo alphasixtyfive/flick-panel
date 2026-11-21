@@ -1,5 +1,7 @@
 """Automation actions for linked Flick Panel tablets."""
 
+import re
+
 import probatio as vol
 
 from homeassistant.config_entries import ConfigEntryState
@@ -7,14 +9,15 @@ from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.service import async_register_admin_service
 
-from .panel import DOMAIN, Panel
+from .panel import CONF_LEGACY_DEVICE_ID, CONF_PANEL, DOMAIN, Panel
 
 CAMERA = "camera_entity_id"
 PAGE = "page"
 BRIGHTNESS = "brightness"
+PACKAGE_NAME = "package_name"
+PACKAGE_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+")
 DISPLAY_COMMANDS = {
     "wake_display": "wake",
     "blank_display": "sleep",
@@ -25,10 +28,11 @@ DISPLAY_COMMANDS = {
 
 
 def _target_panel(hass: HomeAssistant, device_id: str) -> Panel:
-    if device := dr.async_get(hass).async_get(device_id):
-        for entry in hass.config_entries.async_entries(DOMAIN):
-            if entry.entry_id in device.config_entries and entry.state is ConfigEntryState.LOADED:
-                return entry.runtime_data
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.state is ConfigEntryState.LOADED and device_id in (
+            entry.data[CONF_PANEL], entry.data.get(CONF_LEGACY_DEVICE_ID),
+        ):
+            return entry.runtime_data
     raise ServiceValidationError("Choose a tablet linked to Flick Panel")
 
 
@@ -36,6 +40,12 @@ def _brightness_level(value: object) -> int:
     if type(value) not in (int, float) or not 1 <= value <= 100 or value != int(value):
         raise vol.Invalid("Use a whole number from 1 to 100")
     return int(value)
+
+
+def _app_package(value: str) -> str:
+    if len(value) > 255 or not PACKAGE_PATTERN.fullmatch(value):
+        raise vol.Invalid("Enter an Android package name")
+    return value
 
 
 @callback
@@ -59,6 +69,9 @@ def register_actions(hass: HomeAssistant) -> None:
             raise ServiceValidationError("Choose a Home Assistant entity")
         await panel(call).async_command("open_tile", entity_id=entity)
 
+    async def launch_app(call: ServiceCall) -> None:
+        await panel(call).async_command("launch_app", package_name=call.data[PACKAGE_NAME])
+
     async def show_page(call: ServiceCall) -> None:
         await panel(call).async_command("show_page", page=call.data[PAGE])
 
@@ -73,6 +86,7 @@ def register_actions(hass: HomeAssistant) -> None:
     for action, handler, fields in (
         ("open_camera", open_camera, {vol.Required(CAMERA): cv.entity_id}),
         ("open_tile", open_tile, {vol.Required(ATTR_ENTITY_ID): cv.entity_id}),
+        ("launch_app", launch_app, {vol.Required(PACKAGE_NAME): vol.All(cv.string, _app_package)}),
         ("show_page", show_page, {vol.Required(PAGE): vol.In(("favourites", "rooms", "cameras"))}),
         ("set_brightness", set_brightness, {vol.Optional(BRIGHTNESS): _brightness_level}),
     ):

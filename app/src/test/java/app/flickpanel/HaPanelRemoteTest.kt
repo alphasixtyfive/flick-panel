@@ -112,6 +112,7 @@ class HaPanelRemoteTest {
         assertEquals(PanelCommand.SetBrightness(null), parse("""{"command":"set_brightness","level":"auto"}"""))
         assertEquals(PanelCommand.KeepAwake(false), parse("""{"command":"keep_awake","enabled":false}"""))
         assertEquals(PanelCommand.OpenTile("todo.shopping_list"), parse("""{"command":"open_tile","entity_id":"todo.shopping_list"}"""))
+        assertEquals(PanelCommand.LaunchApp("org.jellyfin.mobile"), parse("""{"command":"launch_app","package_name":"org.jellyfin.mobile"}"""))
         for (data in listOf(
             """{"command":"show_page","page":"settings"}""",
             """{"command":"set_brightness","level":0}""",
@@ -120,6 +121,7 @@ class HaPanelRemoteTest {
             """{"command":"set_brightness","level":"50"}""",
             """{"command":"keep_awake","enabled":"false"}""",
             """{"command":"open_tile","entity_id":"app:com.example.app"}""",
+            """{"command":"launch_app","package_name":"intent://org.jellyfin.mobile"}""",
         )) assertNull(parse(data))
     }
 

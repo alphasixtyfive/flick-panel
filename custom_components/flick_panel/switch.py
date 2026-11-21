@@ -27,7 +27,7 @@ class PanelDisplay(SwitchEntity):
 
     def __init__(self, panel: Panel) -> None:
         self.panel = panel
-        self._attr_device_info = panel.device_info
+        self.device_entry = panel.device
         self._attr_unique_id = f"{panel.device.id}_{self.translation_key}"
 
     @property

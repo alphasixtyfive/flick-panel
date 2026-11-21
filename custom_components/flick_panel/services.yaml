@@ -4,7 +4,9 @@ wake_display:
       required: true
       selector:
         device:
-          integration: flick_panel
+          entity:
+            integration: flick_panel
+            domain: switch
 blank_display:
   fields: *tablet_fields
 start_screensaver:
@@ -41,6 +43,14 @@ show_page:
             - favourites
             - rooms
             - cameras
+launch_app:
+  fields:
+    device_id: *tablet
+    package_name:
+      required: true
+      example: org.jellyfin.mobile
+      selector:
+        text: {}
 set_brightness:
   fields:
     device_id: *tablet

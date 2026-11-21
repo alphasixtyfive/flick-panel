@@ -87,6 +87,14 @@
         "page": {"name": "Tab", "description": "The dashboard tab to open."}
       }
     },
+    "launch_app": {
+      "name": "Launch app",
+      "description": "Open an Android app saved as a shortcut on the visible Flick Panel dashboard.",
+      "fields": {
+        "device_id": {"name": "Tablet", "description": "The Flick Panel tablet."},
+        "package_name": {"name": "Package name", "description": "The Android package of an app saved in Favourites."}
+      }
+    },
     "set_brightness": {
       "name": "Set display brightness",
       "description": "Set a temporary brightness override or return to automatic brightness.",

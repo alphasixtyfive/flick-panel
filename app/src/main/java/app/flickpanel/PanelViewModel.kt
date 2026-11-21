@@ -683,6 +683,13 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private fun applyRemoteCommand(command: PanelCommand) {
         if (!foreground) return
         val current = _ui.value
+        if (command is PanelCommand.LaunchApp) {
+            if (!current.acceptsRemoteCommands) return
+            if (current.config.favourites.none { it.appPackage == command.packageName }) return
+            runCatching { getApplication<Application>().openPanelApp(command.packageName) }
+                .onFailure { _ui.update { it.copy(error = "This app couldn't open") } }
+            return
+        }
         val next = current.remoteCommand(command, SystemClock.elapsedRealtime())
         if (next == current) return
         _ui.value = next

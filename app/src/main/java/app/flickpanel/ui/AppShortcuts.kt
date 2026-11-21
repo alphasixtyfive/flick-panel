@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
+import app.flickpanel.openPanelApp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -131,8 +132,7 @@ internal fun AppTile(tile: TileSpec, modifier: Modifier) {
     val image = remember(icon) { icon?.asImageBitmap() }
     Surface(onClick = {
         try {
-            val launch = context.packageManager.getLaunchIntentForPackage(pkg) ?: throw ActivityNotFoundException()
-            context.startActivity(launch)
+            context.openPanelApp(pkg)
         } catch (_: ActivityNotFoundException) {
             Toast.makeText(context, "$label is unavailable", Toast.LENGTH_SHORT).show()
         } catch (_: SecurityException) {

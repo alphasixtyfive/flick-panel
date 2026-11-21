@@ -92,8 +92,11 @@ internal data class PanelUi(
         }
     }
 
+    internal val acceptsRemoteCommands: Boolean
+        get() = configured && link == Link.ONLINE && remoteName != null && !editor && !unlocking
+
     fun remoteCommand(command: PanelCommand, openedAt: Long): PanelUi {
-        if (!configured || link != Link.ONLINE || remoteName == null || editor || unlocking) return this
+        if (!acceptsRemoteCommands) return this
         return when (command) {
             PanelCommand.Wake -> wakeDisplay()
             PanelCommand.Sleep -> if (screenBlank) this else closeViewer().copy(screenBlank = true, clock = false)
@@ -104,6 +107,7 @@ internal data class PanelUi(
             is PanelCommand.KeepAwake -> copy(keepAwakeOverride = command.enabled)
             is PanelCommand.OpenCamera -> showCamera(command.entityId, openedAt)
             is PanelCommand.OpenTile -> openTile(command.entityId, openedAt)
+            is PanelCommand.LaunchApp -> this
         }
     }
 

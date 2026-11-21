@@ -117,15 +117,16 @@ Home Assistant before using it in a script or automation.
 For native controls, install `custom_components/flick_panel` from this repository in
 Home Assistant and restart Core. Add **Flick Panel** under **Settings → Devices &
 services** and choose the linked tablet. **Display** blanks and wakes Flick Panel
-while it is running. The switch follows the app's reported display mode. To see
-the tablet's sensors, open its **Mobile App** device under **Linked devices**, then
-look under **Diagnostic**. Android controls physical display power. Set the
-tablet's regular keep-awake preference under **Wall display**.
+while it is running. On the tablet's device page, **Controls** contains the
+Display switch and **Diagnostic** contains the sensors. Android controls
+physical display power. Set the tablet's regular keep-awake preference under
+**Wall display**.
 
 Choose an action under **Flick Panel** in the Home Assistant automation editor.
 Select the tablet to wake or blank its display, start or stop its screensaver,
-set brightness, open a dashboard tab, open a saved camera or tile, or close the
-current viewer. Leave the brightness field empty to clear the override.
+set brightness, open a dashboard tab, open a saved camera or tile, close the
+current viewer, or launch an app. Leave the brightness field empty to clear the
+override.
 Camera and tile actions use entities saved in Favourites. Existing automations
 can also use the Mobile App notify service with the commands below.
 
@@ -148,6 +149,7 @@ data:
 | `show_page` | `page` as `favourites`, `rooms`, or `cameras` | Open a dashboard tab |
 | `open_camera` | `camera` as a saved camera entity ID | Open its live feed |
 | `open_tile` | `entity_id` as a saved tile entity ID | Open a camera, music player, task list, calendar, map or reader |
+| `launch_app` | `package_name` as an Android package name | Launch an app saved as a shortcut in Favourites |
 | `close_viewer` | | Close the current full-screen view |
 
 Display overrides apply until cleared, the tablet is unlinked, or the app restarts.

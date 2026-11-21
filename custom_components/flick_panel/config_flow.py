@@ -12,7 +12,7 @@ class FlickPanelConfigFlow(ConfigFlow, domain=DOMAIN):
     """Add controls to a linked Flick Panel device."""
 
     VERSION = 1
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     async def async_step_user(self, user_input=None):
         existing = {entry.unique_id for entry in self._async_current_entries()}

@@ -4,11 +4,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.event import async_track_entity_registry_updated_event
+from homeassistant.helpers.helper_integration import async_remove_helper_devices
 from homeassistant.helpers.typing import ConfigType
 
-from .panel import CONF_PANEL, DOMAIN, Panel, linked_panels
+from .panel import CONF_LEGACY_DEVICE_ID, CONF_PANEL, DOMAIN, Panel, linked_panels
 from .services import register_actions
 
 PLATFORMS = (Platform.SWITCH,)
@@ -45,7 +46,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: PanelEntry) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: PanelEntry) -> bool:
-    """Remove the Keep awake entity from the initial pilot."""
+    """Preserve the display switch and attach it to the tablet's device."""
     if entry.version != 1:
         return False
     if entry.minor_version < 2:
@@ -53,5 +54,15 @@ async def async_migrate_entry(hass: HomeAssistant, entry: PanelEntry) -> bool:
         unique_id = f"{entry.data[CONF_PANEL]}_keep_awake"
         if entity_id := registry.async_get_entity_id("switch", DOMAIN, unique_id):
             registry.async_remove(entity_id)
-        hass.config_entries.async_update_entry(entry, minor_version=2)
+    if entry.minor_version < 3:
+        devices = dr.async_get(hass)
+        tablet_id = entry.data[CONF_PANEL]
+        old_device = devices.async_get_device_by_identifier((DOMAIN, tablet_id), entry.entry_id)
+        data = dict(entry.data)
+        if old_device is not None:
+            data[CONF_LEGACY_DEVICE_ID] = old_device.id
+        async_remove_helper_devices(
+            hass, helper_config_entry_id=entry.entry_id, source_device_id=tablet_id,
+        )
+        hass.config_entries.async_update_entry(entry, data=data, minor_version=3)
     return True

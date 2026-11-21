@@ -9,10 +9,10 @@ from homeassistant.const import CONF_WEBHOOK_ID
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
-from homeassistant.helpers.entity import DeviceInfo
 
 DOMAIN = "flick_panel"
 CONF_PANEL = "panel"
+CONF_LEGACY_DEVICE_ID = "legacy_device_id"
 APP_ID = "app.flickpanel"
 
 
@@ -24,13 +24,6 @@ class Panel:
     device: dr.DeviceEntry
     webhook_id: str
     display_entity_id: str
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers=self.device.identifiers | {(DOMAIN, self.device.id)},
-            name=self.device.name,
-        )
 
     async def async_command(self, command: str, **data: Any) -> None:
         """Send a command to this tablet through its registered notify action."""

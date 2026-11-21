@@ -1,6 +1,7 @@
 package app.flickpanel.ha
 
 import app.flickpanel.Page
+import app.flickpanel.config.validAppTarget
 import app.flickpanel.config.validEntity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,6 +53,7 @@ internal sealed interface PanelCommand {
     data class KeepAwake(val enabled: Boolean?) : PanelCommand
     data class OpenCamera(val entityId: String) : PanelCommand
     data class OpenTile(val entityId: String) : PanelCommand
+    data class LaunchApp(val packageName: String) : PanelCommand
 }
 
 internal fun validPanelWebhook(value: String): Boolean = value.length in 8..128 && value.all {
@@ -86,6 +88,9 @@ internal fun parsePanelCommand(event: JSONObject): PanelCommand? {
             ?.takeIf { it.startsWith("camera.") && validEntity(it) }
             ?.let { PanelCommand.OpenCamera(it) }
         "open_tile" -> (data.opt("entity_id") as? String)?.takeIf(::validEntity)?.let(PanelCommand::OpenTile)
+        "launch_app" -> (data.opt("package_name") as? String)
+            ?.takeIf { validAppTarget("app:$it") }
+            ?.let(PanelCommand::LaunchApp)
         else -> null
     }
 }
