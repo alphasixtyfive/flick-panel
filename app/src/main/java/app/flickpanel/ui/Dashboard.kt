@@ -41,6 +41,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.Page
@@ -190,7 +191,8 @@ internal fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Pag
                     .padding(horizontal = if (stacked) 4.dp else 12.dp, vertical = 6.dp)
                 val label: @Composable () -> Unit = {
                     Text(page.label, style = style, color = color,
-                        fontWeight = if (selected) FontWeight.SemiBold else style.fontWeight, maxLines = 1,
+                        fontWeight = if (selected) FontWeight.SemiBold else style.fontWeight,
+                        textAlign = if (stacked) TextAlign.Center else TextAlign.Start, maxLines = if (stacked) 2 else 1,
                         overflow = TextOverflow.Ellipsis)
                 }
                 if (stacked) {

@@ -83,7 +83,8 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
             section = it
         },
         detailTitle = detailTitle,
-        canSave = activeFormat == null && activePicker == null && activeBadge == null && !state.connectionEditor,
+        canSave = activeFormat == null && activePicker == null && activeBadge == null &&
+            !state.connectionEditor && panelPage?.readOnly != true,
         dirty = dirty,
         busy = state.busy,
         back = {
@@ -96,6 +97,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                     activeRoom != null -> room = null
                     panelPage != null -> panelPage = when (panelPage) {
                         PanelPage.REMOTE_CONTROL, PanelPage.HOME_BADGES -> PanelPage.HOME_ASSISTANT
+                        PanelPage.FONT_LICENCE -> PanelPage.ABOUT
                         else -> null
                     }
                     else -> finish()

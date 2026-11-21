@@ -86,8 +86,11 @@ internal fun SetupLayout(
                 val fontScale = LocalDensity.current.fontScale
                 val twoPanes = maxWidth >= tabletWidthDp.dp && maxWidth >= 640.dp * fontScale
                 val iconOnlySave = maxWidth < 360.dp || (!twoPanes && fontScale >= 1.3f)
+                val categoryWidth = (224.dp * fontScale.coerceAtLeast(1f)).coerceAtMost(maxWidth / 3)
                 Row(Modifier.fillMaxSize()) {
-                    if (twoPanes) SetupCategoryPane(section, openSection, close, busy)
+                    if (twoPanes) {
+                        SetupCategoryPane(section, openSection, close, busy, Modifier.width(categoryWidth))
+                    }
                     Box(Modifier.weight(1f).fillMaxHeight().padding(start = if (twoPanes) 12.dp else 0.dp),
                         contentAlignment = if (twoPanes) Alignment.TopStart else Alignment.TopCenter) {
                         Column(Modifier.widthIn(max = setupDetailWidth).fillMaxSize()) {
@@ -162,10 +165,10 @@ private fun SetupToolbar(
 
 @Composable
 private fun SetupCategoryPane(
-    section: SetupSection, open: (SetupSection) -> Unit, close: () -> Unit, busy: Boolean,
+    section: SetupSection, open: (SetupSection) -> Unit, close: () -> Unit, busy: Boolean, modifier: Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
-    Column(Modifier.width(224.dp).fillMaxHeight().background(colors.surfaceContainerLow).padding(horizontal = 12.dp)) {
+    Column(modifier.fillMaxHeight().background(colors.surfaceContainerLow).padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = close, enabled = !busy) { Icon(Icons.Rounded.Close, "Cancel editing") }
             Text("Settings", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)

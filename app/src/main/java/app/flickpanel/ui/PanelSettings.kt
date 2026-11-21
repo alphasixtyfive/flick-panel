@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DisplaySettings
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Hub
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,9 +57,14 @@ import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelTheme
 import app.flickpanel.ha.Link
 
-internal enum class PanelPage(val label: String) {
-    DISPLAY("Display"), APPEARANCE("Appearance"), HOME_ASSISTANT("Home Assistant"), REMOTE_CONTROL("Tablet link"),
+internal enum class PanelPage(val label: String, val readOnly: Boolean = false) {
+    DISPLAY("Display"),
+    APPEARANCE("Appearance"),
+    HOME_ASSISTANT("Home Assistant"),
+    REMOTE_CONTROL("Tablet link"),
     HOME_BADGES("Warning badges"),
+    ABOUT("About Flick Panel", readOnly = true),
+    FONT_LICENCE("Google Sans Flex licence", readOnly = true),
 }
 
 @Composable
@@ -69,25 +76,34 @@ internal fun PanelSettings(
 ) {
     val context = LocalContext.current
     val album = draft.idleAlbum?.title ?: "Clock only"
+    val scroll = key(page) { rememberScrollState() }
     Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+        Modifier.fillMaxWidth().verticalScroll(scroll)
             .padding(start = setupPadding, end = setupPadding, top = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         when (page) {
-            null -> SettingsListGroup {
-                SettingLink("Display", "$album · ${idleDelay(draft.idleSeconds)}",
-                    { open(PanelPage.DISPLAY) }, Icons.Rounded.DisplaySettings)
-                SettingLink("Appearance", draft.theme.label, { open(PanelPage.APPEARANCE) }, Icons.Rounded.Palette)
-                val connection = when (state.link) {
-                    Link.ONLINE -> "Connected"
-                    Link.CONNECTING -> "Connecting…"
-                    Link.AUTH_REJECTED -> "Sign-in required"
-                    Link.OFFLINE -> "Offline"
+            null -> {
+                SettingsListGroup {
+                    SettingLink(PanelPage.DISPLAY.label, "$album · ${idleDelay(draft.idleSeconds)}",
+                        { open(PanelPage.DISPLAY) }, Icons.Rounded.DisplaySettings)
+                    SettingLink(PanelPage.APPEARANCE.label, draft.theme.label,
+                        { open(PanelPage.APPEARANCE) }, Icons.Rounded.Palette)
                 }
-                SettingLink("Home Assistant", connection, { open(PanelPage.HOME_ASSISTANT) }, Icons.Rounded.Hub)
-                SettingLink("Android Home app", "Return from other apps with the Home gesture",
-                    { openHomeAppSettings(context) }, Icons.Rounded.Home)
+                SettingsListGroup {
+                    val connection = when (state.link) {
+                        Link.ONLINE -> "Connected"
+                        Link.CONNECTING -> "Connecting…"
+                        Link.AUTH_REJECTED -> "Sign-in required"
+                        Link.OFFLINE -> "Offline"
+                    }
+                    SettingLink(PanelPage.HOME_ASSISTANT.label, connection, { open(PanelPage.HOME_ASSISTANT) }, Icons.Rounded.Hub)
+                    SettingLink("Android Home app", "Return from other apps with the Home gesture",
+                        { openHomeAppSettings(context) }, Icons.Rounded.Home)
+                }
+                SettingsListGroup {
+                    SettingLink(PanelPage.ABOUT.label, null, { open(PanelPage.ABOUT) }, Icons.Rounded.Info)
+                }
             }
             PanelPage.DISPLAY -> SettingsListGroup {
                 SettingLink("Idle photos", album, choosePhotos,
@@ -134,6 +150,8 @@ internal fun PanelSettings(
             PanelPage.HOME_BADGES -> WarningBadgeSettings(draft.homeBadges, state, chooseBadge, editBadge) { removed ->
                 change(draft.copy(homeBadges = draft.homeBadges - removed))
             }
+            PanelPage.ABOUT -> PanelAbout { open(PanelPage.FONT_LICENCE) }
+            PanelPage.FONT_LICENCE -> FontLicence()
         }
     }
 }
