@@ -71,7 +71,8 @@ internal data class HomeTileGroups(
     val cameras: List<List<TileSpec>>,
     val agenda: List<List<TileSpec>>,
     val agendaColumns: Int,
-    val people: List<TileSpec>,
+    val people: List<List<TileSpec>>,
+    val peopleColumns: Int,
     val shortcuts: List<TileSpec>,
     val history: List<List<TileSpec>>,
 )
@@ -84,6 +85,7 @@ internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolea
     val agendaColumns = agendaSlots.coerceIn(minOf(columns, 2), columns)
     val apps = groups[HomeGroup.APPS].orEmpty()
     val history = groups[HomeGroup.HISTORY].orEmpty()
+    val peopleColumns = minOf(columns, 2)
     val compactGraph = if (compact && apps.size % columns == columns - 1) {
         history.firstOrNull { !it.wideOnTablet }
     } else null
@@ -92,11 +94,9 @@ internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolea
         cameras = cameras.chunked(if (columns > 1) 2 else 1),
         agenda = packTileRows(agenda, agendaColumns, compact, resizeTiles),
         agendaColumns = agendaColumns,
-        people = groups[HomeGroup.PEOPLE].orEmpty(),
+        people = packTileRows(groups[HomeGroup.PEOPLE].orEmpty(), peopleColumns, compact, resizeTiles),
+        peopleColumns = peopleColumns,
         shortcuts = apps + listOfNotNull(compactGraph),
         history = packTileRows(history.filterNot { it == compactGraph }, columns, compact, resizeTiles),
     )
 }
-
-internal fun peopleGridPages(people: List<TileSpec>, columns: Int, resizeTiles: Boolean): List<List<List<TileSpec>>> =
-    packTileRows(people, columns, compact = true, resizeTiles).chunked(2)

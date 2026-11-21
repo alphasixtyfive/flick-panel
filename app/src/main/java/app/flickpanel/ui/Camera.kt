@@ -22,11 +22,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowOutward
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -125,10 +121,6 @@ private fun CameraCard(
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xdc101317))))
                 .padding(start = tileContentPadding, top = 24.dp, end = tileContentPadding, bottom = 14.dp),
                 color = Color.White)
-            Box(Modifier.align(Alignment.TopEnd).padding(12.dp).size(44.dp)
-                .background(Color(0xc0171a1d), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.ArrowOutward, null, Modifier.size(compactTileIconSize), tint = Color.White)
-            }
         }
     }
 }
@@ -228,17 +220,8 @@ internal fun CameraControls(
         val compact = maxWidth < 600.dp || LocalDensity.current.fontScale >= 1.3f
         val inset = if (compact || maxHeight < 480.dp) 16.dp else 24.dp
         Column(Modifier.fillMaxSize().padding(inset)) {
-            FilledIconButton(
-                onClick = close,
-                modifier = Modifier.align(Alignment.End).size(56.dp),
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = Color(0xdd1b1e21),
-                    contentColor = Color.White,
-                ),
-            ) {
-                Icon(Icons.Rounded.Close, "Close camera")
-            }
+            ViewerIconButton(Icons.Rounded.Close, "Close camera", close,
+                Modifier.align(Alignment.End).size(56.dp))
             if (compact) gate?.invoke(Modifier.align(Alignment.End).padding(top = 12.dp))
             Spacer(Modifier.weight(1f))
             Row(

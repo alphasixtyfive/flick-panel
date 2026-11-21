@@ -77,12 +77,22 @@ explicit private IPv4 addresses such as a local Home Assistant server at
   to check tasks off, add a task when the list supports it, or expand completed items.
 - **Calendar** previews the next event and opens a seven-day agenda grouped by date.
   It includes all-day and ongoing events. **Wide** lets either tile preview two items.
+- **Music player** shows the current track on the tile. Tap it for artwork,
+  playback, position and volume, with controls based on the player's Home Assistant
+  capabilities. **Browse** opens that player's library and returns to Now Playing
+  when you start something.
 - **Cover** shows the state and position reported by Home Assistant. It offers the
   Open, Close, and Stop actions advertised by the device. A gate uses the whole
   tile as a toggle and shows its current state.
 - **Person location** shows the person's Home Assistant picture and zone, with initials
   when the picture is unavailable. Tap it to open the in-app map when Home Assistant
-  reports a position. The bundled basemap works without network tile requests.
+  reports a position. The full-screen map works offline, with OpenStreetMap road,
+  park and water detail for north and central London and Varna. Natural Earth
+  supplies the worldwide overview. See the [map data credits](app/src/main/assets/offline_map/ATTRIBUTION.md).
+- In PIN-protected setup, open **Panel → Home Assistant → Warning badges**. Pick an
+  existing sensor and enter the states that should show a badge on Home. For example,
+  use **on** for a maintenance binary sensor or **high, very-high** for a pollen sensor.
+  Tap a badge to read the current warning, including any issues listed by the sensor.
 - **Content reader** opens a sensor or text helper in a full-screen reader. Select
   the entity state or a text attribute as the source. A longer recipe or note can
   live in a text attribute, with line breaks kept in the reader.

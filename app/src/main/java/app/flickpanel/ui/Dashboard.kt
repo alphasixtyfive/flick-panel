@@ -5,15 +5,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,17 +20,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.FavoriteBorder
-import androidx.compose.material.icons.rounded.MeetingRoom
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -54,7 +47,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -150,11 +142,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
-                when (state.page) {
-                    Page.FAVOURITES -> "Home"
-                    Page.ROOMS -> "Rooms"
-                    Page.CAMERAS -> "Cameras"
-                },
+                "Home",
                 weather?.let { state.entity(it.entity) },
                 wide = wide,
                 short = short,
@@ -178,7 +166,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
             }
             if (status != null) Text(status, style = MaterialTheme.typography.bodyMedium,
                 color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
-            DashboardNavigation(state.page, wide, compact, short, model::selectPage)
+            DashboardNavigation(state.page, short, model::selectPage)
             key(state.page) {
                 val body = Modifier.fillMaxSize().padding(top = if (short) 10.dp else 16.dp)
                 when (state.page) {
@@ -248,52 +236,40 @@ private fun HeaderClock(wide: Boolean, showIdleScreen: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun DashboardNavigation(current: Page, wide: Boolean, compact: Boolean, short: Boolean, selectPage: (Page) -> Unit) {
+internal fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page) -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val largeText = LocalDensity.current.fontScale >= 1.3f
-    val stacked = compact && !short && !largeText
-    val textOnly = compact && largeText
-    val typography = MaterialTheme.typography
-    val labelStyle = if (stacked || textOnly) typography.labelLarge else typography.titleMedium
-    val group = Modifier.fillMaxWidth().padding(top = if (short) 6.dp else 16.dp).selectableGroup()
-    val spacing = Arrangement.spacedBy(8.dp)
-    val tabs: @Composable RowScope.() -> Unit = {
+    val tabLabel = if (short) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium
+    val tabs: @Composable () -> Unit = {
         for (page in Page.entries) {
-            val icon = when (page) {
-                Page.FAVOURITES -> Icons.Rounded.FavoriteBorder
-                Page.ROOMS -> Icons.Rounded.MeetingRoom
-                Page.CAMERAS -> Icons.Rounded.Videocam
-            }
-            val selected = current == page
-            Surface(selected = selected, onClick = { selectPage(page) }, shape = CircleShape,
-                color = if (selected) colors.primaryContainer else colors.surfaceContainer,
-                contentColor = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant,
-                modifier = (if (stacked) Modifier.weight(1f) else Modifier).semantics { role = Role.Tab }) {
-                if (stacked) {
-                    Column(Modifier.heightIn(min = 56.dp).padding(horizontal = 4.dp, vertical = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
-                        Icon(icon, null, Modifier.size(20.dp))
-                        Text(page.label, style = labelStyle,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                } else {
-                    Row(Modifier.heightIn(min = if (short) 48.dp else 56.dp)
-                        .padding(horizontal = if (wide) 20.dp else 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (!textOnly) Icon(icon, null, Modifier.size(24.dp))
-                        Text(page.label, style = labelStyle, maxLines = 1)
-                    }
-                }
+            Tab(
+                selected = current == page,
+                onClick = { selectPage(page) },
+                selectedContentColor = colors.primary,
+                unselectedContentColor = colors.onSurfaceVariant,
+                modifier = Modifier.heightIn(min = if (short) 48.dp else 56.dp),
+            ) {
+                Text(page.label, Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
+                    style = tabLabel, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
-    when {
-        stacked -> Row(group, horizontalArrangement = spacing, content = tabs)
-        short -> Row(group.horizontalScroll(rememberScrollState()), horizontalArrangement = spacing, content = tabs)
-        else -> FlowRow(group, horizontalArrangement = spacing, verticalArrangement = spacing) { tabs() }
+    BoxWithConstraints(
+        Modifier.padding(top = if (short) 4.dp else 10.dp).widthIn(max = 480.dp).fillMaxWidth(),
+    ) {
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        if (maxWidth < 284.dp * fontScale) {
+            PrimaryScrollableTabRow(
+                selectedTabIndex = current.ordinal, edgePadding = 0.dp,
+                containerColor = Color.Transparent, contentColor = colors.primary, tabs = tabs,
+            )
+        } else {
+            PrimaryTabRow(
+                selectedTabIndex = current.ordinal,
+                containerColor = Color.Transparent, contentColor = colors.primary, tabs = tabs,
+            )
+        }
     }
 }
 
@@ -303,11 +279,12 @@ private fun Favourites(state: PanelUi, model: PanelViewModel, columns: Int, resi
         val headerWeather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
         state.config.favourites.filter { it.showOnHome && it != headerWeather }
     }
-    if (tiles.isEmpty()) {
+    val badges = state.activeHomeBadges()
+    if (tiles.isEmpty() && badges.isEmpty()) {
         Column(modifier) { EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.") }
         return
     }
-    FavouritesTileGrid(tiles, state, model, columns, resizeTiles, modifier)
+    FavouritesTileGrid(tiles, state, model, columns, resizeTiles, modifier, badges)
 }
 
 @Composable

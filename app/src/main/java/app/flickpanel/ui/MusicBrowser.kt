@@ -32,7 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Speaker
@@ -75,7 +74,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel) {
+internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel, close: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     var folders by remember(id) { mutableStateOf(emptyList<MediaChoice>()) }
     val current = folders.lastOrNull()
@@ -98,7 +97,7 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel) {
 
     fun back() {
         if (starting) return
-        if (folders.isEmpty()) model.closeMusic() else folders = folders.dropLast(1)
+        if (folders.isEmpty()) close() else folders = folders.dropLast(1)
     }
 
     fun retry(folder: MediaChoice?) {
@@ -133,6 +132,7 @@ internal fun MusicBrowser(id: String, player: String?, model: PanelViewModel) {
         scope.launch {
             try {
                 model.playMusic(id, item)
+                close()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -240,12 +240,7 @@ private fun MusicHeader(
 ) {
     val type = MaterialTheme.typography
     val speaker = player?.trim()?.takeIf { it.isNotEmpty() }
-    val title = when {
-        collection != null -> collection
-        speaker == null -> "Music"
-        speaker.equals("music", ignoreCase = true) || speaker.endsWith(" music", ignoreCase = true) -> speaker
-        else -> "$speaker music"
-    }
+    val title = collection ?: "Browse"
     Column(
         Modifier.fillMaxWidth().padding(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -255,16 +250,14 @@ private fun MusicHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (collection != null) {
-                FilledTonalIconButton(onClick = back, enabled = !starting, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
-                }
+            FilledTonalIconButton(onClick = back, enabled = !starting, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, if (collection == null) "Back to player" else "Back")
             }
             Text(
                 title, Modifier.weight(1f).semantics { heading() }, style = type.displaySmall,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
-            if (collection != null && speaker != null && speakerInline) {
+            if (speaker != null && speakerInline) {
                 MusicSpeaker(speaker, Modifier.widthIn(max = 192.dp))
             }
             if (playFolder != null) {
@@ -279,13 +272,9 @@ private fun MusicHeader(
                         contentDescription = "Starting playback"
                     }, strokeWidth = 2.dp)
                 }
-            } else if (collection == null) {
-                FilledTonalIconButton(onClick = back, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.Close, "Close music")
-                }
             }
         }
-        if (collection != null && speaker != null && !speakerInline) {
+        if (speaker != null && !speakerInline) {
             MusicSpeaker(speaker, Modifier.padding(start = 62.dp))
         }
     }

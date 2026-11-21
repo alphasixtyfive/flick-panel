@@ -45,12 +45,14 @@ import app.flickpanel.PanelUi
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
+import app.flickpanel.config.validBadgeSource
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.readerAttributes
 
 internal enum class SetupPicker(val title: String) {
-    TILE("Add tile"), APP("Add tile"), MESSAGE("Choose a message"), PRESENCE("Choose a presence sensor")
+    TILE("Add tile"), APP("Add tile"), MESSAGE("Choose a message"), PRESENCE("Choose a presence sensor"),
+    BADGE("Choose a warning sensor"),
 }
 
 internal data class TileFormat(
@@ -78,14 +80,16 @@ internal fun EntityPicker(
     var filter by rememberSaveable(source) { mutableStateOf(DeviceFilter.ALL) }
     val catalog = state.catalogue
     val areas = remember(catalog.areas) { catalog.areas.associate { it.id to it.name } }
-    val available = remember(catalog, draft.favourites, source, areas) {
+    val available = remember(catalog, draft.favourites, draft.homeBadges, source, areas) {
         val present = draft.favourites.mapTo(hashSetOf()) { it.entity }
+        val badges = draft.homeBadges.mapTo(hashSetOf()) { it.entity }
         catalog.entries.filter { entry -> when (source) {
             SetupPicker.TILE -> entry.entity.id !in present &&
                 (entry.visible || entry.entity.available && entry.entity.domain in setOf("todo", "calendar"))
             SetupPicker.APP -> false
             SetupPicker.MESSAGE -> entry.visible && entry.entity.domain in setOf("sensor", "input_text")
             SetupPicker.PRESENCE -> entry.visible && entry.entity.domain == "binary_sensor"
+            SetupPicker.BADGE -> entry.entity.id !in badges && validBadgeSource(entry.entity.id)
         } }.map { entry ->
             val entity = entry.entity
             entry to "${entity.name} ${entity.id} ${areas[entry.area].orEmpty()}".lowercase()

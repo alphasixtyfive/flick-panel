@@ -53,7 +53,7 @@ internal fun PanelTile(
         TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier) { increase ->
             model.stepTemperature(tile.entity, increase)
         }
-        TileKind.MEDIA -> MusicTile(label, entity, pending, ready, model, modifier)
+        TileKind.MEDIA -> MusicTile(label, entity, available, model, modifier)
         TileKind.CHOICE -> ChoiceTile(label, entity, pending, ready, modifier) { option ->
             live?.let { model.selectOption(it, option) }
         }

@@ -1,6 +1,7 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
+import app.flickpanel.ActiveHomeBadge
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
@@ -33,7 +35,7 @@ private val shortcutHeight = 64.dp
 @Composable
 internal fun FavouritesTileGrid(
     tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, resizeTiles: Boolean,
-    modifier: Modifier,
+    modifier: Modifier, badges: List<ActiveHomeBadge> = emptyList(),
 ) {
     val compact = columns >= 4
     val resizable = compact || resizeTiles
@@ -41,20 +43,23 @@ internal fun FavouritesTileGrid(
         homeTileGroups(tiles, columns, compact, resizable)
     }
     val firstCameraRow = groups.cameras.firstOrNull()
-    val sharedRow = compact && firstCameraRow?.size == 2 && groups.people.isNotEmpty()
+    val sharedRow = compact && firstCameraRow?.size == 2 && groups.people.size in 1..2
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(bottom = 20.dp),
         verticalArrangement = Arrangement.spacedBy(tileGap),
     ) {
+        if (badges.isNotEmpty()) item(key = "home-warnings") { HomeWarnings(badges) }
         tileRows(groups.controls, state, model, columns, compact, resizable)
         if (sharedRow) {
             item(key = "home-glance", contentType = "home-glance") {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
                     HomeCameraRow(firstCameraRow, columns, state, model,
                         modifier = Modifier.weight(1f), previewHeight = 186.dp)
-                    PeopleGrid(groups.people, resizable, Modifier.weight(1f)) { person, cell ->
-                        PanelTile(person, state, model, cell)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                        for (row in groups.people) {
+                            TileRow(row, state, model, groups.peopleColumns, compact, resizable)
+                        }
                     }
                 }
             }
@@ -63,10 +68,8 @@ internal fun FavouritesTileGrid(
         items(cameraRows, key = { "home-cameras:" + it.first().entity }, contentType = { "home-cameras" }) { cameras ->
             HomeCameraRow(cameras, columns, state, model)
         }
-        if (!sharedRow && groups.people.isNotEmpty()) {
-            item(key = "people", contentType = "people") {
-                PeopleGrid(groups.people, resizable) { person, cell -> PanelTile(person, state, model, cell) }
-            }
+        if (!sharedRow) {
+            tileRows(groups.people, state, model, groups.peopleColumns, compact, resizable)
         }
         tileRows(groups.agenda, state, model, groups.agendaColumns, compact, resizable)
         val shortcutColumns = minOf(columns, groups.shortcuts.size).coerceAtLeast(1)
@@ -113,6 +116,7 @@ private fun TileRow(
                 TileKind.APP -> if (compact) shortcutHeight else 76.dp
                 TileKind.TREND -> if (shortcutRow) shortcutHeight else if (compact) compactCellHeight else cellHeight
                 TileKind.CAMERA -> 142.dp
+                TileKind.PERSON -> 86.dp
                 TileKind.IMAGE -> if (compact && tile.wideOnTablet) 190.dp else 144.dp
                 TileKind.TASKS, TileKind.CALENDAR -> if (compact) 126.dp else 144.dp
                 else -> if (compact) compactCellHeight else cellHeight

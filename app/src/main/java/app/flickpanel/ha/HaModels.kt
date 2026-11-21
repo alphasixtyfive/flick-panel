@@ -192,9 +192,11 @@ internal fun Entity.binaryStatus(): String? {
 }
 
 internal enum class MediaTransport(val bit: Long, val service: String) {
-    PAUSE(1, "media_pause"), PLAY(16_384, "media_play")
+    PAUSE(1, "media_pause"), PLAY(16_384, "media_play"),
+    PREVIOUS(16, "media_previous_track"), NEXT(32, "media_next_track"),
 }
 
+internal const val MEDIA_SEEK = 2L
 internal const val MEDIA_VOLUME_SET = 4L
 
 internal fun Long.hasMediaFeature(bit: Long) = this and bit != 0L

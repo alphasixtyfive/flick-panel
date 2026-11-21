@@ -1,208 +1,179 @@
 package app.flickpanel.ui
 
-import android.graphics.Paint
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.flickpanel.ha.PersonLocation
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val initialZoom = 16f
-private const val maximumZoom = 128f
+private enum class MapCredits(val label: String, val link: String) {
+    NATURAL_EARTH("Made with Natural Earth", "https://www.naturalearthdata.com"),
+    OPEN_STREET_MAP("© OpenStreetMap contributors", "https://www.openstreetmap.org/copyright"),
+}
 
 @Composable
-internal fun PersonMapScreen(title: String, location: PersonLocation?, close: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Surface(Modifier.fillMaxSize(), color = colors.surface) {
-        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = close) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }
-                Column(Modifier.weight(1f)) {
-                    Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("Offline map · Country and city overview", color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-
-            Box(
-                Modifier.weight(1f).fillMaxWidth().padding(top = 8.dp).clip(MaterialTheme.shapes.extraLarge)
-                    .background(colors.surfaceContainerLowest),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (location == null) EmptyState("Location unavailable", null)
-                else LoadPersonMap(location)
-            }
-            Text("Made with Natural Earth", Modifier.padding(start = 6.dp, top = 6.dp),
-                color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+internal fun PersonMapScreen(title: String, location: PersonLocation?, close: () -> Unit, status: String? = null) {
+    val colours = mapColours()
+    Box(Modifier.fillMaxSize().background(colours.water), contentAlignment = Alignment.Center) {
+        if (location == null) {
+            EmptyState("Location unavailable", null)
+            MapViewerControls(title, status, close)
+        } else {
+            LoadPersonMap(title, status, location, colours, close)
         }
     }
 }
 
 @Composable
-private fun LoadPersonMap(location: PersonLocation) {
+private fun LoadPersonMap(title: String, status: String?, location: PersonLocation, colours: MapColours, close: () -> Unit) {
     val assets = LocalContext.current.assets
     var basemap by remember(assets) { mutableStateOf<OfflineBasemap?>(null) }
-    var loadFailed by remember(assets) { mutableStateOf(false) }
+    var failed by remember(assets) { mutableStateOf(false) }
     LaunchedEffect(assets) {
         try {
             basemap = withContext(Dispatchers.IO) { loadOfflineBasemap(assets) }
         } catch (_: IOException) {
-            loadFailed = true
+            failed = true
         }
     }
+
     val map = basemap
-    when {
-        map != null -> InteractivePersonMap(map, location)
-        loadFailed -> EmptyState("Map unavailable", null)
-        else -> CircularProgressIndicator()
+    val pin = location.mapPoint()
+    val region = map?.regions?.firstOrNull { it.bounds.contains(pin) }
+    var detail by remember(region) { mutableStateOf<OfflineDetail?>(null) }
+    var detailReady by remember(region) { mutableStateOf(region == null) }
+    LaunchedEffect(region) {
+        if (region != null) {
+            detail = try {
+                withContext(Dispatchers.IO) { loadOfflineDetail(assets, region) }
+            } catch (_: IOException) {
+                null
+            }
+            detailReady = true
+        }
+    }
+
+    if (map != null && detailReady) {
+        InteractivePersonMap(title, status, map, detail, location, colours, close)
+    } else {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (failed) EmptyState("Map unavailable", null) else CircularProgressIndicator()
+            MapViewerControls(title, status, close)
+        }
     }
 }
 
 @Composable
-private fun InteractivePersonMap(map: OfflineBasemap, location: PersonLocation) {
-    val colors = MaterialTheme.colorScheme
-    val density = LocalDensity.current
-    val pin = Offset((location.longitude + 180).toFloat(), (90 - location.latitude).toFloat())
-    var center by remember { mutableStateOf(pin) }
-    var zoom by remember { mutableFloatStateOf(initialZoom) }
-    var followsPerson by remember { mutableStateOf(true) }
-    val textPaint = remember(colors.onSurfaceVariant, density) {
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = colors.onSurfaceVariant.toArgb()
-            textSize = with(density) { 12.sp.toPx() }
-        }
-    }
-    LaunchedEffect(pin, followsPerson) {
-        if (followsPerson) center = pin
-    }
-    Box(Modifier.fillMaxSize()) {
-        Canvas(Modifier.fillMaxSize().semantics { contentDescription = "Map showing the person's location" }
-            .pointerInput(Unit) {
-                detectTransformGestures { centroid, pan, zoomChange, _ ->
-                    val fit = fitScale(size.width.toFloat(), size.height.toFloat())
-                    val screenCenter = Offset(size.width / 2f, size.height / 2f)
-                    val anchor = center + (centroid - screenCenter) / (fit * zoom)
-                    val nextZoom = (zoom * zoomChange).coerceIn(1f, maximumZoom)
-                    val nextCenter = anchor - (centroid + pan - screenCenter) / (fit * nextZoom)
-                    followsPerson = false
-                    center = Offset(wrapLongitude(nextCenter.x), nextCenter.y.coerceIn(0f, 180f))
-                    zoom = nextZoom
-                }
-            }) {
-            val scale = fitScale(size.width, size.height) * zoom
-            val start = this.center - center * scale
-            val worldWidth = 360f * scale
-            for (world in -1..1) {
-                val left = start.x + world * worldWidth
-                if (left > size.width || left + worldWidth < 0f) continue
-                withTransform({
-                    translate(left, start.y)
-                    scale(scale, scale, pivot = Offset.Zero)
-                }) {
-                    drawPath(map.countries, colors.surfaceContainerHigh)
-                    drawPath(map.lakes, colors.surfaceContainerLowest)
-                    drawPath(map.countries, colors.outline, style = Stroke(width = .75.dp.toPx() / scale))
-                }
-            }
-            val marker = screenPoint(pin, center, scale)
-            drawPlaces(map.places, center, scale, zoom, marker, textPaint)
-            drawCircle(colors.surface, radius = 11.dp.toPx(), center = marker)
-            drawCircle(colors.primary, radius = 8.dp.toPx(), center = marker)
-        }
-        Column(Modifier.align(Alignment.BottomEnd).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilledTonalIconButton(onClick = { zoom = (zoom * 1.6f).coerceAtMost(maximumZoom) }, enabled = zoom < maximumZoom) {
-                Icon(Icons.Rounded.Add, "Zoom in")
-            }
-            FilledTonalIconButton(onClick = { zoom = (zoom / 1.6f).coerceAtLeast(1f) }, enabled = zoom > 1f) {
-                Icon(Icons.Rounded.Remove, "Zoom out")
-            }
-            FilledTonalIconButton(onClick = { followsPerson = true; center = pin }) {
-                Icon(Icons.Rounded.MyLocation, "Centre on person")
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawPlaces(
-    places: List<BasemapPlace>, worldCenter: Offset, scale: Float, zoom: Float, marker: Offset, paint: Paint,
+internal fun InteractivePersonMap(
+    title: String, status: String?, map: OfflineBasemap, detail: OfflineDetail?,
+    location: PersonLocation, colours: MapColours, close: () -> Unit,
 ) {
-    val rankLimit = when {
-        zoom < 2f -> 1
-        zoom < 6f -> 3
-        zoom < 12f -> 5
-        else -> Int.MAX_VALUE
+    val pin = location.mapPoint()
+    val minimumSpan = if (detail == null) .24f else .006f
+    val preferredSpan = if (detail == null) .75f else .04f
+    val openingSpan = maxOf(preferredSpan, ((location.accuracyMetres ?: 0.0) * 4 / metresPerLatitudeDegree).toFloat())
+        .coerceAtMost(maximumMapSpan)
+    var viewport by remember(detail) { mutableStateOf(MapViewport(pin, openingSpan)) }
+    var followsPerson by remember(detail) { mutableStateOf(true) }
+    LaunchedEffect(pin, followsPerson) {
+        if (followsPerson) viewport = viewport.copy(centre = pin)
     }
-    val safeArea = Rect(0f, 0f, (size.width - 60.dp.toPx()).coerceAtLeast(0f), size.height)
-    val occupied = mutableListOf<Rect>()
-    for (place in places) {
-        if (place.rank > rankLimit || occupied.size == 18) break
-        val point = screenPoint(place.point, worldCenter, scale)
-        if (!safeArea.contains(point)) continue
-        val x = point.x + 4.dp.toPx()
-        val textBox = Rect(x, point.y + paint.ascent(), x + paint.measureText(place.name), point.y + paint.descent())
-        if (!safeArea.contains(textBox.topRight) || !safeArea.contains(textBox.bottomLeft) ||
-            textBox.inflate(12.dp.toPx()).contains(marker) || occupied.any { it.overlaps(textBox) }
-        ) continue
-        drawCircle(androidx.compose.ui.graphics.Color(paint.color), radius = 1.6.dp.toPx(), center = point)
-        drawContext.canvas.nativeCanvas.drawText(place.name, x, point.y, paint)
-        occupied.add(textBox.inflate(4.dp.toPx()))
+    PersonMapCanvas(map, detail, location, viewport, minimumSpan, colours) { origin, centroid, pan, zoom, limit ->
+        followsPerson = false
+        viewport = viewport.transform(origin, centroid, pan, zoom, limit)
+    }
+    MapViewerControls(
+        title = title,
+        status = status,
+        close = close,
+        attribution = if (detail == null) MapCredits.NATURAL_EARTH else MapCredits.OPEN_STREET_MAP,
+    ) {
+        ViewerIconButton(Icons.Rounded.Add, "Zoom in", enabled = viewport.latitudeSpan > minimumSpan,
+            onClick = { viewport = viewport.copy(latitudeSpan = (viewport.latitudeSpan / 1.6f).coerceAtLeast(minimumSpan)) })
+        ViewerIconButton(Icons.Rounded.Remove, "Zoom out", enabled = viewport.latitudeSpan < maximumMapSpan,
+            onClick = { viewport = viewport.copy(latitudeSpan = (viewport.latitudeSpan * 1.6f).coerceAtMost(maximumMapSpan)) })
+        ViewerIconButton(Icons.Rounded.MyLocation, "Centre on person", onClick = {
+            followsPerson = true
+            viewport = MapViewport(pin, openingSpan)
+        })
     }
 }
 
-private fun DrawScope.screenPoint(point: Offset, worldCenter: Offset, scale: Float): Offset {
-    val dx = wrapLongitude(point.x - worldCenter.x + 180f) - 180f
-    return center + Offset(dx, point.y - worldCenter.y) * scale
+@Composable
+private fun MapViewerControls(
+    title: String, status: String?, close: () -> Unit, attribution: MapCredits? = null,
+    tools: (@Composable () -> Unit)? = null,
+) {
+    BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout)) {
+        val short = maxHeight < 340.dp
+        val inset = if (short || maxWidth < mediumWindowWidthDp.dp) 16.dp else 24.dp
+        ViewerIconButton(Icons.Rounded.Close, "Close map", close, Modifier.align(Alignment.TopEnd).padding(inset).size(56.dp))
+        if (tools != null) {
+            if (short) {
+                Row(Modifier.align(Alignment.TopStart).padding(inset), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tools()
+                }
+            } else {
+                Column(Modifier.align(Alignment.BottomEnd).padding(inset), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tools()
+                }
+            }
+        }
+        val controlsWidth = if (tools == null || short) 0.dp else 62.dp
+        Surface(
+            Modifier.align(Alignment.BottomStart).padding(inset)
+                .widthIn(max = minOf(400.dp, (maxWidth - inset * 2 - controlsWidth).coerceAtLeast(0.dp))),
+            shape = panelCardShape,
+            color = viewerSurface,
+            contentColor = Color.White,
+        ) {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (status != null) {
+                    Text(status, style = MaterialTheme.typography.bodyMedium, color = Color(0xffe1e7ed), maxLines = 2,
+                        overflow = TextOverflow.Ellipsis)
+                }
+                if (attribution != null) {
+                    val uri = LocalUriHandler.current
+                    Text(attribution.label, Modifier.clickable(onClickLabel = "Map data credits") { uri.openUri(attribution.link) },
+                        style = MaterialTheme.typography.labelSmall, color = Color(0xffccd5de))
+                }
+            }
+        }
+    }
 }
-
-private fun wrapLongitude(value: Float): Float = ((value % 360f) + 360f) % 360f
-
-private fun fitScale(width: Float, height: Float) = minOf(width / 360f, height / 180f).coerceAtLeast(.0001f)

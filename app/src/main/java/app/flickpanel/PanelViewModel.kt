@@ -18,6 +18,7 @@ import app.flickpanel.ha.Entity
 import app.flickpanel.ha.HaClient
 import app.flickpanel.ha.HaCredentials
 import app.flickpanel.ha.HaProblem
+import app.flickpanel.ha.MEDIA_SEEK
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MediaChoice
@@ -27,13 +28,13 @@ import app.flickpanel.ha.PanelRegistration
 import app.flickpanel.ha.PanelRemoteState
 import app.flickpanel.ha.adjacentTemperature
 import app.flickpanel.ha.canAddTasks
-import app.flickpanel.ha.canBrowseMusic
 import app.flickpanel.ha.canMoveCover
 import app.flickpanel.ha.canUpdateTasks
 import app.flickpanel.ha.coverPosition
 import app.flickpanel.ha.gateToggleAction
 import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.parseServer
+import app.flickpanel.ha.playbackProgress
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -107,7 +108,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             agenda.pause()
             presence = null
             relock()
-            _ui.update { it.copy(camera = null, musicBrowser = null, agendaOpen = null, contentOpen = null,
+            _ui.update { it.copy(camera = null, musicOpen = null, agendaOpen = null, contentOpen = null,
                 screenBlank = false, pending = emptyMap()) }
         }
     }
@@ -283,13 +284,17 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun openMusic(id: String) {
         val current = _ui.value
-        if (current.config.favourites.none { it.entity == id && it.kind == TileKind.MEDIA } ||
-            current.entities[id]?.mediaFeatures?.canBrowseMusic() != true) return
+        if (current.editor || current.unlocking || current.screenBlank || current.hasViewer) return
+        if (current.link != Link.ONLINE || current.entities[id]?.available != true ||
+            current.config.favourites.none { it.entity == id && it.kind == TileKind.MEDIA }) return
         idleJob?.cancel()
-        _ui.update { it.copy(musicBrowser = id) }
+        _ui.update { it.copy(musicOpen = id) }
     }
 
-    fun closeMusic() { _ui.update { it.copy(musicBrowser = null) }; touch() }
+    fun closeMusic() {
+        _ui.update { it.copy(musicOpen = null) }
+        touch()
+    }
 
     fun openContent(id: String) {
         val current = _ui.value
@@ -359,10 +364,22 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     fun mediaTransport(id: String, transport: MediaTransport) {
         val entity = _ui.value.entities[id] ?: return
         if (entity.domain != "media_player" || !entity.mediaFeatures.hasMediaFeature(transport.bit)) return
+        if (transport == MediaTransport.PREVIOUS || transport == MediaTransport.NEXT) {
+            send(entity, transport.service, pending = "Changing track…")
+            return
+        }
         val play = transport == MediaTransport.PLAY
         if (entity.playingMedia == play) return
         send(entity, transport.service, pending = if (play) "Starting…" else "Pausing…",
             matches = { it.available && it.playingMedia == play })
+    }
+
+    fun seekMusic(id: String, seconds: Double) {
+        val entity = _ui.value.entities[id] ?: return
+        val duration = entity.playbackProgress()?.duration ?: return
+        if (!entity.mediaFeatures.hasMediaFeature(MEDIA_SEEK) || !seconds.isFinite()) return
+        send(entity, "media_seek", JSONObject().put("seek_position", seconds.coerceIn(0.0, duration)),
+            pending = "Seeking…")
     }
 
     fun setVolume(entity: Entity, percent: Int) {
@@ -373,11 +390,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     suspend fun playMusic(id: String, media: MediaChoice) {
-        if (!media.playable || _ui.value.musicBrowser != id) return
+        if (!media.playable || _ui.value.musicOpen != id) return
         val active = client ?: throw HaProblem("Home Assistant isn't connected")
         active.command(id, "media_player", "play_media",
             JSONObject().put("media_content_type", media.type).put("media_content_id", media.id))
-        closeMusic()
     }
 
     fun toggle(entity: Entity, checked: Boolean) = send(entity, if (checked) "turn_on" else "turn_off",
@@ -642,6 +658,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
         current.config.presenceEntity?.let(ids::add)
         current.config.messageEntity?.let(ids::add)
+        current.config.homeBadges.mapTo(ids) { it.entity }
         client?.select(ids)
     }
 

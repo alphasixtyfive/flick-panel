@@ -2,7 +2,11 @@ package app.flickpanel.ha
 
 import okhttp3.HttpUrl
 
-internal class PersonLocation private constructor(val latitude: Double, val longitude: Double) {
+internal class PersonLocation private constructor(
+    val latitude: Double,
+    val longitude: Double,
+    val accuracyMetres: Double?,
+) {
 
     override fun toString() = "PersonLocation"
 
@@ -12,7 +16,9 @@ internal class PersonLocation private constructor(val latitude: Double, val long
             val latitude = (entity.attributes.opt("latitude") as? Number)?.toDouble() ?: return null
             val longitude = (entity.attributes.opt("longitude") as? Number)?.toDouble() ?: return null
             if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return null
-            return PersonLocation(latitude, longitude)
+            val accuracy = (entity.attributes.opt("gps_accuracy") as? Number)?.toDouble()
+                ?.takeIf { it.isFinite() && it > 0 }
+            return PersonLocation(latitude, longitude, accuracy)
         }
     }
 }

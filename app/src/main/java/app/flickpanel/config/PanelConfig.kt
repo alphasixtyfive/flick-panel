@@ -54,7 +54,8 @@ internal data class PanelConfig(
     val roomTiles: Map<String, List<RoomTilePreference>> = emptyMap(),
     val highContrast: Boolean = false,
     val reduceMotion: Boolean = false,
-    internal val idleAlbum: PhotoFolder? = null
+    internal val idleAlbum: PhotoFolder? = null,
+    val homeBadges: List<HomeBadge> = emptyList(),
 )
 
 internal object PanelConfigCodec {
@@ -71,6 +72,12 @@ internal object PanelConfigCodec {
         }))
         .put("theme", config.theme.name)
         .put("message", config.messageEntity)
+        .put("homeBadges", config.homeBadges.takeIf { it.isNotEmpty() }?.let { badges ->
+            JSONArray(badges.map { badge ->
+                JSONObject().put("entity", badge.entity).put("label", badge.label)
+                    .put("states", JSONArray(badge.activeStates))
+            })
+        })
         .put("presence", config.presenceEntity)
         .put("idle", config.idleSeconds)
         .put("wall", config.wallMode)
@@ -120,6 +127,7 @@ internal object PanelConfigCodec {
             favourites = tiles.take(48),
             theme = PanelTheme.entries.firstOrNull { it.name == obj.optString("theme") } ?: PanelTheme.SLATE,
             messageEntity = obj.text("message")?.takeIf(::validEntity),
+            homeBadges = decodeBadges(obj.optJSONArray("homeBadges")),
             presenceEntity = obj.text("presence")?.takeIf { validEntity(it) && it.startsWith("binary_sensor.") },
             idleSeconds = obj.optInt("idle", 60).let { if (it == 0) 0 else it.coerceIn(15, 900) },
             wallMode = obj.optBoolean("wall", true),
@@ -156,6 +164,18 @@ internal object PanelConfigCodec {
             }.distinctBy(RoomTilePreference::entity)
             if (preferences.isNotEmpty()) put(id, preferences)
         }
+    }
+
+    private fun decodeBadges(rows: JSONArray?): List<HomeBadge> {
+        if (rows == null) return emptyList()
+        return (0 until rows.length()).mapNotNull { index ->
+            val badge = rows.optJSONObject(index) ?: return@mapNotNull null
+            val entity = badge.optString("entity").takeIf(::validBadgeSource) ?: return@mapNotNull null
+            val values = badge.optJSONArray("states") ?: return@mapNotNull null
+            val states = badgeStates((0 until values.length()).mapNotNull { values.opt(it) as? String })
+            if (states.isEmpty()) return@mapNotNull null
+            HomeBadge(entity, badge.text("label")?.trim()?.take(48), states)
+        }.distinctBy(HomeBadge::entity)
     }
 
     private fun JSONObject.text(key: String): String? =

@@ -5,7 +5,6 @@ import app.flickpanel.config.TileSpec
 import app.flickpanel.ui.dashboardTileColumns
 import app.flickpanel.ui.homeTileGroups
 import app.flickpanel.ui.packTileRows
-import app.flickpanel.ui.peopleGridPages
 import app.flickpanel.ui.roomTileColumns
 import app.flickpanel.ui.tileSpan
 import org.junit.Assert.assertEquals
@@ -68,7 +67,7 @@ class TileGridLayoutTest {
         assertEquals(listOf(listOf(gate, front)), wide.cameras)
         assertEquals(listOf(listOf(tasks, calendar)), wide.agenda)
         assertEquals(2, wide.agendaColumns)
-        assertEquals(listOf(person), wide.people)
+        assertEquals(listOf(listOf(person)), wide.people)
         assertEquals(listOf(app), wide.shortcuts)
 
         val narrow = homeTileGroups(tiles, columns = 2, compact = false, resizeTiles = true)
@@ -92,18 +91,21 @@ class TileGridLayoutTest {
     }
 
     @Test
-    fun peopleGridKeepsFourProfilesOnTheFirstPageAndAllOthersReachable() {
+    fun homeShowsEveryPersonInOrdinaryRows() {
         val people = (1..6).map { TileSpec("person.profile_$it", TileKind.PERSON) }
-        assertEquals(listOf(people.take(4), people.drop(4)),
-            peopleGridPages(people, columns = 2, resizeTiles = true).map { it.flatten() })
-        assertEquals(people.chunked(2), peopleGridPages(people, columns = 1, resizeTiles = false).map { it.flatten() })
+        val wide = homeTileGroups(people, columns = 4, compact = true, resizeTiles = true)
+        val narrow = homeTileGroups(people, columns = 1, compact = false, resizeTiles = true)
+        assertEquals(2, wide.peopleColumns)
+        assertEquals(people.chunked(2), wide.people)
+        assertEquals(1, narrow.peopleColumns)
+        assertEquals(people.chunked(1), narrow.people)
     }
 
     @Test
     fun peopleGridKeepsTheConfiguredWideCardAndSavedOrder() {
         val wide = TileSpec("person.profile_1", TileKind.PERSON, wideOnTablet = true)
         val others = (2..4).map { TileSpec("person.profile_$it", TileKind.PERSON) }
-        assertEquals(listOf(listOf(listOf(wide), others.take(2)), listOf(others.takeLast(1))),
-            peopleGridPages(listOf(wide) + others, columns = 2, resizeTiles = true))
+        assertEquals(listOf(listOf(wide), others.take(2), others.takeLast(1)),
+            homeTileGroups(listOf(wide) + others, columns = 2, compact = false, resizeTiles = true).people)
     }
 }

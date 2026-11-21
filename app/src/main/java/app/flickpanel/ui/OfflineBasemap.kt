@@ -2,6 +2,7 @@ package app.flickpanel.ui
 
 import android.content.res.AssetManager
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import java.io.DataInputStream
@@ -9,7 +10,17 @@ import java.io.IOException
 
 internal data class BasemapPlace(val point: Offset, val rank: Int, val name: String)
 
-internal data class OfflineBasemap(val countries: Path, val lakes: Path, val places: List<BasemapPlace>)
+internal data class OfflineBasemap(
+    val countries: Path,
+    val lakes: Path,
+    val places: List<BasemapPlace>,
+    val regions: List<OfflineRegion>,
+)
+
+internal data class OfflineRegion(val asset: String, val bounds: Rect)
+internal data class OfflineDetail(val cells: List<DetailCell>, val roadNames: List<BasemapPlace>)
+internal data class DetailCell(val bounds: Rect, val layers: List<Path>)
+internal enum class DetailLayer(val closed: Boolean = false) { PARK(true), WATER(true), RIVER, LOCAL_ROAD, MAIN_ROAD }
 
 internal fun loadOfflineBasemap(assets: AssetManager): OfflineBasemap =
     DataInputStream(assets.open("offline_map/world.fpm").buffered()).use { input ->
@@ -25,7 +36,7 @@ internal fun loadOfflineBasemap(assets: AssetManager): OfflineBasemap =
             BasemapPlace(point, rank, nameBytes.toString(Charsets.UTF_8))
         }
         if (input.read() != -1) throw IOException("Unexpected map data")
-        OfflineBasemap(countries, lakes, places)
+        OfflineBasemap(countries, lakes, places, offlineRegions(assets))
     }
 
 private fun DataInputStream.readLayer(): Path {
@@ -55,3 +66,56 @@ private fun DataInputStream.readPoint(): Offset {
 
 private fun DataInputStream.readCount(maximum: Int, minimum: Int = 0): Int =
     readInt().takeIf { it in minimum..maximum } ?: throw IOException("Invalid bundled map data")
+
+private fun offlineRegions(assets: AssetManager): List<OfflineRegion> =
+    listOf("offline_map/london.fpd", "offline_map/varna.fpd").mapNotNull { path ->
+        try {
+            DataInputStream(assets.open(path).buffered()).use { OfflineRegion(path, it.readDetailHeader()) }
+        } catch (_: IOException) {
+            null
+        }
+    }
+
+internal fun loadOfflineDetail(assets: AssetManager, region: OfflineRegion): OfflineDetail =
+    DataInputStream(assets.open(region.asset).buffered()).use { input ->
+        if (input.readDetailHeader() != region.bounds) throw IOException("Unexpected bundled map bounds")
+        val cells = List(input.readCount(512)) {
+            DetailCell(input.readDetailBounds(), DetailLayer.entries.map { input.readDetailLayer(it.closed) })
+        }
+        val roads = List(input.readCount(60_000)) {
+            val point = input.readDetailPoint()
+            val length = input.readUnsignedShort()
+            if (length !in 1..160) throw IOException("Invalid road name")
+            BasemapPlace(point, 0, ByteArray(length).also(input::readFully).toString(Charsets.UTF_8))
+        }
+        if (input.read() != -1) throw IOException("Unexpected map detail data")
+        OfflineDetail(cells, roads)
+    }
+
+private fun DataInputStream.readDetailHeader(): Rect {
+    if (readInt() != 0x46504431) throw IOException("Unsupported map detail format")
+    return readDetailBounds()
+}
+
+private fun DataInputStream.readDetailBounds(): Rect {
+    val first = readDetailPoint()
+    val last = readDetailPoint()
+    if (first.x > last.x || first.y > last.y) throw IOException("Invalid map detail bounds")
+    return Rect(first, last)
+}
+
+private fun DataInputStream.readDetailPoint(): Offset =
+    Offset(readCount(36_000_000) / 100_000f, readCount(18_000_000) / 100_000f)
+
+private fun DataInputStream.readDetailLayer(closed: Boolean) = Path().apply {
+    repeat(readCount(70_000)) {
+        val count = readCount(100_000, minimum = if (closed) 3 else 2)
+        val first = readDetailPoint()
+        moveTo(first.x, first.y)
+        repeat(count - 1) {
+            val next = readDetailPoint()
+            lineTo(next.x, next.y)
+        }
+        if (closed) close()
+    }
+}

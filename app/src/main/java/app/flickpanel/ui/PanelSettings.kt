@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SettingsRemote
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
@@ -52,12 +53,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.config.PanelConfig
+import app.flickpanel.config.HomeBadge
 import app.flickpanel.config.PanelTheme
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.PanelRemoteState
 
 internal enum class PanelPage(val label: String) {
     DISPLAY("Display"), APPEARANCE("Appearance"), HOME_ASSISTANT("Home Assistant"), REMOTE_CONTROL("Remote control"),
+    HOME_BADGES("Warning badges"),
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -66,6 +69,7 @@ internal fun PanelSettings(
     page: PanelPage?, draft: PanelConfig, state: PanelUi, open: (PanelPage) -> Unit, change: (PanelConfig) -> Unit,
     choosePhotos: () -> Unit, chooseMessage: () -> Unit, choosePresence: () -> Unit, changeConnection: () -> Unit,
     linkPanel: (String) -> Unit, unlinkPanel: () -> Unit,
+    chooseBadge: () -> Unit, editBadge: (HomeBadge) -> Unit,
 ) {
     val context = LocalContext.current
     val album = draft.idleAlbum?.title ?: "Clock only"
@@ -124,11 +128,16 @@ internal fun PanelSettings(
                 SettingLink("Remote control", state.remoteLabel(), { open(PanelPage.REMOTE_CONTROL) }, Icons.Rounded.SettingsRemote)
                 SettingLink("Home message", draft.messageEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", chooseMessage,
                     clear = draft.messageEntity?.let { { change(draft.copy(messageEntity = null)) } })
+                SettingLink("Warning badges", if (draft.homeBadges.isEmpty()) "Show active alerts on Home" else null,
+                    { open(PanelPage.HOME_BADGES) }, Icons.Rounded.WarningAmber)
                 SettingLink("Wake on approach", draft.presenceEntity?.let { state.entity(it)?.name ?: it } ?: "Choose entity", choosePresence,
                     clear = draft.presenceEntity?.let { { change(draft.copy(presenceEntity = null)) } })
                 SettingLink("Home Assistant connection", state.serverAddress, changeConnection, Icons.Rounded.Hub)
             }
             PanelPage.REMOTE_CONTROL -> RemoteControlSettings(state, linkPanel, unlinkPanel)
+            PanelPage.HOME_BADGES -> WarningBadgeSettings(draft.homeBadges, state, chooseBadge, editBadge) { removed ->
+                change(draft.copy(homeBadges = draft.homeBadges - removed))
+            }
         }
     }
 }

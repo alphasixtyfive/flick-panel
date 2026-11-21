@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
+import app.flickpanel.config.HomeBadge
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
@@ -31,6 +32,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     var picker by remember { mutableStateOf<SetupPicker?>(null) }
     var format by remember { mutableStateOf<TileFormat?>(null) }
     var room by remember { mutableStateOf<Area?>(null) }
+    var badge by remember { mutableStateOf<HomeBadge?>(null) }
     var panelPage by remember { mutableStateOf<PanelPage?>(null) }
     var choosingPhotos by remember { mutableStateOf(false) }
     var confirmingDiscard by remember { mutableStateOf(false) }
@@ -40,6 +42,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
     val activePicker = picker
     val activeFormat = format
     val activeRoom = room
+    val activeBadge = badge
     val adding = activePicker == SetupPicker.TILE || activePicker == SetupPicker.APP
     val dirty = draft != state.config
     val editTile: (TileSpec) -> Unit = { tile ->
@@ -55,6 +58,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
         state.connectionEditor -> "Connection"
         activeFormat != null -> if (activeFormat.current == null) "Add tile" else "Edit tile"
         activePicker != null -> activePicker.title
+        activeBadge != null -> "Warning badge"
         activeRoom != null -> activeRoom.name
         else -> panelPage?.label
     }
@@ -63,18 +67,19 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
         theme = draft.theme,
         highContrast = draft.highContrast,
         reduceMotion = draft.reduceMotion,
-        destination = activeFormat?.entity?.id ?: activePicker ?: activeRoom?.id ?: detailTitle ?: section,
+        destination = activeFormat?.entity?.id ?: activePicker ?: activeRoom?.id ?: activeBadge?.entity ?: detailTitle ?: section,
         section = section,
         openSection = {
             format = null
             picker = null
+            badge = null
             panelPage = null
             room = null
             model.cancelConnectionChange()
             section = it
         },
         detailTitle = detailTitle,
-        canSave = activeFormat == null && activePicker == null && !state.connectionEditor,
+        canSave = activeFormat == null && activePicker == null && activeBadge == null && !state.connectionEditor,
         dirty = dirty,
         busy = state.busy,
         back = {
@@ -82,9 +87,13 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                 when {
                     activeFormat != null -> format = null
                     activePicker != null -> picker = null
+                    activeBadge != null -> badge = null
                     state.connectionEditor -> model.cancelConnectionChange()
                     activeRoom != null -> room = null
-                    panelPage != null -> panelPage = if (panelPage == PanelPage.REMOTE_CONTROL) PanelPage.HOME_ASSISTANT else null
+                    panelPage != null -> panelPage = when (panelPage) {
+                        PanelPage.REMOTE_CONTROL, PanelPage.HOME_BADGES -> PanelPage.HOME_ASSISTANT
+                        else -> null
+                    }
                     else -> finish()
                 }
             }
@@ -129,9 +138,21 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                 draft = when (activePicker) {
                     SetupPicker.MESSAGE -> draft.copy(messageEntity = entity.id)
                     SetupPicker.PRESENCE -> draft.copy(presenceEntity = entity.id)
+                    SetupPicker.BADGE -> {
+                        val states = if (entity.domain == "sensor") emptyList() else listOf("on")
+                        badge = HomeBadge(entity.id, null, states)
+                        draft
+                    }
                     else -> draft
                 }
                 picker = null
+            }
+            activeBadge != null -> WarningBadgeEditor(activeBadge, state) { saved ->
+                val existing = draft.homeBadges
+                val next = if (existing.none { it.entity == saved.entity }) existing + saved
+                    else existing.map { if (it.entity == saved.entity) saved else it }
+                draft = draft.copy(homeBadges = next)
+                badge = null
             }
             activeRoom != null -> RoomControlsEditor(
                 room = activeRoom,
@@ -198,6 +219,8 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                             choosePhotos = { choosingPhotos = true },
                             chooseMessage = { search = ""; picker = SetupPicker.MESSAGE },
                             choosePresence = { search = ""; picker = SetupPicker.PRESENCE },
+                            chooseBadge = { search = ""; picker = SetupPicker.BADGE },
+                            editBadge = { badge = it },
                             changeConnection = model::changeConnection,
                             linkPanel = model::linkPanel,
                             unlinkPanel = model::unlinkPanel,

@@ -25,7 +25,7 @@ internal data class PanelUi(
     val screenBlank: Boolean = false,
     val camera: String? = null,
     val cameraOpenedAt: Long = 0,
-    val musicBrowser: String? = null,
+    val musicOpen: String? = null,
     val agendaOpen: String? = null,
     val contentOpen: String? = null,
     val unlocking: Boolean = false,
@@ -41,14 +41,14 @@ internal data class PanelUi(
     val config get() = layout.config
     val catalogue get() = layout.catalogue
     val roomSections get() = layout.sections
-    val hasViewer get() = camera != null || musicBrowser != null || agendaOpen != null || contentOpen != null
+    val hasViewer get() = camera != null || musicOpen != null || agendaOpen != null || contentOpen != null
 
     fun entity(id: String) = entities[id] ?: catalogue.entity(id)
     fun label(spec: TileSpec) = spec.label ?: entity(spec.entity)?.name ?: spec.entity.substringAfter('.').replace('_', ' ')
 
     fun showCamera(id: String, openedAt: Long): PanelUi {
         if (camera == id || config.favourites.none { it.entity == id && it.kind == TileKind.CAMERA }) return this
-        return copy(camera = id, cameraOpenedAt = openedAt, screenBlank = false, clock = false, musicBrowser = null,
+        return copy(camera = id, cameraOpenedAt = openedAt, screenBlank = false, clock = false, musicOpen = null,
             agendaOpen = null, contentOpen = null)
     }
 
@@ -57,7 +57,7 @@ internal data class PanelUi(
         return when (command) {
             PanelCommand.Wake -> if (screenBlank || clock) copy(screenBlank = false, clock = false, page = Page.FAVOURITES) else this
             PanelCommand.Sleep -> if (screenBlank) this else copy(
-                screenBlank = true, clock = false, camera = null, musicBrowser = null, agendaOpen = null, contentOpen = null,
+                screenBlank = true, clock = false, camera = null, musicOpen = null, agendaOpen = null, contentOpen = null,
             )
             is PanelCommand.OpenCamera -> showCamera(command.entityId, openedAt)
         }
@@ -66,4 +66,25 @@ internal data class PanelUi(
     val message: String? get() = if (link != Link.ONLINE) null else config.messageEntity?.let(entities::get)
         ?.takeIf { it.available && it.state !in setOf("on", "off", "none", "No reminders") }
         ?.state?.replace(Regex("\\s+"), " ")?.trim()?.take(120)?.takeIf(String::isNotEmpty)
+
+    fun activeHomeBadges(): List<ActiveHomeBadge> {
+        if (link != Link.ONLINE) return emptyList()
+        return config.homeBadges.mapNotNull { badge ->
+            val entity = entities[badge.entity]?.takeIf { it.available && it.state.trim().lowercase() in badge.activeStates }
+                ?: return@mapNotNull null
+            ActiveHomeBadge(badge.label ?: entity.name, entity)
+        }
+    }
+}
+
+internal data class ActiveHomeBadge(val label: String, val entity: Entity) {
+    fun details(): List<Pair<String, String?>> {
+        val items = entity.attributes.optJSONArray("items") ?: return emptyList()
+        return (0 until minOf(items.length(), 48)).mapNotNull { index ->
+            val item = items.optJSONObject(index) ?: return@mapNotNull null
+            val name = (item.opt("name") as? String)?.trim()?.take(120)?.takeIf(String::isNotEmpty)
+                ?: return@mapNotNull null
+            name to (item.opt("value") as? String)?.trim()?.take(300)?.takeIf(String::isNotEmpty)
+        }
+    }
 }
