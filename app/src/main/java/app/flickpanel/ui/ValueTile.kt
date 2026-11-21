@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -35,7 +36,7 @@ import kotlinx.coroutines.isActive
 @Composable
 internal fun ValueTile(
     tile: TileSpec, label: String, entity: Entity?, link: Link, history: List<GraphPoint>?,
-    loadHistory: suspend (String) -> Unit, modifier: Modifier, wideGraph: Boolean,
+    loadHistory: suspend (String) -> Unit, modifier: Modifier, compactHistory: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
     val trend = tile.kind == TileKind.TREND
@@ -46,36 +47,49 @@ internal fun ValueTile(
             delay(60_000)
         }
     }
+    val value = displayValue(entity)
     Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
-        Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (compactHistory) {
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxSize().padding(horizontal = tileContentPadding, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                TileTitle(label, Modifier.weight(1f))
-                if (points.size > 1) Text("6 h", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
-            }
-            val value = displayValue(entity)
-            if (entity?.available == true) TileValue(value, prominent = entity.state.toDoubleOrNull()?.isFinite() == true, maxLines = 2)
-            else TileStatus(value)
-            if (trend) {
-                if (points.size > 1) {
-                    val chart = if (wideGraph) Modifier.weight(1f) else Modifier.height(21.dp)
-                    Sparkline(points, chart.fillMaxWidth())
-                } else {
-                    Text(
-                        when {
-                            link != Link.ONLINE -> "History unavailable"
-                            history != null -> "No history"
-                            else -> "Loading history…"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.onSurfaceVariant,
-                    )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    TileTitle(label, maxLines = 1)
+                    TileStatus(value, maxLines = 1)
                 }
-            } else if (link == Link.OFFLINE && entity?.available == true) {
-                TileStatus("Last reported")
+                if (points.size > 1) Sparkline(points, Modifier.weight(.8f).height(24.dp))
+            }
+        } else {
+            Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    TileTitle(label, Modifier.weight(1f))
+                    if (points.size > 1) Text("6 h", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
+                }
+                if (entity?.available == true) TileValue(value, prominent = entity.state.toDoubleOrNull()?.isFinite() == true, maxLines = 2)
+                else TileStatus(value)
+                if (trend) {
+                    if (points.size > 1) {
+                        Sparkline(points, Modifier.fillMaxWidth().height(21.dp))
+                    } else {
+                        Text(
+                            when {
+                                link != Link.ONLINE -> "History unavailable"
+                                history != null -> "No history"
+                                else -> "Loading history…"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                } else if (link == Link.OFFLINE && entity?.available == true) {
+                    TileStatus("Last reported")
+                }
             }
         }
     }

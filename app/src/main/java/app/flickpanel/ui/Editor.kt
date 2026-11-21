@@ -90,9 +90,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
             state.connectionEditor -> ConnectionForm(state, model::connect)
             activeFormat != null -> FormatPanel(activeFormat, state) { spec ->
                 val current = activeFormat.current
-                val tiles = if (spec.kind == TileKind.CAMERA && spec.showOnHome) {
-                    draft.favourites.map { if (it.kind == TileKind.CAMERA) it.copy(showOnHome = false) else it }
-                } else draft.favourites
+                val tiles = draft.favourites
                 draft = draft.copy(favourites = if (current == null) tiles + spec
                     else tiles.map { if (it.entity == current.entity) spec else it })
                 format = null
@@ -157,7 +155,8 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                             },
                             move = { id, delta ->
                                 val tiles = draft.favourites.toMutableList()
-                                val onHome = tiles.indices.filter { tiles[it].showOnHome }
+                                val group = tiles.firstOrNull { it.entity == id }?.kind?.homeGroup
+                                val onHome = tiles.indices.filter { tiles[it].showOnHome && tiles[it].kind.homeGroup == group }
                                 val position = onHome.indexOfFirst { tiles[it].entity == id }
                                 if (position >= 0 && position + delta in onHome.indices) {
                                     java.util.Collections.swap(tiles, onHome[position], onHome[position + delta])
@@ -168,9 +167,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel) {
                                 {
                                     val tiles = draft.favourites.toMutableList()
                                     if (tiles.size < 48 && tiles.none { it.entity == tile.entity }) {
-                                        val alreadyFeatured = tiles.any { it.kind == TileKind.CAMERA && it.showOnHome }
-                                        val restored = if (alreadyFeatured && tile.kind == TileKind.CAMERA) tile.copy(showOnHome = false) else tile
-                                        tiles.add(index.coerceIn(0, tiles.size), restored)
+                                        tiles.add(index.coerceIn(0, tiles.size), tile)
                                         draft = draft.copy(favourites = tiles)
                                     }
                                     removed = null

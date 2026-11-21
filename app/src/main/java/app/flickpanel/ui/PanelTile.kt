@@ -32,7 +32,7 @@ internal val tileArtworkSize = 36.dp
 @Composable
 internal fun PanelTile(
     tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
-    wideGraph: Boolean = false,
+    compactHistory: Boolean = false,
 ) {
     val label = state.label(tile)
     val entity = state.entity(tile.entity)
@@ -76,7 +76,7 @@ internal fun PanelTile(
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
         TileKind.TIMER -> TimerTile(label, entity, modifier)
         TileKind.VALUE, TileKind.TREND -> ValueTile(tile, label, entity, state.link, state.graphs[tile.entity],
-            model::loadGraph, modifier, wideGraph)
+            model::loadGraph, modifier, compactHistory)
         TileKind.APP -> AppTile(tile, modifier)
         TileKind.CAMERA -> CameraTile(tile, state, model, modifier)
     }

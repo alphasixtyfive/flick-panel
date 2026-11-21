@@ -47,16 +47,14 @@ internal fun PersonTile(
         color = colors.surfaceContainer,
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(tileContentPadding),
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PersonAvatar(label, avatar)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                TileTitle(label)
-                val status = person?.personStatus()
-                if (status != null) TileValue(status, maxLines = 2)
-                else TileStatus("Unavailable")
+                TileTitle(label, maxLines = 1)
+                TileStatus(person?.personStatus() ?: "Unavailable", maxLines = 1)
             }
         }
     }

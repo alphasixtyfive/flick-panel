@@ -80,11 +80,12 @@ internal fun EntityPicker(
     val areas = remember(catalog.areas) { catalog.areas.associate { it.id to it.name } }
     val available = remember(catalog, draft.favourites, source, areas) {
         val present = draft.favourites.mapTo(hashSetOf()) { it.entity }
-        catalog.entries.filter { entry -> entry.visible && when (source) {
-            SetupPicker.TILE -> entry.entity.id !in present
+        catalog.entries.filter { entry -> when (source) {
+            SetupPicker.TILE -> entry.entity.id !in present &&
+                (entry.visible || entry.entity.available && entry.entity.domain in setOf("todo", "calendar"))
             SetupPicker.APP -> false
-            SetupPicker.MESSAGE -> entry.entity.domain == "sensor" || entry.entity.domain == "input_text"
-            SetupPicker.PRESENCE -> entry.entity.domain == "binary_sensor"
+            SetupPicker.MESSAGE -> entry.visible && entry.entity.domain in setOf("sensor", "input_text")
+            SetupPicker.PRESENCE -> entry.visible && entry.entity.domain == "binary_sensor"
         } }.map { entry ->
             val entity = entry.entity
             entry to "${entity.name} ${entity.id} ${areas[entry.area].orEmpty()}".lowercase()
@@ -95,7 +96,8 @@ internal fun EntityPicker(
         available.mapNotNull { (entry, searchable) ->
             val include = source != SetupPicker.TILE ||
                 filter.shows(entry.entity.domain) && (!entry.diagnostic || words.isNotEmpty())
-            entry.takeIf { include && words.all { word -> searchable.contains(word) } }
+            val explicitlyRequested = query.trim().equals(entry.entity.id, ignoreCase = true)
+            entry.takeIf { include && (entry.visible || explicitlyRequested) && words.all { word -> searchable.contains(word) } }
         }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding, vertical = 9.dp)) {

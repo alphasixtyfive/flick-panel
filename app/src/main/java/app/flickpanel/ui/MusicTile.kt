@@ -81,7 +81,7 @@ internal fun MusicTile(label: String, entity: Entity?, pending: String?, ready: 
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                TileTitle(label, Modifier.weight(1f))
+                TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
                 Box(Modifier.size(tileArtworkSize), contentAlignment = Alignment.Center) {
                     if (cover != null) {
                         Image(cover, null, Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),

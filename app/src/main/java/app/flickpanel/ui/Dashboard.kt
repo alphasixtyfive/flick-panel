@@ -39,6 +39,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -135,6 +138,7 @@ internal fun AmbientClock(message: String?, albumId: String?, reduceMotion: Bool
 @Composable
 internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     val colors = MaterialTheme.colorScheme
+    var roomId by rememberSaveable { mutableStateOf<String?>(null) }
     val weather = state.config.favourites.firstOrNull { it.kind == TileKind.WEATHER }
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         val wide = maxWidth >= tabletWidthDp.dp
@@ -179,7 +183,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 val body = Modifier.fillMaxSize().padding(top = if (short) 10.dp else 16.dp)
                 when (state.page) {
                     Page.CAMERAS -> CameraGallery(state, model, cameraColumns, body)
-                    Page.ROOMS -> Rooms(state, model, tileColumns, body)
+                    Page.ROOMS -> Rooms(state, model, tileColumns, roomId, { roomId = it }, body)
                     Page.FAVOURITES -> Favourites(state, model, tileColumns, resizeTiles = !compact, modifier = body)
                 }
             }

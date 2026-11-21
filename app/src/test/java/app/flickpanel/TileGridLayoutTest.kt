@@ -3,7 +3,9 @@ package app.flickpanel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ui.dashboardTileColumns
+import app.flickpanel.ui.homeTileGroups
 import app.flickpanel.ui.packTileRows
+import app.flickpanel.ui.roomTileColumns
 import app.flickpanel.ui.tileSpan
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -51,5 +53,40 @@ class TileGridLayoutTest {
             assertEquals(1, tileSpan(agenda, columns = 4, compact = true, resizeTiles = true))
             assertEquals(2, tileSpan(agenda.copy(wideOnTablet = true), columns = 4, compact = true, resizeTiles = true))
         }
+    }
+    @Test
+    fun homePairsSmallCamerasWithTheAgendaWhenFourColumnsFit() {
+        val gate = TileSpec("camera.front_gate", TileKind.CAMERA)
+        val front = TileSpec("camera.front_left", TileKind.CAMERA)
+        val tasks = TileSpec("todo.shopping", TileKind.TASKS)
+        val calendar = TileSpec("calendar.home", TileKind.CALENDAR)
+        val person = TileSpec("person.sam", TileKind.PERSON)
+        val app = TileSpec("app:example.media", TileKind.APP)
+        val tiles = listOf(person, gate, tasks, front, app, calendar)
+        val wide = homeTileGroups(tiles, columns = 4, compact = true, resizeTiles = true)
+        assertEquals(listOf(gate, front, tasks, calendar), wide.overview)
+        assertEquals(emptyList<List<TileSpec>>(), wide.cameras)
+        assertEquals(listOf(person), wide.people)
+        assertEquals(listOf(app), wide.shortcuts)
+
+        val narrow = homeTileGroups(tiles, columns = 2, compact = false, resizeTiles = true)
+        assertEquals(emptyList<TileSpec>(), narrow.overview)
+        assertEquals(listOf(listOf(gate, front)), narrow.cameras)
+        assertEquals(listOf(listOf(tasks, calendar)), narrow.agenda)
+    }
+    @Test
+    fun standardGraphCanFillTheFourthShortcutSlot() {
+        val apps = listOf("one", "two", "three").map { TileSpec("app:example.$it", TileKind.APP) }
+        val graph = TileSpec("sensor.house_power", TileKind.TREND)
+        val wideGraph = graph.copy(entity = "sensor.solar_power", wideOnTablet = true)
+        val layout = homeTileGroups(listOf(wideGraph, graph) + apps, columns = 4, compact = true, resizeTiles = true)
+        assertEquals(apps + graph, layout.shortcuts)
+        assertEquals(listOf(listOf(wideGraph)), layout.history)
+    }
+    @Test
+    fun roomGridKeepsAFifthLightInTheRowWhenThereIsSpace() {
+        assertEquals(5, roomTileColumns(1168f, 1f, 4, 5))
+        assertEquals(4, roomTileColumns(768f, 1f, 4, 5))
+        assertEquals(2, roomTileColumns(768f, 1.6f, 2, 5))
     }
 }

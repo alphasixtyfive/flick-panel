@@ -26,12 +26,13 @@ internal data class RoomLayout(
             ids.mapNotNull(byId::get)
         } ?: available
         val pinned = config.favourites.filter { it.showOnHome }.associateBy(TileSpec::entity)
-        rooms.map { area ->
+        rooms.mapNotNull { area ->
             val tiles = catalogue.room(area.id)
+                .filter { config.showRoomHeating || it.entity.domain != "climate" }
                 .sortedWith(compareBy({ it.entity.domain != "light" }, { it.entity.id !in pinned }))
                 .take(32)
                 .map { entry -> roomTile(area, entry.entity, pinned[entry.entity.id]) }
-            RoomSection(area, tiles)
+            if (tiles.isEmpty()) null else RoomSection(area, tiles)
         }
     }
 

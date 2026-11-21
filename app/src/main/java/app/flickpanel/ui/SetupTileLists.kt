@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -58,7 +59,7 @@ internal fun FavouriteEditor(
     draft: PanelConfig, state: PanelUi, add: () -> Unit, edit: (TileSpec) -> Unit,
     resize: (TileSpec) -> Unit, remove: (TileSpec) -> Unit, move: (String, Int) -> Unit, undo: (() -> Unit)?,
 ) {
-    val homeTiles = remember(draft.favourites) { draft.favourites.filter { it.showOnHome } }
+    val homeTiles = remember(draft.favourites) { draft.favourites.filter { it.showOnHome }.sortedBy { it.kind.homeGroup } }
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding)) {
         FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             FilledTonalButton(onClick = add, enabled = draft.favourites.size < 48, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -73,9 +74,10 @@ internal fun FavouriteEditor(
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 14.dp)) {
-            items(homeTiles, key = { it.entity }) { tile ->
-                val after = homeTiles.lastOrNull()?.entity != tile.entity
-                val before = homeTiles.firstOrNull()?.entity != tile.entity
+            itemsIndexed(homeTiles, key = { _, tile -> tile.entity }) { index, tile ->
+                val group = tile.kind.homeGroup
+                val after = homeTiles.getOrNull(index + 1)?.kind?.homeGroup == group
+                val before = homeTiles.getOrNull(index - 1)?.kind?.homeGroup == group
                 Surface(modifier = if (draft.reduceMotion) Modifier else Modifier.animateItem(),
                     shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 3.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -134,6 +136,7 @@ internal fun RoomSetup(draft: PanelConfig, state: PanelUi, update: (PanelConfig)
             TextButton(onClick = { update(draft.copy(roomIds = null)) }, enabled = draft.roomIds != null) { Text("Show all") }
             TextButton(onClick = { update(draft.copy(roomIds = emptyList())) }, enabled = chosen.isNotEmpty()) { Text("Clear selection") }
         }
+        SetupSwitchRow("Heating controls", null, draft.showRoomHeating) { update(draft.copy(showRoomHeating = it)) }
         if (state.loadingCatalogue) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
         else if (rooms.isEmpty()) Text("No rooms available")
         else {
@@ -176,7 +179,7 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
     val saved = draft.favourites.associateBy { it.entity }
     Column(Modifier.padding(horizontal = setupPadding, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Star a camera to show it on Home.", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Text("Star cameras to show them on Home.", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = {
                 val missing = cameras.filter { it.id !in saved }.take(48 - draft.favourites.size)
                 update(draft.copy(favourites = draft.favourites + missing.map { TileSpec(it.id, TileKind.CAMERA, showOnHome = false) }))
@@ -209,12 +212,10 @@ internal fun CameraSetup(draft: PanelConfig, state: PanelUi, edit: (TileSpec) ->
                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         IconButton(onClick = {
-                            val next = draft.favourites.map {
-                                if (it.kind == TileKind.CAMERA) it.copy(showOnHome = it.entity == camera.id && !featured)
-                                else it
-                            }
-                            update(draft.copy(favourites = if (tile != null) next
-                                else next + TileSpec(camera.id, TileKind.CAMERA)))
+                            val next = if (tile != null) draft.favourites.map {
+                                if (it.entity == tile.entity) it.copy(showOnHome = !featured) else it
+                            } else draft.favourites + TileSpec(camera.id, TileKind.CAMERA)
+                            update(draft.copy(favourites = next))
                         }, enabled = tile != null || canAdd) {
                             Icon(if (featured) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                                 if (featured) "Remove $name from Home" else "Show $name on Home",

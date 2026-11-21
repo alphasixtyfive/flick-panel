@@ -4,18 +4,27 @@ import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 
 internal const val mediumWindowWidthDp = 600
+private const val minimumTileWidthDp = 170f
 
 internal fun dashboardTileColumns(windowWidth: Float, fontScale: Float): Int {
     val expanded = windowWidth >= tabletWidthDp
     val padding = if (expanded) panelWidePadding.value else 20f
     val contentWidth = minOf(windowWidth, panelMaxWidth.value) - padding * 2
-    val minimumTileWidth = 170f * fontScale.coerceAtLeast(1f)
+    val minimumTileWidth = minimumTileWidthDp * fontScale.coerceAtLeast(1f)
 
     return when {
         expanded && contentWidth >= minimumTileWidth * 4 + tileGap.value * 3 -> 4
         contentWidth >= minimumTileWidth * 2 + tileGap.value -> 2
         else -> 1
     }
+}
+
+internal fun roomTileColumns(availableWidth: Float, fontScale: Float, standardColumns: Int, tileCount: Int): Int {
+    if (standardColumns < 4) return standardColumns
+    val gap = tileGap.value
+    val minimum = minimumTileWidthDp * fontScale.coerceAtLeast(1f)
+    val fitting = ((availableWidth + gap) / (minimum + gap)).toInt()
+    return minOf(fitting, tileCount, 6).coerceAtLeast(standardColumns)
 }
 
 internal fun tileSpan(tile: TileSpec, columns: Int, compact: Boolean, resizeTiles: Boolean): Int {
@@ -43,4 +52,48 @@ internal fun packTileRows(
         used += span
     }
     return rows
+}
+
+internal enum class HomeGroup { CONTROLS, CAMERAS, AGENDA, PEOPLE, APPS, HISTORY }
+
+internal val TileKind.homeGroup: HomeGroup
+    get() = when {
+        this == TileKind.CAMERA -> HomeGroup.CAMERAS
+        isAgenda -> HomeGroup.AGENDA
+        this == TileKind.PERSON -> HomeGroup.PEOPLE
+        this == TileKind.APP -> HomeGroup.APPS
+        this == TileKind.TREND -> HomeGroup.HISTORY
+        else -> HomeGroup.CONTROLS
+    }
+
+internal data class HomeTileGroups(
+    val controls: List<List<TileSpec>>,
+    val overview: List<TileSpec>,
+    val cameras: List<List<TileSpec>>,
+    val agenda: List<List<TileSpec>>,
+    val people: List<TileSpec>,
+    val shortcuts: List<TileSpec>,
+    val history: List<List<TileSpec>>,
+)
+
+internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolean, resizeTiles: Boolean): HomeTileGroups {
+    val groups = tiles.groupBy { it.kind.homeGroup }
+    val cameras = groups[HomeGroup.CAMERAS].orEmpty()
+    val agenda = groups[HomeGroup.AGENDA].orEmpty()
+    val pairWithAgenda = compact && cameras.size >= 2 && agenda.size >= 2 && agenda.take(2).none(TileSpec::wideOnTablet)
+    val overview = if (pairWithAgenda) cameras.take(2) + agenda.take(2) else emptyList()
+    val apps = groups[HomeGroup.APPS].orEmpty()
+    val history = groups[HomeGroup.HISTORY].orEmpty()
+    val compactGraph = if (compact && apps.size % columns == columns - 1) {
+        history.firstOrNull { !it.wideOnTablet }
+    } else null
+    return HomeTileGroups(
+        controls = packTileRows(groups[HomeGroup.CONTROLS].orEmpty(), columns, compact, resizeTiles),
+        overview = overview,
+        cameras = (if (pairWithAgenda) cameras.drop(2) else cameras).chunked(if (columns > 1) 2 else 1),
+        agenda = packTileRows(if (pairWithAgenda) agenda.drop(2) else agenda, columns, compact, resizeTiles),
+        people = groups[HomeGroup.PEOPLE].orEmpty(),
+        shortcuts = apps + listOfNotNull(compactGraph),
+        history = packTileRows(history.filterNot { it == compactGraph }, columns, compact, resizeTiles),
+    )
 }

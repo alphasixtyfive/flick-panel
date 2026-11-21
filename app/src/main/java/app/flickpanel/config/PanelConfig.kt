@@ -43,6 +43,7 @@ internal data class PanelConfig(
     val idleSeconds: Int = 60,
     val wallMode: Boolean = true,
     val roomIds: List<String>? = null,
+    val showRoomHeating: Boolean = true,
     val highContrast: Boolean = false,
     val reduceMotion: Boolean = false,
     internal val idleAlbum: PhotoFolder? = null
@@ -68,6 +69,7 @@ internal object PanelConfigCodec {
         .put("highContrast", config.highContrast)
         .put("reduceMotion", config.reduceMotion)
         .put("rooms", config.roomIds?.let(::JSONArray))
+        .put("roomHeating", config.showRoomHeating)
         .put("idleAlbum", config.idleAlbum?.let { JSONObject().put("id", it.id).put("title", it.title) })
         .toString()
 
@@ -105,6 +107,7 @@ internal object PanelConfigCodec {
             wallMode = obj.optBoolean("wall", true),
             highContrast = obj.optBoolean("highContrast"),
             reduceMotion = obj.optBoolean("reduceMotion"),
+            showRoomHeating = obj.optBoolean("roomHeating", true),
             roomIds = obj.optJSONArray("rooms")?.let { areas ->
                 (0 until areas.length()).mapNotNull { areas.optString(it).takeIf(::validAreaId) }.distinct().take(48)
             },
