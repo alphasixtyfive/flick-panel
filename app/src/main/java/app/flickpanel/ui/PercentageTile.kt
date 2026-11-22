@@ -1,0 +1,36 @@
+package app.flickpanel.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import app.flickpanel.ha.Entity
+import app.flickpanel.ha.Link
+
+@Composable
+internal fun PercentageTile(label: String, entity: Entity?, link: Link, modifier: Modifier) {
+    val reading = entity?.percentageReading
+    Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+        Column(Modifier.fillMaxSize().padding(tileContentPadding), verticalArrangement = Arrangement.SpaceBetween) {
+            TileTitle(label)
+            if (reading == null || link == Link.AUTH_REJECTED) {
+                TileStatus("Unavailable")
+            } else {
+                val value = remember(reading) { "${formatNumber(reading.toDouble(), 1)}%" }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TileValue(value)
+                    LinearProgressIndicator(progress = { reading / 100f }, modifier = Modifier.fillMaxWidth())
+                    if (link == Link.OFFLINE) TileStatus("Last reported")
+                }
+            }
+        }
+    }
+}

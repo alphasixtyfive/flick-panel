@@ -68,8 +68,9 @@ internal class HaConnection(
         session?.close()
     }
 
-    suspend fun request(type: String, data: JSONObject): JSONObject =
-        (socket.get() ?: throw HaProblem("Home Assistant is reconnecting")).request(type, data)
+    fun currentSocket(): HaSocket = socket.get() ?: throw HaProblem("Home Assistant is reconnecting")
+
+    suspend fun request(type: String, data: JSONObject): JSONObject = currentSocket().request(type, data)
 
     private suspend fun reconnect(worker: Job) {
         var wait = FIRST_RETRY_DELAY_MS

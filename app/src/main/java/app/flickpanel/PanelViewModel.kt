@@ -16,7 +16,9 @@ import app.flickpanel.config.PanelStore
 import app.flickpanel.config.PanelStoreProblem
 import app.flickpanel.config.SavedRemote
 import app.flickpanel.config.TileKind
+import app.flickpanel.config.CameraActionKind
 import app.flickpanel.config.validPin
+import app.flickpanel.ha.CameraCapabilities
 import app.flickpanel.ha.CameraStream
 import app.flickpanel.ha.CoverAction
 import app.flickpanel.ha.Entity
@@ -30,11 +32,14 @@ import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MEDIA_VOLUME_MUTE
 import app.flickpanel.ha.MediaChoice
 import app.flickpanel.ha.MediaTransport
+import app.flickpanel.ha.NativeCameraSignaling
 import app.flickpanel.ha.PanelCommand
 import app.flickpanel.ha.PanelRegistration
 import app.flickpanel.ha.PanelRemoteState
 import app.flickpanel.ha.PhotoAlbum
 import app.flickpanel.ha.adjacentTemperature
+import app.flickpanel.ha.cameraActionKind
+import app.flickpanel.ha.cameraActionReady
 import app.flickpanel.ha.canAddTasks
 import app.flickpanel.ha.canDim
 import app.flickpanel.ha.canMoveCover
@@ -42,6 +47,9 @@ import app.flickpanel.ha.canUpdateTasks
 import app.flickpanel.ha.coverPosition
 import app.flickpanel.ha.colourTemperatures
 import app.flickpanel.ha.gateToggleAction
+import app.flickpanel.ha.fanPowerService
+import app.flickpanel.ha.fanSpeed
+import app.flickpanel.ha.fanSpeedTarget
 import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.parseServer
 import app.flickpanel.ha.playbackProgress
@@ -56,6 +64,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl
 import org.json.JSONObject
 import kotlin.math.abs
 
@@ -267,11 +276,11 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun save(config: PanelConfig) {
+    fun save(config: PanelConfig, saved: () -> Unit) {
         if (!_ui.value.editor) return
         submitSettingsOperation {
             saveLayout(config)
-            relock()
+            if (_ui.value.editor) saved()
         }
     }
 
@@ -346,12 +355,18 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun closeCamera() = closeViewer<PanelViewer.Camera>()
 
-    fun openCameraGate(camera: String) {
+    fun runCameraAction(camera: String, entityId: String) {
         val current = _ui.value
-        if (current.camera != camera) return
-        val gateId = current.config.favourites.firstOrNull { it.entity == camera && it.kind == TileKind.CAMERA }?.cameraGate ?: return
-        val gate = current.entities[gateId]?.takeIf { it.state == "closed" && it.gateWithOpenControl } ?: return
-        moveCover(gate, CoverAction.OPEN)
+        if (current.camera != camera || current.link != Link.ONLINE || !foreground) return
+        val tile = current.config.favourites.firstOrNull { it.entity == camera && it.kind == TileKind.CAMERA } ?: return
+        if (tile.cameraActions.none { it.entity == entityId } || entityId in current.pending) return
+        val entity = current.entities[entityId]?.takeIf { it.cameraActionReady } ?: return
+        when (entity.cameraActionKind) {
+            CameraActionKind.TOGGLE -> toggle(entity, entity.state != "on")
+            CameraActionKind.OPEN_GATE -> moveCover(entity, CoverAction.OPEN)
+            CameraActionKind.RUN -> action(entity)
+            null -> Unit
+        }
     }
 
     fun openMusic(id: String) {
@@ -501,6 +516,21 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             pending = "$value%", matches = { state -> state.brightness?.let { abs(it - value) <= 1 } == true })
     }
 
+    fun fanPower(id: String, turnOn: Boolean) {
+        val fan = _ui.value.entities[id] ?: return
+        val service = fan.fanPowerService(turnOn) ?: return
+        commands.send(fan, service, pending = if (turnOn) "On" else "Off",
+            matches = { it.state == if (turnOn) "on" else "off" })
+    }
+
+    fun setFanSpeed(id: String, value: Int) {
+        val fan = _ui.value.entities[id] ?: return
+        val target = fan.fanSpeedTarget(value) ?: return
+        if (fan.fanSpeed == target) return
+        commands.send(fan, "set_percentage", JSONObject().put("percentage", target), pending = "$target%",
+            matches = { it.fanSpeed?.let { actual -> abs(actual - target) <= 1 } == true })
+    }
+
     fun setLightColour(id: String, colour: LightColour) {
         val light = _ui.value.entities[id]?.takeIf { it.supportsColour } ?: return
         commands.send(light, "turn_on", JSONObject().put("rgb_color", colour.toJson()), pending = "Setting colour…")
@@ -528,7 +558,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun controlCover(id: String, action: CoverAction) {
         val state = _ui.value
-        if (state.config.favourites.none { it.entity == id && it.kind == TileKind.COVER }) return
+        val configured = state.config.favourites.any { it.entity == id && it.kind == TileKind.COVER } ||
+            state.roomSections.any { room -> room.tiles.any { it.entity == id && it.kind == TileKind.COVER } }
+        if (!configured) return
         val cover = state.entities[id] ?: return
         if (cover.isGate && cover.gateToggleAction(state.pending[id]) != action) return
         moveCover(cover, action)
@@ -569,6 +601,15 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         return images.snapshots.load("$id@$revision") { active.snapshot(id) }
     }
 
+    val cameraPreviews get() = images.cameraPreviews
+
+    suspend fun refreshCameraPreview(id: String): Bitmap? {
+        if (!foreground) return null
+        val active = client ?: return null
+        val width = if (lowImageMemory) 480 else 640
+        return images.cameraPreviews.load(id) { active.snapshot(id, width) }
+    }
+
     fun cachedArtwork(reference: String): Bitmap? = images.artwork.fresh(reference)
 
     suspend fun browsePhotos(id: String?): PhotoAlbum {
@@ -592,6 +633,27 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (!foreground) return null
         val active = client ?: return null
         return images.artwork.load("person:$reference", decodeEdge = 192) { active.personAvatar(reference) }
+    }
+
+    suspend fun cameraCapabilities(id: String): CameraCapabilities {
+        val active = client ?: return CameraCapabilities.None
+        return try {
+            active.cameraCapabilities(id)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            CameraCapabilities.None
+        }
+    }
+
+    suspend fun nativeCamera(id: String, talk: Boolean): NativeCameraSignaling {
+        val active = client ?: throw HaProblem("Home Assistant isn't connected")
+        return active.nativeCamera(id, talk)
+    }
+
+    suspend fun cameraIntercom(stream: String): HttpUrl {
+        val active = client ?: throw HaProblem("Home Assistant isn't connected")
+        return active.intercomSource(stream)
     }
 
     suspend fun cameraStream(id: String): CameraStream {
@@ -664,7 +726,10 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         graphTimes.clear()
         graphRequests.clear()
         images.close()
-        images = PanelImages(viewModelScope, lowImageMemory)
+        val previewFolder = getApplication<Application>().cacheDir.resolve("camera-previews")
+        val account = previewKey(credentials.server.toString(), credentials.token)
+        val previewBudget = (if (lowImageMemory) 4 else 8) * 1024 * 1024L
+        images = PanelImages(viewModelScope, lowImageMemory, CameraPreviewFiles(previewFolder, account, previewBudget))
         musicPages.evictAll()
         roomControlsRequested = _ui.value.page == Page.ROOMS
         _ui.update { it.copy(
@@ -747,7 +812,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
             if (tile.kind == TileKind.TREND) trends += tile.entity
             if (tile.kind != TileKind.APP) ids += tile.entity
             tile.statusEntity?.let(ids::add)
-            tile.cameraGate?.let(ids::add)
+            tile.cameraActions.forEach { ids += it.entity }
             tile.cameraStream?.let(ids::add)
         }
         agenda.keep(agendas)

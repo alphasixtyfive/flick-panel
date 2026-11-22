@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -84,9 +83,7 @@ internal fun NowPlaying(
                 Text(playback.speaker, Modifier.weight(1f).semantics { heading() },
                     style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                IconButton(onClick = close, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.Close, "Close music")
-                }
+                ViewerCloseButton("Close music", close)
             }
             if (shortLandscape) {
                 Row(

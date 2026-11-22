@@ -2,16 +2,11 @@ package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,7 +18,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import app.flickpanel.BuildConfig
 import app.flickpanel.R
@@ -31,7 +25,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PanelAbout(openFontLicence: () -> Unit) {
     val openLink = rememberOpenWebLink()
@@ -44,26 +37,14 @@ internal fun PanelAbout(openFontLicence: () -> Unit) {
             style = typography.bodyLarge, color = secondary,
         )
     }
-    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(start = 16.dp, top = 24.dp)) {
-        Text("Map data", Modifier.semantics { heading() }, style = typography.titleMedium)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            AboutLink(MapCredits.OPEN_STREET_MAP.label) { openLink(MapCredits.OPEN_STREET_MAP.link) }
-            AboutLink("Natural Earth") { openLink(MapCredits.NATURAL_EARTH.link) }
-        }
-        Text("Typeface", Modifier.padding(top = 12.dp).semantics { heading() }, style = typography.titleMedium)
-        AboutLink(PanelPage.FONT_LICENCE.label, openFontLicence)
-    }
-}
-
-@Composable
-private fun AboutLink(label: String, open: () -> Unit) {
-    TextButton(
-        onClick = open,
-        modifier = Modifier.heightIn(min = 48.dp),
-        shape = MaterialTheme.shapes.medium,
-        contentPadding = PaddingValues(vertical = 8.dp),
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, textDecoration = TextDecoration.Underline)
+    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+        val project = "https://github.com/alphasixtyfive/flick-panel"
+        SettingLink("User guide", null, { openLink("$project/blob/main/docs/manual.md") }, external = true)
+        SettingLink("Flick Panel on GitHub", null, { openLink(project) }, external = true)
+        Text("Credits", Modifier.padding(start = 16.dp, top = 12.dp).semantics { heading() }, style = typography.titleMedium)
+        SettingLink(MapCredits.OPEN_STREET_MAP.label, "Map data", { openLink(MapCredits.OPEN_STREET_MAP.link) }, external = true)
+        SettingLink("Natural Earth", "Map data", { openLink(MapCredits.NATURAL_EARTH.link) }, external = true)
+        SettingLink(PanelPage.FONT_LICENCE.label, null, openFontLicence)
     }
 }
 

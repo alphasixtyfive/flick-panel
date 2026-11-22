@@ -79,6 +79,7 @@ private fun TileContent(
             }
         }
         TileKind.SLIDER -> BrightnessTile(label, entity, live, pending.takeIf { online }, ready, model, modifier)
+        TileKind.FAN -> FanTile(label, entity, live, pending.takeIf { online }, ready, model, modifier)
         TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier) { increase ->
             model.stepTemperature(tile.entity, increase)
         }
@@ -105,6 +106,7 @@ private fun TileContent(
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
         TileKind.TIMER -> TimerTile(label, entity, modifier)
         TileKind.VALUE -> ValueTile(label, entity, link, modifier)
+        TileKind.PERCENTAGE -> PercentageTile(label, entity, link, modifier)
         TileKind.TREND -> GraphTile(tile, label, entity, link, history, model::loadGraph, modifier, compactHistory)
         TileKind.APP -> AppTile(tile, modifier)
         TileKind.CAMERA -> Unit

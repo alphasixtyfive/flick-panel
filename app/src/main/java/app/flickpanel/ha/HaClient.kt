@@ -1,6 +1,8 @@
 package app.flickpanel.ha
 
 import app.flickpanel.config.validEntity
+import app.flickpanel.config.validIntercomStream
+import app.flickpanel.camera.CameraAudioOffer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.HttpUrl
@@ -12,6 +14,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 import java.time.ZoneId
+import java.util.concurrent.ConcurrentHashMap
 
 private val JSON_MEDIA_TYPE = "application/json".toMediaType()
 private val streamPath = Regex("/api/hls/[A-Za-z0-9_-]{8,160}/[A-Za-z0-9_-]+\\.m3u8")
@@ -29,6 +32,7 @@ internal class HaClient(
     val panelRemoteState = connection.panelState
     val panelCommands = connection.panelCommands
     private val videoClient: OkHttpClient by lazy { HaHttp.videoClient(credentials.server) }
+    private val cameraCapabilities = ConcurrentHashMap<String, Pair<Long, CameraCapabilities>>()
 
     fun start() = connection.start()
     fun stop() = connection.stop()
@@ -157,10 +161,10 @@ internal class HaClient(
             decodeHistory(response.optJSONObject("result")?.optJSONArray(entity)))
     }
 
-    suspend fun snapshot(entity: String): ByteArray? {
+    suspend fun snapshot(entity: String, width: Int = 720): ByteArray? {
         require(validEntity(entity))
         val path = when {
-            entity.startsWith("camera.") -> "api/camera_proxy/$entity?width=720"
+            entity.startsWith("camera.") -> "api/camera_proxy/$entity?width=$width"
             entity.startsWith("image.") -> "api/image_proxy/$entity"
             else -> return null
         }
@@ -186,6 +190,35 @@ internal class HaClient(
         val path = resolvePhoto(id, ::request) ?: return null
         val url = resolvePhotoUrl(credentials.server, id, path) ?: return null
         return HaHttp.get(url, credentials.token) { it.readImage(MAX_PHOTO_BYTES) }
+    }
+
+    suspend fun intercomSource(stream: String): HttpUrl {
+        require(validIntercomStream(stream))
+        val path = "/api/webrtc/ws"
+        val response = request("auth/sign_path", JSONObject().put("path", path).put("expires", 30))
+        val signed = response.optJSONObject("result")?.text("path") ?: throw HaProblem("Intercom is unavailable")
+        return signedIntercomUrl(credentials.server, signed, stream)
+            ?: throw HaProblem("Home Assistant returned an invalid intercom address")
+    }
+
+    suspend fun cameraCapabilities(entity: String): CameraCapabilities {
+        require(validEntity(entity) && entity.startsWith("camera."))
+        val now = System.nanoTime()
+        cameraCapabilities[entity]?.let { (time, value) ->
+            if (now - time < 120_000_000_000L) return value
+        }
+        val response = request("camera/capabilities", JSONObject().put("entity_id", entity))
+        val result = response.optJSONObject("result") ?: return CameraCapabilities.None
+        return CameraCapabilities.from(result).also { cameraCapabilities[entity] = now to it }
+    }
+
+    suspend fun nativeCamera(entity: String, wantsTalk: Boolean): NativeCameraSignaling {
+        require(validEntity(entity) && entity.startsWith("camera."))
+        val socket = connection.currentSocket()
+        val reply = socket.request("camera/webrtc/get_client_config", JSONObject().put("entity_id", entity))
+        val configuration = reply.optJSONObject("result") ?: throw HaProblem("Home Assistant didn't configure WebRTC")
+        return NativeCameraSignaling(socket, entity, configuration,
+            if (wantsTalk) CameraAudioOffer.TWO_WAY else CameraAudioOffer.LISTEN)
     }
 
     suspend fun cameraStream(entity: String): CameraStream {

@@ -65,12 +65,9 @@ internal fun PanelScreen(
             viewer is PanelViewer.Camera -> {
                 val camera = viewer.id
                 val title = tile?.let(state::label)
-                val streamCamera = tile?.cameraStream?.takeIf { state.entities[it]?.available == true } ?: camera
-                val features = state.entity(streamCamera)?.attributes?.optLong("supported_features", -1L) ?: -1L
                 Box(Modifier.fillMaxSize()) {
                     key(camera) {
-                        CameraViewer(camera, title, canStream = features and 2L != 0L, openedAt = viewer.openedAt,
-                            gateId = tile?.cameraGate, state = state, model = model, streamCamera = streamCamera)
+                        CameraViewer(camera, title, openedAt = viewer.openedAt, tile = tile, state = state, model = model)
                     }
                     SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
                 }

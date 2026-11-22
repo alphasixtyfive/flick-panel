@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -54,8 +55,9 @@ internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -
     }
     Dialog(onDismissRequest = cancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BoxWithConstraints(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
-            val sideBySide = maxWidth >= 560.dp && maxHeight < 500.dp
-            val compact = maxHeight < 324.dp
+            val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+            val sideBySide = maxWidth >= 420.dp * fontScale && maxHeight < 480.dp
+            val compact = maxHeight < 360.dp
             Surface(Modifier.widthIn(max = if (sideBySide) 640.dp else 448.dp).fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.extraLarge) {
                 if (sideBySide) {
@@ -63,8 +65,9 @@ internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -
                         horizontal = if (compact) 20.dp else 28.dp,
                         vertical = if (compact) 12.dp else 28.dp,
                     ),
-                        horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                        horizontalArrangement = Arrangement.spacedBy(if (compact) 20.dp else 32.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 22.dp)) {
                             PinPrompt(pin.length, state.error)
                             PinActions(state.busy, pin.length >= 4, cancel, submit)
                         }
@@ -72,11 +75,13 @@ internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -
                             { pin = pin.dropLast(1) }, Modifier.weight(1f), compact = compact)
                     }
                 } else {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 32.dp),
-                        verticalArrangement = Arrangement.spacedBy(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(
+                        horizontal = if (compact) 18.dp else 28.dp, vertical = if (compact) 16.dp else 32.dp,
+                    ), verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally) {
                         PinPrompt(pin.length, state.error)
-                        PinKeys(pin.length, state.busy, 62.dp, { pin += it }, { pin = pin.dropLast(1) },
-                            Modifier.widthIn(max = keypadWidth).fillMaxWidth())
+                        PinKeys(pin.length, state.busy, if (compact) 48.dp else 62.dp, { pin += it }, { pin = pin.dropLast(1) },
+                            Modifier.widthIn(max = keypadWidth).fillMaxWidth(), compact = compact)
                         PinActions(state.busy, pin.length >= 4, cancel, submit, Modifier.widthIn(max = keypadWidth))
                     }
                 }

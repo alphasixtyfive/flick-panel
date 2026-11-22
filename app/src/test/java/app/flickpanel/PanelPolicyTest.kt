@@ -143,21 +143,16 @@ class PanelPolicyTest {
         assertTrue(PanelConfigCodec.decode(legacy).favourites.single().showOnHome)
     }
 
-    @Test fun cameraGateLinksRequireAnOpenableGateCover() {
+    @Test fun gateControlRequiresAnOpenableGateCover() {
         val gateId = "cover.front_gate"
         val gate = Entity(gateId, "closed", JSONObject("""{"device_class":"gate","supported_features":1}"""))
         assertTrue(gate.gateWithOpenControl)
         assertFalse(gate.copy(attributes = JSONObject("""{"device_class":"garage","supported_features":1}""")).gateWithOpenControl)
         assertFalse(gate.copy(attributes = JSONObject("""{"device_class":"gate","supported_features":2}""")).gateWithOpenControl)
-        val camera = TileSpec("camera.driveway", TileKind.CAMERA, cameraGate = gateId)
-        val sensor = TileSpec("sensor.power", TileKind.VALUE, cameraGate = gateId)
-        val config = PanelConfig(favourites = listOf(camera, sensor))
-        assertEquals(listOf(camera, sensor.copy(cameraGate = null)),
-            PanelConfigCodec.decode(PanelConfigCodec.encode(config)).favourites)
     }
 
     @Test fun cameraCanUseAnAlternateLiveStreamWithoutChangingItsTile() {
-        val camera = TileSpec("camera.gate", TileKind.CAMERA, cameraGate = "cover.gate", cameraStream = "camera.gate_low")
+        val camera = TileSpec("camera.gate", TileKind.CAMERA, cameraStream = "camera.gate_low")
         val invalid = TileSpec("camera.side", TileKind.CAMERA, cameraStream = "sensor.side")
         val config = PanelConfig(favourites = listOf(camera, invalid))
         assertEquals(listOf(camera, invalid.copy(cameraStream = null)),

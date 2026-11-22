@@ -53,6 +53,16 @@ internal data class PanelUi(
     val catalogue get() = layout.catalogue
     val roomSections get() = layout.sections
     val keepsDisplayAwake get() = keepAwakeOverride ?: config.wallMode
+    val displayBrightness: Int?
+        get() {
+            if (screenBlank) return 0
+            val dashboard = brightnessPercent ?: config.dashboardBrightness
+            if (!configured || !clock) return dashboard
+            val screensaver = config.screensaverBrightness
+                ?: config.defaultScreensaverBrightness.takeIf { keepsDisplayAwake }
+                ?: return dashboard
+            return minOf(dashboard ?: screensaver, screensaver)
+        }
     val camera get() = (viewer as? PanelViewer.Camera)?.id
     val cameraOpenedAt get() = (viewer as? PanelViewer.Camera)?.openedAt ?: 0L
     val musicOpen get() = (viewer as? PanelViewer.Music)?.id

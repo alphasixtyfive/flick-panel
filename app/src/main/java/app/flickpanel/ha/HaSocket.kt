@@ -2,6 +2,8 @@ package app.flickpanel.ha
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -20,10 +22,11 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
     private val inbox = Channel<String>(capacity = 64)
     private val queuedChars = AtomicLong()
     private val requests = ConcurrentHashMap<Int, CompletableDeferred<JSONObject>>()
+    private val subscriptions = ConcurrentHashMap<Int, Channel<JSONObject>>()
     private val sendLock = Any()
     private var nextId = 0
     private val socket = client.newWebSocket(
-        Request.Builder().url(credentials.server.resolve("api/websocket")!!).build(),
+        Request.Builder().url(checkNotNull(credentials.server.resolve("api/websocket"))).build(),
         object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val length = text.length.toLong()
@@ -62,10 +65,41 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
             val msg = parseReceived(text)
             when (msg.optString("type")) {
                 "result" -> requests.remove(msg.optInt("id"))?.complete(msg)
-                "event" -> event(msg)
+                "event" -> {
+                    val channel = subscriptions[msg.optInt("id")]
+                    if (channel == null) {
+                        event(msg)
+                    } else {
+                        val payload = msg.optJSONObject("event")
+                        if (payload == null || !channel.trySend(payload).isSuccess) {
+                            channel.close(HaProblem("Home Assistant sent too many camera messages"))
+                        }
+                    }
+                }
             }
         }
         throw HaProblem("Home Assistant disconnected")
+    }
+
+    fun events(type: String, data: JSONObject): Flow<JSONObject> = flow {
+        val channel = Channel<JSONObject>(64)
+        var subscription: Int? = null
+        try {
+            request(type, data) { id ->
+                subscription = id
+                subscriptions[id] = channel
+            }
+            for (message in channel) emit(message)
+        } finally {
+            subscription?.let { id ->
+                subscriptions.remove(id)
+                synchronized(sendLock) {
+                    socket.send(JSONObject().put("id", ++nextId).put("type", "unsubscribe_events")
+                        .put("subscription", id).toString())
+                }
+            }
+            channel.cancel()
+        }
     }
 
     suspend fun request(type: String, data: JSONObject = JSONObject(), onSend: (Int) -> Unit = {}): JSONObject {
@@ -112,6 +146,8 @@ internal class HaSocket(client: OkHttpClient, private val credentials: HaCredent
         socket.cancel()
         for (reply in requests.values) reply.completeExceptionally(HaProblem("Home Assistant disconnected"))
         requests.clear()
+        subscriptions.values.forEach { it.close(HaProblem("Home Assistant disconnected")) }
+        subscriptions.clear()
     }
 
     private fun send(json: JSONObject) {

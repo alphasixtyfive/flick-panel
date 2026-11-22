@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val panelAbi = providers.gradleProperty("panelAbi").orNull
+require(panelAbi == null || panelAbi in setOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")) {
+    "panelAbi must be arm64-v8a, armeabi-v7a, x86, or x86_64"
+}
+
 android {
     namespace = "app.flickpanel"
     compileSdk = 35
@@ -12,14 +17,15 @@ android {
         applicationId = "app.flickpanel"
         minSdk = 28
         targetSdk = 35
-        versionCode = 77
-        versionName = "0.1.76"
+        versionCode = 86
+        versionName = "0.1.85"
+        if (panelAbi != null) ndk.abiFilters += panelAbi
     }
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         create("pilot") {
             initWith(getByName("release"))
@@ -48,6 +54,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("io.github.webrtc-sdk:android:150.7871.04")
     implementation("androidx.media3:media3-exoplayer:1.6.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.6.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.6.1")

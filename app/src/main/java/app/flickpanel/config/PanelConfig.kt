@@ -14,7 +14,8 @@ enum class TileKind(val label: String) {
     TOGGLE("Switch"), VALUE("Value"), SLIDER("Slider"), TREND("Small graph"),
     ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"),
     APP("Android app"), IMAGE("Image"), TIMER("Countdown"), CHOICE("Selector"), NUMBER("Number control"),
-    TASKS("Tasks"), CALENDAR("Calendar"), COVER("Cover"), PERSON("Person location"), READER("Content reader");
+    TASKS("Tasks"), CALENDAR("Calendar"), COVER("Cover"), PERSON("Person location"), READER("Content reader"),
+    FAN("Fan"), PERCENTAGE("Percentage");
 
     internal val resizable get() = this != CAMERA && this != WEATHER && this != APP
     internal val isAgenda get() = this == TASKS || this == CALENDAR
@@ -28,11 +29,12 @@ data class TileSpec(
     val statusEntity: String? = null,
     val showOnHome: Boolean = true,
     val wideOnTablet: Boolean = false,
-    val cameraGate: String? = null,
     val confirmAction: Boolean = false,
     val readerAttribute: String? = null,
     val cameraStream: String? = null,
     val graphColour: GraphColour? = null,
+    val intercomStream: String? = null,
+    val cameraActions: List<CameraAction> = emptyList(),
 ) {
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
@@ -50,6 +52,8 @@ internal data class PanelConfig(
     val messageEntity: String? = null,
     val idleSeconds: Int = 60,
     val wallMode: Boolean = true,
+    val dashboardBrightness: Int? = null,
+    val screensaverBrightness: Int? = null,
     val roomIds: List<String>? = null,
     val showRoomHeating: Boolean = true,
     val roomTiles: Map<String, List<RoomTilePreference>> = emptyMap(),
@@ -57,7 +61,9 @@ internal data class PanelConfig(
     val reduceMotion: Boolean = false,
     internal val idleAlbum: PhotoFolder? = null,
     val homeBadges: List<HomeBadge> = emptyList(),
-)
+) {
+    val defaultScreensaverBrightness get() = if (idleAlbum == null) 13 else 22
+}
 
 internal const val roomTileLimit = 32
 
@@ -65,7 +71,11 @@ private val entityPattern = Regex("[a-z0-9_]+\\.[a-z0-9_]+")
 internal fun validEntity(entity: String): Boolean = entity.length <= 255 && entityPattern.matches(entity)
 
 internal fun roomTileKind(entity: String): TileKind? = when (entity.substringBefore('.')) {
-    "light", "switch" -> TileKind.TOGGLE
+    "light", "switch", "input_boolean" -> TileKind.TOGGLE
+    "fan" -> TileKind.FAN
+    "cover" -> TileKind.COVER
+    "select", "input_select" -> TileKind.CHOICE
+    "number", "input_number" -> TileKind.NUMBER
     "climate" -> TileKind.CLIMATE
     "media_player" -> TileKind.MEDIA
     "scene" -> TileKind.ACTION

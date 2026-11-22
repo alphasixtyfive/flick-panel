@@ -1,129 +1,48 @@
 package app.flickpanel.ui
 
-import android.graphics.Bitmap
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.SystemClock
 import android.util.Log
-import androidx.compose.foundation.Image
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
+import app.flickpanel.camera.cameraRoutes
+import app.flickpanel.camera.cameraSources
 import app.flickpanel.config.TileSpec
+import app.flickpanel.ha.CameraCapabilities
 import app.flickpanel.ha.CameraStream
 import app.flickpanel.ha.Link
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
-
-@Composable
-private fun CameraStill(
-    id: String, model: PanelViewModel, active: Boolean, modifier: Modifier,
-    placeholder: String? = null, blurred: Boolean = false
-) {
-    var still by remember(id, active) { mutableStateOf<Bitmap?>(if (active) model.cachedSnapshot(id) else null) }
-    var unavailable by remember(id, active) { mutableStateOf(false) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(id, active, lifecycle) {
-        if (!active) return@LaunchedEffect
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) {
-                try {
-                    val fresh = model.snapshot(id)
-                    if (fresh != null) still = fresh
-                    unavailable = fresh == null
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    unavailable = true
-                }
-                delay(25_000)
-            }
-        }
-    }
-    val bitmap = remember(still) { still?.asImageBitmap() }
-    val background = if (placeholder == null) Color.Black else MaterialTheme.colorScheme.surfaceContainerHigh
-    Box(modifier.background(background), contentAlignment = Alignment.Center) {
-        if (bitmap != null) {
-            val image = Modifier.matchParentSize()
-            Image(bitmap, null, if (blurred) image.blur(7.dp, BlurredEdgeTreatment.Rectangle) else image,
-                contentScale = ContentScale.Crop)
-        } else if (placeholder != null) {
-            Text(if (unavailable) "Preview unavailable" else placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-internal fun CameraTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, widescreen: Boolean = false) {
-    val online = state.link == Link.ONLINE && state.entity(tile.entity)?.available != false
-    CameraCard(tile.entity, state.label(tile), online, online && state.camera == null, model, modifier, widescreen)
-}
-
-@Composable
-private fun CameraCard(
-    id: String, label: String, online: Boolean, previewActive: Boolean, model: PanelViewModel,
-    modifier: Modifier, widescreen: Boolean,
-) {
-    val preview = if (widescreen) modifier.aspectRatio(16f / 9f) else modifier
-    Surface(onClick = { model.openCamera(id) }, enabled = online,
-        modifier = preview.semantics { if (online) onClick(label = "Open live camera", action = null) },
-        shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Box(Modifier.fillMaxSize()) {
-            CameraStill(id, model, previewActive, Modifier.matchParentSize(),
-                placeholder = if (online) "Camera preview" else "Camera offline")
-            TileTitle(label, modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xdc101317))))
-                .padding(start = tileContentPadding, top = 24.dp, end = tileContentPadding, bottom = 14.dp),
-                color = Color.White)
-        }
-    }
-}
 
 internal enum class CameraStatus(val label: String) {
     STILL("Still image"),
@@ -133,36 +52,251 @@ internal enum class CameraStatus(val label: String) {
     UNAVAILABLE("Live stream unavailable");
 
     val buffering get() = this == CONNECTING || this == RECONNECTING
+    val hasVideo get() = this == LIVE || this == RECONNECTING
 }
+
+private enum class IntercomPlayback { CONNECTING, RETRYING, LIVE, UNAVAILABLE }
+
+private const val intercomFallbackDelayMs = 650L
 
 @Composable
 internal fun CameraViewer(
-    id: String, label: String?, canStream: Boolean, openedAt: Long, gateId: String?, state: PanelUi, model: PanelViewModel,
-    streamCamera: String = id,
+    id: String, label: String?, openedAt: Long, tile: TileSpec?, state: PanelUi, model: PanelViewModel,
 ) {
     val online = state.link == Link.ONLINE
-    val initialStatus = when {
+    val (nativeCamera, streamCamera, stream) = cameraSources(id, tile, state.entities)
+    val features = state.entity(streamCamera)?.attributes?.optLong("supported_features", -1L) ?: -1L
+    val canStream = features and 2L != 0L
+    val initialHlsStatus = when {
+        !online -> CameraStatus.UNAVAILABLE
         !canStream -> CameraStatus.STILL
-        online -> CameraStatus.CONNECTING
-        else -> CameraStatus.UNAVAILABLE
+        else -> CameraStatus.CONNECTING
     }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val context = LocalContext.current
+    val hasMic = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE) }
+    var capabilities by remember(nativeCamera, online) { mutableStateOf<CameraCapabilities?>(null) }
+    var talking by remember(stream, online) { mutableStateOf(false) }
+    var micOn by remember(stream, online) { mutableStateOf(false) }
+    var microphoneRequestedAt by remember(stream, online) { mutableLongStateOf(0L) }
+    var muted by remember(id, openedAt) { mutableStateOf(false) }
+    var intercom by remember(stream, online) { mutableStateOf(IntercomPlayback.CONNECTING) }
+    var attempt by remember(stream, online) { mutableIntStateOf(0) }
+    var canTalk by remember(stream, online) { mutableStateOf(false) }
+    var intercomHasAudio by remember(stream, online) { mutableStateOf(false) }
+    var notice by remember(stream, online) { mutableStateOf<String?>(null) }
+    var hlsPreview by remember(stream, online) { mutableStateOf(false) }
+    var hlsStatus by remember(streamCamera, initialHlsStatus) { mutableStateOf(initialHlsStatus) }
+    var hlsHasAudio by remember(streamCamera, initialHlsStatus) { mutableStateOf(false) }
+    var loggedFirstFrame by remember(openedAt) { mutableStateOf(false) }
+    val routes = remember(capabilities, stream) { cameraRoutes(capabilities ?: CameraCapabilities.None, stream != null) }
+    val findingRoute = online && capabilities == null
+    val useIntercom = !findingRoute && online && routes.isNotEmpty() && intercom != IntercomPlayback.UNAVAILABLE
+    val intercomLive = useIntercom && intercom == IntercomPlayback.LIVE
+    val showHls = (!findingRoute && !useIntercom) ||
+        (canStream && !intercomLive && (stream == null || hlsPreview))
+    val hasAudio = if (intercomLive) intercomHasAudio else showHls && hlsHasAudio
+    val audioRequested = talking || (!muted && (hasAudio || (useIntercom && intercomHasAudio)))
+    val audioFocused = rememberCameraAudioFocus(audioRequested) {
+        notice = if (talking) "Call disconnected" else "Camera audio paused"
+        muted = true
+        talking = false
+    }
+
+    LaunchedEffect(nativeCamera, online) {
+        if (online) {
+            capabilities = withTimeoutOrNull(900) { model.cameraCapabilities(nativeCamera) } ?: CameraCapabilities.None
+        }
+    }
+    val tryVideoFallback = stream != null && canStream && (findingRoute || useIntercom) && !intercomLive
+    LaunchedEffect(tryVideoFallback) {
+        if (tryVideoFallback) {
+            delay(intercomFallbackDelayMs)
+            hlsPreview = true
+        }
+    }
+
+    fun setTalkMode(enabled: Boolean) {
+        notice = null
+        talking = enabled
+        if (enabled) microphoneRequestedAt = SystemClock.elapsedRealtime()
+    }
+
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted && useIntercom) setTalkMode(true)
+        else if (!granted) notice = "Microphone permission needed"
+    }
+    DisposableEffect(lifecycle, stream, online) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                if (intercom != IntercomPlayback.UNAVAILABLE) intercom = IntercomPlayback.CONNECTING
+                talking = false
+                micOn = false
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+
+    fun logFrame(transport: String) {
+        if (!loggedFirstFrame) {
+            Log.i("FlickPanelCamera", "first_frame_ms=${SystemClock.elapsedRealtime() - openedAt} transport=$transport")
+            loggedFirstFrame = true
+        }
+    }
+
+    fun toggleTalk() {
+        when {
+            talking -> setTalkMode(false)
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ->
+                permission.launch(Manifest.permission.RECORD_AUDIO)
+            else -> setTalkMode(true)
+        }
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        if (useIntercom) {
+            CameraIntercom(
+                id = nativeCamera,
+                stream = stream,
+                routes = routes,
+                attempt = attempt,
+                audioEnabled = audioFocused && intercomLive && (!muted || talking),
+                talk = audioFocused && intercomLive && talking && canTalk,
+                model = model,
+                modifier = Modifier.matchParentSize(),
+                connecting = { intercom = IntercomPlayback.CONNECTING },
+                retrying = {
+                    intercom = IntercomPlayback.RETRYING
+                    hlsPreview = true
+                    if (talking) notice = "Call disconnected"
+                    talking = false
+                    micOn = false
+                },
+                live = { hasStreamAudio, talkSupported, transport ->
+                    canTalk = talkSupported
+                    intercomHasAudio = hasStreamAudio
+                    intercom = IntercomPlayback.LIVE
+                    hlsPreview = false
+                    hlsStatus = initialHlsStatus
+                    hlsHasAudio = false
+                    logFrame(transport)
+                },
+                microphone = { active ->
+                    micOn = active
+                    if (active && microphoneRequestedAt != 0L) {
+                        Log.i("FlickPanelCamera", "talk_ready_ms=${SystemClock.elapsedRealtime() - microphoneRequestedAt}")
+                    }
+                },
+                microphoneError = {
+                    talking = false
+                    micOn = false
+                    notice = "Microphone unavailable"
+                },
+                failed = {
+                    talking = false
+                    micOn = false
+                    intercomHasAudio = false
+                    intercom = IntercomPlayback.UNAVAILABLE
+                    if (routes.any { it.talk }) notice = "Intercom unavailable"
+                },
+            )
+        }
+
+        if (showHls) {
+            HlsCamera(
+                streamCamera, openedAt, initialHlsStatus, maxWidth.value / maxHeight.value, model,
+                Modifier.matchParentSize(),
+                audioEnabled = audioFocused && !muted && hlsHasAudio,
+                onAudioAvailable = { hlsHasAudio = it },
+                onStatus = { hlsStatus = it },
+                onLive = {
+                    hlsStatus = CameraStatus.LIVE
+                    logFrame("hls")
+                },
+            )
+        }
+        val status = when {
+            intercomLive -> CameraStatus.LIVE
+            showHls -> hlsStatus
+            intercom == IntercomPlayback.RETRYING -> CameraStatus.RECONNECTING
+            else -> CameraStatus.CONNECTING
+        }
+        if (!intercomLive && !(showHls && hlsStatus.hasVideo)) {
+            CameraStill(id, model, online, Modifier.matchParentSize(), blurred = status.buffering,
+                allowStored = state.link != Link.AUTH_REJECTED)
+        }
+        val expectsTalk = routes.any { it.talk }
+        val retry = online && expectsTalk && (intercom == IntercomPlayback.UNAVAILABLE || intercomLive && !canTalk)
+        val talkControl: (@Composable (Boolean) -> Unit)? = if (online && expectsTalk && (hasMic || retry)) {
+            { compact ->
+                IntercomTalkButton(talking, intercomLive && canTalk, retry, compact) {
+                    if (retry) {
+                        notice = null
+                        hlsPreview = true
+                        intercom = IntercomPlayback.CONNECTING
+                        attempt++
+                    } else toggleTalk()
+                }
+            }
+        } else null
+        val speakerControl: (@Composable (Modifier) -> Unit)? = if (hasAudio && !talking) {
+            { controlModifier ->
+                ViewerIconButton(
+                    icon = if (muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
+                    label = if (muted) "Unmute camera" else "Mute camera",
+                    onClick = {
+                        notice = null
+                        muted = !muted
+                    },
+                    modifier = controlModifier,
+                )
+            }
+        } else null
+        CameraControls(
+            label ?: "Camera", status,
+            startingCall = intercomLive && talking && !micOn,
+            micOn = intercomLive && micOn,
+            notice = notice ?: when {
+                useIntercom && expectsTalk && !intercomLive && showHls && hlsStatus.hasVideo ->
+                    if (intercom == IntercomPlayback.RETRYING) "Reconnecting audio…" else "Connecting audio…"
+                else -> null
+            },
+            close = model::closeCamera,
+            state = state,
+            actions = tile?.cameraActions.orEmpty(),
+            runAction = { entity -> model.runCameraAction(id, entity) },
+            talkControl = talkControl,
+            speakerControl = speakerControl,
+            modifier = Modifier.matchParentSize(),
+        )
+    }
+}
+
+@Composable
+private fun HlsCamera(
+    streamCamera: String, openedAt: Long, initialStatus: CameraStatus, viewportAspect: Float,
+    model: PanelViewModel, modifier: Modifier, audioEnabled: Boolean, onAudioAvailable: (Boolean) -> Unit,
+    onStatus: (CameraStatus) -> Unit, onLive: () -> Unit,
+) {
     var stream by remember(streamCamera, initialStatus) { mutableStateOf<CameraStream?>(null) }
-    var status by remember(streamCamera, initialStatus) { mutableStateOf(initialStatus) }
+    var buffering by remember(streamCamera, initialStatus) { mutableStateOf(true) }
+    var rendered by remember(streamCamera, initialStatus) { mutableStateOf(false) }
     var videoAspect by remember(streamCamera, initialStatus) { mutableStateOf<Float?>(null) }
-    var firstFrame by remember(streamCamera, initialStatus) { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     fun playbackFailed() {
         stream = null
-        firstFrame = false
-        status = CameraStatus.UNAVAILABLE
+        onAudioAvailable(false)
+        onStatus(CameraStatus.UNAVAILABLE)
     }
 
     LaunchedEffect(streamCamera, initialStatus, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            status = initialStatus
+            onStatus(initialStatus)
+            buffering = true
+            rendered = false
             videoAspect = null
-            firstFrame = false
             if (initialStatus != CameraStatus.CONNECTING) return@repeatOnLifecycle
             try {
                 stream = model.cameraStream(streamCamera)
@@ -178,100 +312,27 @@ internal fun CameraViewer(
         }
     }
 
-    val activeStream = stream
-    LaunchedEffect(activeStream, status, lifecycle) {
-        if (activeStream != null && status.buffering) {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                delay(15_000)
-                if (stream === activeStream && status.buffering) playbackFailed()
-            }
+    val active = stream ?: return
+    LaunchedEffect(active, buffering) {
+        if (buffering) {
+            delay(15_000)
+            if (stream === active && buffering) playbackFailed()
         }
     }
-
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
-        val viewportAspect = maxWidth.value / maxHeight.value
-        val fillVideo = videoAspect?.let { abs(viewportAspect / it - 1f) < .10f } == true
-        if (activeStream != null) {
-            CameraPlayer(activeStream.url, activeStream.transport, fillVideo, Modifier.matchParentSize(),
-                onAspectRatio = { videoAspect = it },
-                onFirstFrame = {
-                    if (!firstFrame) {
-                        Log.i("FlickPanelCamera", "first_frame_ms=${SystemClock.elapsedRealtime() - openedAt} transport=hls")
-                    }
-                    firstFrame = true
-                    status = CameraStatus.LIVE
-                },
-                onBuffering = { buffering ->
-                    if (firstFrame) status = if (buffering) CameraStatus.RECONNECTING else CameraStatus.LIVE
-                },
-                onError = ::playbackFailed,
-            )
-        }
-        if (!firstFrame) CameraStill(id, model, true, Modifier.matchParentSize(), blurred = status.buffering)
-        val gate: (@Composable (Modifier) -> Unit)? = gateId?.let { gate ->
-            { modifier -> GateControl(state, gate, { model.openCameraGate(id) }, modifier) }
-        }
-        CameraControls(label ?: "Camera", status, model::closeCamera, Modifier.matchParentSize(), gate)
-    }
-}
-
-@Composable
-internal fun CameraControls(
-    label: String,
-    status: CameraStatus,
-    close: () -> Unit,
-    modifier: Modifier = Modifier,
-    gate: (@Composable (Modifier) -> Unit)? = null,
-) {
-    BoxWithConstraints(modifier.windowInsetsPadding(WindowInsets.displayCutout)) {
-        val compact = maxWidth < 600.dp || LocalDensity.current.fontScale >= 1.3f
-        val inset = if (compact || maxHeight < 480.dp) 16.dp else 24.dp
-        Column(Modifier.fillMaxSize().padding(inset)) {
-            ViewerIconButton(Icons.Rounded.Close, "Close camera", close,
-                Modifier.align(Alignment.End).size(56.dp))
-            if (compact) gate?.invoke(Modifier.align(Alignment.End).padding(top = 12.dp))
-            Spacer(Modifier.weight(1f))
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.Start),
-            ) {
-                Box(Modifier.weight(1f)) {
-                    CameraCaption(label, status)
-                }
-                if (!compact) gate?.invoke(Modifier)
-            }
-        }
-    }
-}
-
-@Composable
-private fun CameraCaption(label: String, status: CameraStatus) {
-    Surface(
-        Modifier.widthIn(max = 420.dp),
-        color = Color(0xdd171a1d),
-        contentColor = Color.White,
-        shape = panelCardShape,
-    ) {
-        Column(
-            Modifier.padding(horizontal = 19.dp, vertical = 13.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (status == CameraStatus.LIVE) Box(Modifier.size(8.dp).background(Color(0xff7fe6a8), CircleShape))
-                Text(
-                    status.label,
-                    color = Color(0xffe1e7ed),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
-        }
-    }
+    val fill = videoAspect?.let { abs(viewportAspect / it - 1f) < .10f } == true
+    CameraPlayer(
+        active.url, active.transport, fill, audioEnabled, modifier,
+        onAspectRatio = { videoAspect = it },
+        onFirstFrame = {
+            rendered = true
+            buffering = false
+            onLive()
+        },
+        onBuffering = {
+            buffering = it
+            if (rendered) onStatus(if (it) CameraStatus.RECONNECTING else CameraStatus.LIVE)
+        },
+        onAudioAvailable = onAudioAvailable,
+        onError = ::playbackFailed,
+    )
 }

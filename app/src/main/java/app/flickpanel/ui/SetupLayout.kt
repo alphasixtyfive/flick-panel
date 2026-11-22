@@ -34,6 +34,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -46,11 +50,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.flickpanel.config.PanelTheme
 
 internal val setupPadding = 24.dp
-private val setupDetailWidth = 760.dp
 
 internal enum class SetupSection(val label: String, val icon: ImageVector) {
     FAVOURITES("Favourites", Icons.Rounded.FavoriteBorder),
@@ -68,11 +72,14 @@ internal fun SetupLayout(
     section: SetupSection,
     openSection: (SetupSection) -> Unit,
     detailTitle: String?,
+    detailWidth: Dp,
+    toolbarAction: (@Composable () -> Unit)?,
     showSave: Boolean,
     busy: Boolean,
     back: () -> Unit,
     close: () -> Unit,
     save: () -> Unit,
+    feedback: SnackbarHostState,
     content: @Composable () -> Unit,
 ) {
     BackHandler(onBack = back)
@@ -81,23 +88,28 @@ internal fun SetupLayout(
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
                 val fontScale = LocalDensity.current.fontScale
                 val twoPanes = maxWidth >= tabletWidthDp.dp && maxWidth >= 640.dp * fontScale
+                val shortScreen = !twoPanes && maxHeight < 360.dp && maxWidth >= 440.dp
                 val categoryWidth = (224.dp * fontScale.coerceAtLeast(1f)).coerceAtMost(maxWidth / 3)
                 Row(Modifier.fillMaxSize()) {
                     if (twoPanes) {
                         SetupCategoryPane(section, openSection, close, busy, Modifier.width(categoryWidth))
+                    } else if (shortScreen) {
+                        SetupNavigationRail(section, busy, openSection)
                     }
                     Box(Modifier.weight(1f).fillMaxHeight().padding(start = if (twoPanes) 12.dp else 0.dp),
                         contentAlignment = if (twoPanes) Alignment.TopStart else Alignment.TopCenter) {
-                        Column(Modifier.widthIn(max = setupDetailWidth).fillMaxSize()) {
+                        Column(Modifier.widthIn(max = detailWidth).fillMaxSize()) {
                             SetupToolbar(
                                 title = detailTitle ?: section.label,
                                 detail = detailTitle != null,
                                 showNavigation = detailTitle != null || !twoPanes,
                                 busy = busy,
                                 navigate = if (detailTitle != null) back else close,
+                                action = toolbarAction,
                             )
                             Box(Modifier.weight(1f).fillMaxWidth().panelEntrance(destination, reduceMotion)) {
                                 content()
+                                SnackbarHost(feedback, Modifier.align(Alignment.BottomCenter).padding(horizontal = setupPadding))
                             }
                             if (showSave) {
                                 Row(
@@ -109,10 +121,29 @@ internal fun SetupLayout(
                                     }
                                 }
                             }
-                            if (!twoPanes && detailTitle == null) SetupNavigationBar(section, busy, openSection)
+                            if (!twoPanes && !shortScreen && detailTitle == null) SetupNavigationBar(section, busy, openSection)
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SetupNavigationRail(section: SetupSection, busy: Boolean, open: (SetupSection) -> Unit) {
+    NavigationRail(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        windowInsets = WindowInsets(0, 0, 0, 0),
+    ) {
+        Column(Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
+            for (destination in SetupSection.entries) {
+                NavigationRailItem(
+                    selected = destination == section,
+                    onClick = { open(destination) },
+                    enabled = !busy,
+                    icon = { Icon(destination.icon, destination.label) },
+                )
             }
         }
     }
@@ -126,6 +157,7 @@ private fun SetupToolbar(
     showNavigation: Boolean,
     busy: Boolean,
     navigate: () -> Unit,
+    action: (@Composable () -> Unit)?,
 ) {
     TopAppBar(
         title = {
@@ -134,6 +166,7 @@ private fun SetupToolbar(
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         },
+        actions = { action?.invoke() },
         modifier = Modifier.padding(start = if (showNavigation) 0.dp else setupPadding - 16.dp, end = 12.dp),
         navigationIcon = {
             if (showNavigation) {

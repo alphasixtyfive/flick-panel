@@ -11,12 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -90,9 +85,7 @@ private fun MusicLibraryScreen(
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Music library", Modifier.weight(1f).semantics { heading() },
                     style = MaterialTheme.typography.headlineSmall)
-                IconButton(onClick = model::closeMusic, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Rounded.Close, "Close music")
-                }
+                ViewerCloseButton("Close music", model::closeMusic)
             }
             MusicBrowser(
                 id, library, model, wide, playback, artwork, transport, volume, showPlayer, Modifier.weight(1f),

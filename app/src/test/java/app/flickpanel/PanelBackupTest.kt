@@ -14,13 +14,15 @@ import org.junit.Test
 
 class PanelBackupTest {
     @Test
-    fun preservesRoomSelectionTilesThemeAndPhotoSource() {
+    fun preservesRoomSelectionTilesThemeAndDisplayPreferences() {
         val config = PanelConfig(
             favourites = listOf(TileSpec("light.wall", TileKind.TOGGLE)),
             theme = PanelTheme.AMBER,
             roomIds = listOf("kitchen"),
             roomTiles = mapOf("kitchen" to listOf(RoomTilePreference("media_player.kitchen"))),
             idleAlbum = PhotoFolder("media-source://media_source/media/local/photos", "Family photos"),
+            dashboardBrightness = 100,
+            screensaverBrightness = 8,
         )
         val output = ByteArrayOutputStream()
         PanelBackup.write(config, output)

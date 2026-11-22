@@ -68,10 +68,13 @@ internal suspend fun publishPanelTelemetry(
     }
 }
 
-private data class DisplayReport(val mode: String, val page: Page, val brightness: Int?, val wallDisplay: Boolean) {
+private data class DisplayReport(
+    val mode: String, val page: Page, val brightness: Int?, val brightnessOverride: Int?, val wallDisplay: Boolean,
+) {
     fun reading() = PanelSensorReading(PanelSensor.DISPLAY, mode, mapOf(
         "page" to page.name.lowercase(),
-        "brightness_override" to (brightness ?: "auto"),
+        "brightness" to (brightness ?: "system"),
+        "brightness_override" to (brightnessOverride ?: "auto"),
         "wall_display" to wallDisplay,
     ))
 }
@@ -88,7 +91,7 @@ private fun PanelUi.displayReport(): DisplayReport {
             is PanelViewer.Light, null -> "dashboard"
         }
     }
-    return DisplayReport(mode, page, brightnessPercent, keepsDisplayAwake)
+    return DisplayReport(mode, page, displayBrightness, brightnessPercent, keepsDisplayAwake)
 }
 
 private fun batteryReadings(context: Context) = callbackFlow {

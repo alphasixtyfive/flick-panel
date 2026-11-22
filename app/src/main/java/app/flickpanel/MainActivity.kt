@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by model.ui.collectAsStateWithLifecycle()
             val keepScreenOn = state.screenBlank || state.configured && state.keepsDisplayAwake
-            val brightness = state.windowBrightness()
+            val brightness = state.displayBrightness?.div(100f) ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             LaunchedEffect(keepScreenOn) {
                 if (keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -93,14 +93,4 @@ class MainActivity : ComponentActivity() {
     private fun showBackupMessage(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
-}
-
-private fun PanelUi.windowBrightness(): Float {
-    if (screenBlank) return 0f
-    val level = brightnessPercent?.div(100f)
-    if (configured && clock && keepsDisplayAwake) {
-        val idleMaximum = if (config.idleAlbum == null) .13f else .22f
-        return minOf(level ?: idleMaximum, idleMaximum)
-    }
-    return level ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 }

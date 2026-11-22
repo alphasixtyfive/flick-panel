@@ -50,6 +50,7 @@ internal data class Entity(
         .replaceFirstChar { it.uppercase() }
     val available get() = state.isNotBlank() && state != "unavailable" && (state != "unknown" || domain == "scene")
     val unit get() = attributes.text("unit_of_measurement").orEmpty()
+    val percentageReading get() = state.toFloatOrNull()?.takeIf { domain == "sensor" && unit == "%" && it in 0f..100f }
     val mediaFeatures get() = attributes.optLong("supported_features")
     val playingMedia get() = state == "playing" || state == "buffering"
     val volumePercent get() = attributes.optDouble("volume_level", Double.NaN)
@@ -89,8 +90,10 @@ internal data class Entity(
             val numeric = state.toDoubleOrNull()?.isFinite() == true
             add(TileKind.VALUE)
             if (numeric) add(TileKind.TREND)
+            if (unit == "%") add(TileKind.PERCENTAGE)
             if (!numeric || hasReaderAttribute) add(TileKind.READER)
         }
+        "fan" -> listOf(TileKind.FAN)
         "input_number", "number" -> if (numberRange != null) listOf(TileKind.NUMBER, TileKind.VALUE) else listOf(TileKind.VALUE)
         "input_select", "select" -> if (options.isNotEmpty()) listOf(TileKind.CHOICE, TileKind.VALUE) else listOf(TileKind.VALUE)
         "timer" -> listOf(TileKind.TIMER, TileKind.VALUE)

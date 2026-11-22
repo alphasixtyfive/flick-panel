@@ -17,6 +17,17 @@ class PanelRemotePolicyTest {
         layout = RoomLayout(PanelConfig(favourites = listOf(TileSpec("camera.gate", TileKind.CAMERA, showOnHome = false)))))
 
     @Test
+    fun screensaverAndBlankDisplayCapTheDashboardBrightness() {
+        val panel = linked.copy(layout = RoomLayout(PanelConfig(dashboardBrightness = 100, screensaverBrightness = 8)))
+        assertEquals(100, panel.displayBrightness)
+        assertEquals(8, panel.copy(clock = true).displayBrightness)
+        assertEquals(0, panel.copy(screenBlank = true).displayBrightness)
+        val dimmed = panel.remoteCommand(PanelCommand.SetBrightness(4), 0)
+        assertEquals(4, dimmed.copy(clock = true).displayBrightness)
+        assertEquals(100, dimmed.remoteCommand(PanelCommand.SetBrightness(null), 0).displayBrightness)
+    }
+
+    @Test
     fun blankingClosesMediaAndWakeReturnsToHome() {
         val gallery = linked.copy(page = Page.CAMERAS).showCamera("camera.gate", 99)
         val blank = gallery.remoteCommand(PanelCommand.Sleep, 100)

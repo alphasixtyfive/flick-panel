@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,9 +62,9 @@ internal fun AgendaScreen(
         Scaffold(Modifier.fillMaxSize().imePadding(), topBar = {
             Box(Modifier.fillMaxWidth().padding(top = if (roomy) 12.dp else 4.dp), contentAlignment = Alignment.TopCenter) {
                 TopAppBar(
-                    modifier = Modifier.widthIn(max = agendaMaxWidth).fillMaxWidth().padding(horizontal = gutter - 8.dp),
+                    modifier = Modifier.widthIn(max = agendaMaxWidth).fillMaxWidth().padding(horizontal = gutter - 16.dp),
                     title = {
-                        Column(Modifier.padding(start = 6.dp)) {
+                        Column {
                             Text(title, Modifier.semantics { heading() },
                                 style = if (roomy) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -74,9 +73,6 @@ internal fun AgendaScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = close) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to dashboard") }
                     },
                     actions = {
                         IconButton(onClick = refresh, enabled = ready) { Icon(Icons.Rounded.Refresh, "Refresh") }
@@ -92,6 +88,7 @@ internal fun AgendaScreen(
                                 }
                             }
                         }
+                        ViewerCloseButton(if (kind == TileKind.CALENDAR) "Close calendar" else "Close list", close)
                     },
                 )
             }

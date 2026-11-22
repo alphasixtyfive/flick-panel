@@ -14,13 +14,21 @@ internal object PanelConfigCodec {
         .put("version", 1)
         .put("tiles", JSONArray(config.favourites.map { tile ->
             JSONObject().put("entity", tile.entity).put("kind", tile.kind.name).put("label", tile.label)
-                .put("status", tile.statusEntity).put("home", tile.showOnHome).put("gate", tile.cameraGate)
+                .put("status", tile.statusEntity).put("home", tile.showOnHome)
                 .put("stream", tile.cameraStream)
                 .apply {
                     if (tile.wideOnTablet) put("wide", true)
                     if (tile.confirmAction) put("confirm", true)
                     tile.readerAttribute?.let { put("readerAttribute", it) }
                     if (tile.kind == TileKind.TREND) tile.graphColour?.let { put("graphColour", it.name) }
+                    if (tile.kind == TileKind.CAMERA) {
+                        tile.intercomStream?.let { put("intercom", it) }
+                        if (tile.cameraActions.isNotEmpty()) put("cameraActions", JSONArray(tile.cameraActions.map {
+                            JSONObject().put("entity", it.entity).put("label", it.label).apply {
+                                if (it.icon != CameraActionIcon.AUTOMATIC) put("icon", it.icon.name)
+                            }
+                        }))
+                    }
                 }
         }))
         .put("theme", config.theme.name)
@@ -33,6 +41,8 @@ internal object PanelConfigCodec {
         })
         .put("idle", config.idleSeconds)
         .put("wall", config.wallMode)
+        .put("dashboardBrightness", config.dashboardBrightness)
+        .put("screensaverBrightness", config.screensaverBrightness)
         .put("highContrast", config.highContrast)
         .put("reduceMotion", config.reduceMotion)
         .put("rooms", config.roomIds?.let(::JSONArray))
@@ -62,6 +72,8 @@ internal object PanelConfigCodec {
             if (kind == TileKind.TASKS && !entity.startsWith("todo.") ||
                 kind == TileKind.CALENDAR && !entity.startsWith("calendar.") ||
                 kind == TileKind.COVER && !entity.startsWith("cover.") ||
+                kind == TileKind.FAN && !entity.startsWith("fan.") ||
+                kind == TileKind.PERCENTAGE && !entity.startsWith("sensor.") ||
                 kind == TileKind.PERSON && !entity.startsWith("person.") ||
                 kind == TileKind.READER && entity.substringBefore('.') !in setOf("sensor", "input_text")) return@mapNotNull null
             val readerAttribute = if (kind == TileKind.READER && !tile.isNull("readerAttribute")) {
@@ -71,7 +83,6 @@ internal object PanelConfigCodec {
                 kind == TileKind.ACTION && validEntity(it) && it.startsWith("timer.")
             }, showOnHome = kind != TileKind.CAMERA || tile.optBoolean("home", true),
                 wideOnTablet = kind.resizable && tile.optBoolean("wide"),
-                cameraGate = tile.text("gate")?.takeIf { kind == TileKind.CAMERA && validEntity(it) && it.startsWith("cover.") },
                 confirmAction = kind == TileKind.ACTION && tile.optBoolean("confirm"),
                 readerAttribute = readerAttribute,
                 cameraStream = tile.text("stream")?.takeIf {
@@ -81,6 +92,8 @@ internal object PanelConfigCodec {
                     val colour = tile.text("graphColour")
                     GraphColour.entries.firstOrNull { it.name == colour }
                 } else null,
+                intercomStream = tile.text("intercom")?.takeIf { kind == TileKind.CAMERA && validIntercomStream(it) },
+                cameraActions = if (kind == TileKind.CAMERA) decodeCameraActions(tile) else emptyList(),
             )
         }.distinctBy { it.entity }
         return PanelConfig(
@@ -90,6 +103,8 @@ internal object PanelConfigCodec {
             homeBadges = decodeBadges(obj.optJSONArray("homeBadges")),
             idleSeconds = obj.optInt("idle", 60).let { if (it == 0) 0 else it.coerceIn(15, 900) },
             wallMode = obj.optBoolean("wall", true),
+            dashboardBrightness = obj.optInt("dashboardBrightness").takeIf { it in 1..100 },
+            screensaverBrightness = obj.optInt("screensaverBrightness").takeIf { it in 1..100 },
             highContrast = obj.optBoolean("highContrast"),
             reduceMotion = obj.optBoolean("reduceMotion"),
             showRoomHeating = obj.optBoolean("roomHeating", true),
@@ -102,6 +117,20 @@ internal object PanelConfigCodec {
                 PhotoFolder(id, album.text("title")?.take(140) ?: "Photo folder")
             }
         )
+    }
+
+    private fun decodeCameraActions(tile: JSONObject): List<CameraAction> {
+        val rows = tile.optJSONArray("cameraActions")
+        if (rows == null) {
+            val gate = tile.text("gate")?.takeIf { validEntity(it) && it.startsWith("cover.") }
+            return if (gate == null) emptyList() else listOf(CameraAction(gate))
+        }
+        return (0 until minOf(rows.length(), cameraActionLimit)).mapNotNull { index ->
+            val row = rows.optJSONObject(index) ?: return@mapNotNull null
+            val entity = row.text("entity")?.takeIf(::validCameraAction) ?: return@mapNotNull null
+            val icon = row.text("icon")?.let { name -> CameraActionIcon.entries.firstOrNull { it.name == name } }
+            CameraAction(entity, row.text("label")?.trim()?.take(cameraActionLabelLimit), icon ?: CameraActionIcon.AUTOMATIC)
+        }.distinctBy(CameraAction::entity)
     }
 
     private fun decodeRoomTiles(rooms: JSONObject?): Map<String, List<RoomTilePreference>> = buildMap {

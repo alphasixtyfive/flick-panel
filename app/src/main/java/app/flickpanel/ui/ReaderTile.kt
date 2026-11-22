@@ -14,11 +14,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Article
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -34,6 +32,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.flickpanel.ha.ReadingContent
+
+private val readerMaxWidth = 720.dp
 
 @Composable
 internal fun ReaderTile(label: String, content: ReadingContent?, modifier: Modifier = Modifier, open: () -> Unit) {
@@ -69,21 +69,20 @@ internal fun ReaderScreen(title: String, content: ReadingContent?, close: () -> 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(title, Modifier.semantics { heading() }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                navigationIcon = {
-                    IconButton(onClick = close) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to dashboard")
-                    }
-                },
-            )
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                TopAppBar(
+                    modifier = Modifier.widthIn(max = readerMaxWidth).fillMaxWidth().padding(horizontal = 8.dp),
+                    title = {
+                        Text(title, Modifier.semantics { heading() }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    actions = { ViewerCloseButton("Close reader", close) },
+                )
+            }
         },
     ) { insets ->
         Box(Modifier.fillMaxSize().padding(insets), contentAlignment = Alignment.TopCenter) {
             Column(
-                Modifier.widthIn(max = 720.dp).fillMaxWidth()
+                Modifier.widthIn(max = readerMaxWidth).fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),

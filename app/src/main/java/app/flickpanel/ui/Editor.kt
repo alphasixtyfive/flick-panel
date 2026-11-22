@@ -1,15 +1,17 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,6 +19,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -28,6 +32,7 @@ import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
 import app.flickpanel.ha.Entity
+import kotlinx.coroutines.launch
 
 private data class RoomTileTarget(val entity: String, val label: String)
 
@@ -40,17 +45,18 @@ private sealed class SetupDestination(val title: String, val allowsSaving: Boole
     data class Badge(val badge: HomeBadge) : SetupDestination("Warning badge")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBackupAction) -> Unit) {
     var draft by remember(state.config) { mutableStateOf(state.config) }
-    var section by remember { mutableStateOf(SetupSection.FAVOURITES) }
+    var section by rememberSaveable { mutableStateOf(SetupSection.FAVOURITES) }
     var destinations by remember { mutableStateOf(emptyList<SetupDestination>()) }
     var choosingPhotos by remember { mutableStateOf(false) }
     var confirmingDiscard by remember { mutableStateOf(false) }
-    var search by remember { mutableStateOf("") }
+    var search by rememberSaveable { mutableStateOf("") }
     var removed by remember { mutableStateOf<Pair<Int, TileSpec>?>(null) }
     val editorPages = rememberSaveableStateHolder()
+    val feedback = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     val current = destinations.lastOrNull()
     val dirty = draft != state.config
     fun navigateTo(destination: SetupDestination) { destinations = destinations + destination }
@@ -69,6 +75,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
         }
     }
     val detailTitle = if (state.connectionEditor) "Connection" else current?.title
+    val picker = (current as? SetupDestination.Picker)?.source
 
     SetupLayout(
         theme = draft.theme,
@@ -82,6 +89,19 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
             section = it
         },
         detailTitle = detailTitle,
+        detailWidth = if (picker == SetupPicker.TILE || picker == SetupPicker.APP) 880.dp else 760.dp,
+        toolbarAction = if (picker == SetupPicker.TILE) {
+            {
+                TextButton(
+                    onClick = { navigateTo(SetupDestination.Picker(SetupPicker.APP)) },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    Icon(Icons.Rounded.Apps, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Apps")
+                }
+            }
+        } else null,
         showSave = dirty && !state.connectionEditor && current?.allowsSaving != false,
         busy = state.busy,
         back = {
@@ -94,7 +114,8 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
             }
         },
         close = finish,
-        save = { model.save(draft) },
+        save = { model.save(draft) { scope.launch { feedback.showSnackbar("Changes saved") } } },
+        feedback = feedback,
     ) {
         if (state.connectionEditor) {
             ConnectionForm(state, model::connect)
@@ -107,33 +128,18 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                 destinations = destinations.dropLast(if (original == null) 2 else 1)
             }
             is SetupDestination.Picker -> when (val source = current.source) {
-                SetupPicker.TILE, SetupPicker.APP -> Column {
-                    SingleChoiceSegmentedButtonRow(Modifier.padding(horizontal = setupPadding)
-                        .widthIn(max = 360.dp).fillMaxWidth()) {
-                        val sources = listOf(SetupPicker.TILE to "Home Assistant", SetupPicker.APP to "Android apps")
-                        sources.forEachIndexed { index, (option, label) ->
-                            SegmentedButton(
-                                selected = source == option,
-                                onClick = { destinations = destinations.dropLast(1) + SetupDestination.Picker(option) },
-                                shape = SegmentedButtonDefaults.itemShape(index, sources.size),
-                                modifier = Modifier.heightIn(min = 48.dp),
-                            ) { Text(label) }
-                        }
+                SetupPicker.TILE -> editorPages.SaveableStateProvider("device-picker") {
+                    EntityPicker(source, draft, state, search, { search = it }, model::loadCatalogue) { entity ->
+                        val featured = entity.domain != "camera" ||
+                            draft.favourites.none { it.kind == TileKind.CAMERA && it.showOnHome }
+                        navigateTo(SetupDestination.Format(TileFormat(entity, null, entity.kinds(), featured)))
                     }
-                    if (source == SetupPicker.APP) {
-                        val added = remember(draft.favourites) { draft.favourites.mapNotNull { it.appPackage }.toSet() }
-                        AppPicker(added) { tile ->
-                            draft = draft.copy(favourites = draft.favourites + tile)
-                            backToPrevious()
-                        }
-                    } else {
-                        editorPages.SaveableStateProvider("device-picker") {
-                            EntityPicker(source, draft, state, search, { search = it }, model::loadCatalogue) { entity ->
-                                val featured = entity.domain != "camera" ||
-                                    draft.favourites.none { it.kind == TileKind.CAMERA && it.showOnHome }
-                                navigateTo(SetupDestination.Format(TileFormat(entity, null, entity.kinds(), featured)))
-                            }
-                        }
+                }
+                SetupPicker.APP -> {
+                    val added = remember(draft.favourites) { draft.favourites.mapNotNull { it.appPackage }.toSet() }
+                    AppPicker(added) { tile ->
+                        draft = draft.copy(favourites = draft.favourites + tile)
+                        destinations = destinations.dropLast(2)
                     }
                 }
                 SetupPicker.MESSAGE, SetupPicker.BADGE -> EntityPicker(

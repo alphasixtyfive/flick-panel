@@ -41,7 +41,7 @@ internal data class RoomLayout(
         val saved = config.roomIds
         val ids = saved ?: buildList {
             for (tile in config.favourites) {
-                if (tile.showOnHome && (tile.entity.startsWith("light.") || tile.kind == TileKind.CLIMATE)) {
+                if (tile.showOnHome && (tile.entity.startsWith("light.") || tile.kind == TileKind.CLIMATE || tile.kind == TileKind.FAN)) {
                     catalogue.areaOf(tile.entity)?.let(::add)
                 }
             }
@@ -66,6 +66,7 @@ internal data class RoomLayout(
         fun shownByDefault(device: Entity) = when (device.domain) {
             "climate" -> true
             "light" -> saved == null
+            "fan" -> saved == null && device.id in favourites
             else -> false
         }
         val discovered = catalogue.room(area.id).asSequence().map(Entry::entity)
@@ -92,11 +93,8 @@ internal data class RoomLayout(
             return RoomControl(preference, null)
         }
         val canDim = device.canDim
-        val kind = if (canDim && preference.lightFormat != TileKind.TOGGLE) {
-            TileKind.SLIDER
-        } else {
-            checkNotNull(roomTileKind(device.id))
-        }
+        val default = checkNotNull(roomTileKind(device.id))
+        val kind = if (canDim && preference.lightFormat != TileKind.TOGGLE) TileKind.SLIDER else default
         return RoomControl(preference, TileSpec(device.id, kind, wideOnTablet = preference.wideOnTablet), canDim)
     }
 }

@@ -13,17 +13,20 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 private const val MiB = 1024 * 1024
 
-internal class PanelImages(parent: CoroutineScope, lowMemory: Boolean) {
+internal class PanelImages(parent: CoroutineScope, lowMemory: Boolean, previews: CameraPreviewFiles? = null) {
     private val job = SupervisorJob(parent.coroutineContext[Job])
     private val scope = CoroutineScope(parent.coroutineContext + job)
     val snapshots = ImageCache(scope, byteLimit = (if (lowMemory) 6 else 12) * MiB,
         maxEdge = if (lowMemory) 1080 else 1440, lifetimeMillis = 24_000)
+    val cameraPreviews = ImageCache(scope, byteLimit = (if (lowMemory) 2 else 4) * MiB,
+        maxEdge = if (lowMemory) 480 else 640, lifetimeMillis = 29_000, disk = previews)
     val artwork = ImageCache(scope, byteLimit = (if (lowMemory) 3 else 8) * MiB,
         maxEdge = if (lowMemory) 320 else 480, lifetimeMillis = 30 * 60_000)
     val photos = ImageCache(scope, byteLimit = (if (lowMemory) 6 else 12) * MiB,
@@ -32,29 +35,48 @@ internal class PanelImages(parent: CoroutineScope, lowMemory: Boolean) {
     fun close() {
         job.cancel()
         snapshots.clear()
+        cameraPreviews.clear()
         artwork.clear()
         photos.clear()
     }
 }
 
 internal class ImageCache(
-    scope: CoroutineScope, byteLimit: Int, private val maxEdge: Int, private val lifetimeMillis: Long,
+    private val scope: CoroutineScope, byteLimit: Int, private val maxEdge: Int, private val lifetimeMillis: Long,
+    private val disk: CameraPreviewFiles? = null,
 ) {
-    private data class CachedImage(val bitmap: Bitmap, val fetchedAt: Long)
+    private data class CachedImage(val bitmap: Bitmap, val fetchedAt: Long?)
 
     private val images = object : LruCache<String, CachedImage>(byteLimit) {
         override fun sizeOf(key: String, value: CachedImage) = value.bitmap.allocationByteCount
     }
     private val fetchSlots = Semaphore(2)
+    private val restoreSlots = Semaphore(2)
     private val requests = ImageRequests(scope)
+    private val restores = ImageRequests(scope)
 
     fun cached(key: String): Bitmap? = images[key]?.bitmap
 
     fun fresh(key: String): Bitmap? = images[key]
-        ?.takeIf { SystemClock.elapsedRealtime() - it.fetchedAt < lifetimeMillis }
+        ?.takeIf { image -> image.fetchedAt?.let { SystemClock.elapsedRealtime() - it < lifetimeMillis } == true }
         ?.bitmap
 
     fun clear() = images.evictAll()
+
+    suspend fun restore(key: String): Bitmap? {
+        cached(key)?.let { return it }
+        val source = disk ?: return null
+        return restores.load(key) {
+            restoreSlots.withPermit {
+                cached(key)?.let { return@withPermit it }
+                val bitmap = source.read(key)?.let { decodePanelImage(it, maxEdge) } ?: return@withPermit null
+                currentCoroutineContext().ensureActive()
+                synchronized(images) {
+                    cached(key) ?: bitmap.also { images.put(key, CachedImage(it, null)) }
+                }
+            }
+        }
+    }
 
     suspend fun load(key: String, decodeEdge: Int = maxEdge, fetch: suspend () -> ByteArray?): Bitmap? {
         fresh(key)?.let { return it }
@@ -64,7 +86,8 @@ internal class ImageCache(
                 val data = fetch() ?: return@withPermit null
                 val bitmap = decodePanelImage(data, minOf(maxEdge, decodeEdge)) ?: return@withPermit null
                 currentCoroutineContext().ensureActive()
-                images.put(key, CachedImage(bitmap, SystemClock.elapsedRealtime()))
+                synchronized(images) { images.put(key, CachedImage(bitmap, SystemClock.elapsedRealtime())) }
+                disk?.let { source -> scope.launch { source.write(key, data) } }
                 bitmap
             }
         }

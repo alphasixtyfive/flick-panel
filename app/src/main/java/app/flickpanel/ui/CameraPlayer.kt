@@ -6,6 +6,7 @@ import android.os.Build
 import android.util.Log
 import android.view.LayoutInflater
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,12 +15,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -41,10 +43,12 @@ internal fun CameraPlayer(
     stream: HttpUrl,
     transport: OkHttpClient,
     fillVideo: Boolean,
+    audioEnabled: Boolean,
     modifier: Modifier,
     onAspectRatio: (Float) -> Unit,
     onFirstFrame: () -> Unit,
     onBuffering: (Boolean) -> Unit,
+    onAudioAvailable: (Boolean) -> Unit,
     onError: () -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
@@ -52,12 +56,19 @@ internal fun CameraPlayer(
     val reportAspectRatio by rememberUpdatedState(onAspectRatio)
     val reportFirstFrame by rememberUpdatedState(onFirstFrame)
     val reportBuffering by rememberUpdatedState(onBuffering)
+    val reportAudioAvailable by rememberUpdatedState(onAudioAvailable)
     val reportError by rememberUpdatedState(onError)
+    val playAudio by rememberUpdatedState(audioEnabled)
 
-    LifecycleStartEffect(stream, transport) {
+    LifecycleResumeEffect(stream, transport) {
         val active = createCameraPlayer(context, stream, transport)
+        active.volume = if (playAudio) 1f else 0f
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() = reportFirstFrame()
+
+            override fun onTracksChanged(tracks: Tracks) {
+                reportAudioAvailable(tracks.isTypeSelected(C.TRACK_TYPE_AUDIO))
+            }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 if (videoSize.width > 0 && videoSize.height > 0) {
@@ -84,13 +95,15 @@ internal fun CameraPlayer(
         active.prepare()
         active.playWhenReady = true
 
-        onStopOrDispose {
+        onPauseOrDispose {
             active.removeListener(listener)
             active.release()
+            reportAudioAvailable(false)
             player = null
         }
     }
     val active = player ?: return
+    SideEffect { active.volume = if (audioEnabled) 1f else 0f }
     AndroidView(
         factory = { LayoutInflater.from(it).inflate(R.layout.camera_player, null) as PlayerView },
         update = {
@@ -117,9 +130,6 @@ private fun createCameraPlayer(context: Context, stream: HttpUrl, transport: OkH
     val source = HlsMediaSource.Factory(OkHttpDataSource.Factory(transport))
         .createMediaSource(MediaItem.fromUri(stream.toString()))
     return ExoPlayer.Builder(context, renderers).setLoadControl(buffer).build().apply {
-        volume = 0f
-        trackSelectionParameters = trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
         setMediaSource(source)
     }
 }

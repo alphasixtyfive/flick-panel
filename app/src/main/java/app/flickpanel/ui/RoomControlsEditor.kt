@@ -16,8 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Tune
@@ -27,12 +25,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +78,15 @@ internal fun RoomControlsEditor(
         controls.filter { it.tile != null }.partition { !it.preference.hidden }
     }
     val custom = room.id in draft.roomTiles
+    var search by rememberSaveable(room.id) { mutableStateOf("") }
+    val matching = remember(hidden, search, state.catalogue) {
+        val term = search.trim()
+        hidden.filter { control ->
+            val tile = checkNotNull(control.tile)
+            state.label(tile).contains(term, ignoreCase = true) ||
+                tile.kind.label.contains(term, ignoreCase = true) || tile.entity.contains(term, ignoreCase = true)
+        }
+    }
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = setupPadding),
         state = scroll,
@@ -109,9 +119,17 @@ internal fun RoomControlsEditor(
             }
         }
         if (hidden.isNotEmpty()) item { RoomEditorHeading("Hidden controls", Modifier.padding(top = 6.dp)) }
-        items(hidden, key = { it.preference.entity }) { control ->
-            val label = state.label(checkNotNull(control.tile))
-            RoomControlRow(label) {
+        if (hidden.size >= 6 || search.isNotBlank()) item {
+            SetupSearchField(search, { search = it }, "Find a hidden control", Modifier.fillMaxWidth())
+        }
+        if (hidden.isNotEmpty() && matching.isEmpty()) item {
+            Text("No matching controls", Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        items(matching, key = { it.preference.entity }) { control ->
+            val tile = checkNotNull(control.tile)
+            val label = state.label(tile)
+            RoomControlRow(label, tile.kind.label) {
                 IconButton(onClick = { edit(control.preference.copy(hidden = false)) }) {
                     Icon(Icons.Rounded.Visibility, "Show $label")
                 }
@@ -157,35 +175,14 @@ private fun RoomTileSettings(kind: TileKind, settings: RoomTilePreference, canDi
             SetupSwitchRow("Show in room", null, !settings.hidden) { edit(settings.copy(hidden = !it)) }
         }
         if (canDim) {
-            RoomTileChoice("Control", "Switch", "Dimmer", kind == TileKind.SLIDER) { dimmer ->
-                edit(settings.copy(lightFormat = if (dimmer) TileKind.SLIDER else TileKind.TOGGLE))
+            SettingsListGroup("Light control") {
+                SettingChoices(listOf(false, true), kind == TileKind.SLIDER, { if (it) "Dimmer" else "Switch" }) { dimmer ->
+                    edit(settings.copy(lightFormat = if (dimmer) TileKind.SLIDER else TileKind.TOGGLE))
+                }
             }
         }
-        RoomTileChoice("Tile size", "Standard", "Wide", settings.wideOnTablet) { wide ->
+        TileSizePicker(settings.wideOnTablet) { wide ->
             edit(settings.copy(wideOnTablet = wide))
-        }
-    }
-}
-
-@Composable
-private fun RoomTileChoice(title: String, first: String, second: String, secondSelected: Boolean, select: (Boolean) -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    SettingsListGroup(title) {
-        Column(Modifier.selectableGroup()) {
-            for ((index, label) in listOf(first, second).withIndex()) {
-                val selected = (index == 1) == secondSelected
-                ListItem(
-                    modifier = Modifier.selectable(selected, role = Role.RadioButton) {
-                        if (!selected) select(index == 1)
-                    }.heightIn(min = 56.dp),
-                    headlineContent = { Text(label) },
-                    trailingContent = { RadioButton(selected, onClick = null) },
-                    colors = ListItemDefaults.colors(
-                        containerColor = if (selected) colors.secondaryContainer else Color.Transparent,
-                        headlineColor = if (selected) colors.onSecondaryContainer else colors.onSurface,
-                    ),
-                )
-            }
         }
     }
 }

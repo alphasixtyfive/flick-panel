@@ -1,7 +1,6 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +23,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ElectricBolt
@@ -71,19 +69,22 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
+import app.flickpanel.config.intercomStreamLimit
 import app.flickpanel.config.validBadgeSource
+import app.flickpanel.config.validIntercomStream
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.readerAttributes
 
 internal enum class SetupPicker(val title: String) {
-    TILE("Add tile"), APP("Add tile"), MESSAGE("Choose a message"),
+    TILE("Add tile"), APP("Add app shortcut"), MESSAGE("Choose a message"),
     BADGE("Choose a warning sensor"),
 }
 
@@ -93,7 +94,7 @@ internal data class TileFormat(
 
 private enum class DeviceFilter(val label: String, private vararg val domains: String) {
     ALL("All"),
-    CONTROLS("Controls", "light", "switch", "input_boolean", "climate", "input_select", "select", "number", "input_number", "cover"),
+    CONTROLS("Controls", "light", "switch", "input_boolean", "climate", "input_select", "select", "number", "input_number", "cover", "fan"),
     SENSORS("Sensors", "sensor", "binary_sensor", "timer", "input_text", "weather", "image", "person"),
     CAMERAS("Cameras", "camera"),
     MEDIA("Media", "media_player"),
@@ -103,6 +104,7 @@ private enum class DeviceFilter(val label: String, private vararg val domains: S
     fun shows(domain: String) = this == ALL || domain in domains
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun EntityPicker(
     source: SetupPicker, draft: PanelConfig, state: PanelUi, query: String, changeQuery: (String) -> Unit,
@@ -139,33 +141,30 @@ internal fun EntityPicker(
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            SetupSearchField(query, changeQuery, "Find a device or sensor", Modifier.weight(1f))
+            SetupSearchField(query, changeQuery, "Search entities", Modifier.weight(1f))
             IconButton(onClick = refresh, enabled = !state.loadingCatalogue && state.link == Link.ONLINE) {
                 Icon(Icons.Rounded.Refresh, "Refresh devices")
             }
         }
-        if (source == SetupPicker.TILE) {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (choice in DeviceFilter.entries) {
-                    val selected = filter == choice
-                    FilterChip(selected = selected, onClick = { filter = choice }, label = { Text(choice.label) },
-                        leadingIcon = if (selected) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null,
-                        shape = CircleShape)
+        if (state.loadingCatalogue) LinearProgressIndicator(Modifier.fillMaxWidth())
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 12.dp)) {
+            if (source == SetupPicker.TILE) item(key = "filters") {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (choice in DeviceFilter.entries) {
+                        FilterChip(selected = filter == choice, onClick = { filter = choice },
+                            label = { Text(choice.label) }, shape = CircleShape)
+                    }
                 }
             }
-        }
-        if (state.loadingCatalogue) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (matches.isEmpty() && !state.loadingCatalogue) {
-            val message = when {
-                state.link != Link.ONLINE -> "Connect to Home Assistant to find devices"
-                query.isNotBlank() -> "No results for this search"
-                else -> "No devices in this category"
+            if (matches.isEmpty() && !state.loadingCatalogue) item(key = "empty") {
+                val message = when {
+                    state.link != Link.ONLINE -> "Connect to Home Assistant to find devices"
+                    query.isNotBlank() -> "No results for this search"
+                    else -> "No devices in this category"
+                }
+                Text(message, Modifier.padding(start = 16.dp, top = 20.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(message, Modifier.padding(start = 16.dp, top = 20.dp).semantics { liveRegion = LiveRegionMode.Polite },
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 12.dp)) {
             items(matches, key = { it.entity.id }) { entry ->
                 val entity = entry.entity
                 ListItem(
@@ -228,7 +227,10 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
     var status by remember(format) { mutableStateOf(format.current?.statusEntity) }
     var showOnHome by remember(format) { mutableStateOf(format.current?.showOnHome ?: format.suggestedOnHome) }
     var wideOnTablet by remember(format) { mutableStateOf(format.current?.wideOnTablet ?: false) }
-    var cameraGate by remember(format) { mutableStateOf(format.current?.cameraGate) }
+    var cameraActions by remember(format) { mutableStateOf(format.current?.cameraActions.orEmpty()) }
+    var intercomStream by remember(format) { mutableStateOf(format.current?.intercomStream.orEmpty()) }
+    val intercomAlias = intercomStream.trim()
+    val validIntercom = intercomAlias.isEmpty() || validIntercomStream(intercomAlias)
     var cameraStream by remember(format) { mutableStateOf(format.current?.cameraStream) }
     var confirmAction by remember(format) { mutableStateOf(format.current?.confirmAction ?: false) }
     var readerAttribute by remember(format) { mutableStateOf(format.current?.readerAttribute) }
@@ -288,18 +290,33 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
             }
             if (kind == TileKind.CAMERA) {
                 SetupSwitchRow("Pin to Favourites", null, showOnHome, { showOnHome = it })
-                val gates = remember(state.catalogue) {
-                    state.catalogue.entries.filter { it.visible && it.entity.gateWithOpenControl }.map { it.entity }
-                }
-                LinkedEntitySetting("Gate control", cameraGate, gates, state) { cameraGate = it }
                 val streams = remember(state.catalogue, format.entity.id) {
                     state.catalogue.entries.map { it.entity }.filter {
                         it.domain == "camera" && it.id != format.entity.id && it.attributes.optLong("supported_features") and 2L != 0L
                     }.sortedBy { it.name.lowercase() }
                 }
-                LinkedEntitySetting("Live stream source", cameraStream, streams, state, defaultLabel = "This camera") {
-                    cameraStream = it
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Intercom", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(
+                        intercomStream, { intercomStream = it }, Modifier.fillMaxWidth(),
+                        label = { Text("go2rtc fallback (optional)") }, singleLine = true, isError = !validIntercom,
+                        keyboardOptions = KeyboardOptions(
+                            autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done,
+                        ),
+                        supportingText = if (intercomAlias.isEmpty() || !validIntercom) ({
+                            Text(when {
+                                intercomAlias.length > intercomStreamLimit -> "Use up to ${intercomStreamLimit} characters."
+                                !validIntercom -> "Enter a stream name using letters, numbers, spaces, dots, underscores or hyphens."
+                                else -> "Home Assistant talkback works automatically on supported cameras."
+                            })
+                        }) else null,
+                    )
+                    val streamTitle = if (intercomAlias.isEmpty()) "Live stream source" else "Fallback camera"
+                    LinkedEntitySetting(streamTitle, cameraStream, streams, state, defaultLabel = "This camera") {
+                        cameraStream = it
+                    }
                 }
+                CameraActionsEditor(cameraActions, state) { cameraActions = it }
             }
             if (kind == TileKind.READER) {
                 val attributes = remember(preview.attributes) { preview.readerAttributes() }
@@ -311,13 +328,14 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                 apply(TileSpec(
                     format.entity.id, kind, label.trim().takeIf(String::isNotEmpty), status.takeIf { kind == TileKind.ACTION },
                     showOnHome = kind != TileKind.CAMERA || showOnHome, wideOnTablet = kind.resizable && wideOnTablet,
-                    cameraGate = cameraGate.takeIf { kind == TileKind.CAMERA },
                     confirmAction = kind == TileKind.ACTION && confirmAction,
                     readerAttribute = readerAttribute.takeIf { kind == TileKind.READER },
                     cameraStream = cameraStream.takeIf { kind == TileKind.CAMERA },
+                    intercomStream = intercomAlias.takeIf { kind == TileKind.CAMERA && it.isNotEmpty() && validIntercom },
+                    cameraActions = if (kind == TileKind.CAMERA) cameraActions else emptyList(),
                     graphColour = graphColour.takeIf { kind == TileKind.TREND },
                 ))
-            }) { Text(if (format.current == null) "Add tile" else "Apply") }
+            }, enabled = kind != TileKind.CAMERA || validIntercom) { Text(if (format.current == null) "Add tile" else "Apply") }
         }
     }
 }
