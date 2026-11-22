@@ -72,6 +72,24 @@ class RoomLayoutTest {
     }
 
     @Test
+    fun scenesCanBeAddedToARoomWithoutShowingOtherScenesByDefault() {
+        val lounge = Area("lounge", "Lounge")
+        val fireplace = Entity("scene.fireplace", "unknown")
+        val movies = Entity("scene.movies", "2026-11-21T00:00:00+00:00")
+        val config = PanelConfig(roomIds = listOf(lounge.id), roomTiles = mapOf(lounge.id to listOf(
+            RoomTilePreference(movies.id),
+        )))
+        val catalogue = Catalogue(listOf(fireplace, movies).map {
+            Entry(it, lounge.id, diagnostic = false, visible = true)
+        }, listOf(lounge))
+        val restored = PanelConfigCodec.decode(PanelConfigCodec.encode(config))
+        val layout = RoomLayout(restored, catalogue)
+        assertEquals(listOf(TileSpec(movies.id, TileKind.ACTION)), layout.sections.single().tiles)
+        assertTrue(layout.controls(lounge).last().preference.hidden)
+        assertTrue(fireplace.available)
+    }
+
+    @Test
     fun hidingHeatingKeepsTheChosenRoomsAndTheirLightsInOrder() {
         val kitchen = Area("kitchen", "Kitchen")
         val hallway = Area("hallway", "Hallway")
@@ -124,7 +142,8 @@ class RoomLayoutTest {
 
         val reset = RoomLayout(restored.copy(roomTiles = emptyMap()), catalogue).sections.first().tiles
         assertEquals(listOf(ordinary.id, hidden.id, dimmable.id), reset.map { it.entity })
-        assertTrue(reset.all { it.kind == TileKind.TOGGLE && !it.wideOnTablet })
+        assertEquals(listOf(TileKind.TOGGLE, TileKind.TOGGLE, TileKind.SLIDER), reset.map { it.kind })
+        assertTrue(reset.none { it.wideOnTablet })
     }
 
     @Test

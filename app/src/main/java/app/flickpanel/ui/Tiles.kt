@@ -15,6 +15,8 @@ import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
+import app.flickpanel.ha.Area
+import app.flickpanel.tileName
 
 internal val tileGap = 14.dp
 internal val personTileHeight = 86.dp
@@ -26,10 +28,11 @@ private val shortcutHeight = 64.dp
 internal fun LazyListScope.tileRows(
     rows: List<List<TileSpec>>, state: PanelUi, model: PanelViewModel,
     columns: Int, compact: Boolean, resizeTiles: Boolean, keyPrefix: String = "tile:", shortcutRow: Boolean = false,
-    homeAgenda: Boolean = false,
+    homeAgenda: Boolean = false, room: Area? = null,
 ) {
     items(rows, key = { keyPrefix + it.first().entity }, contentType = { "tiles" }) { row ->
-        TileRow(row, state, model, columns, compact, resizeTiles, shortcutRow = shortcutRow, homeAgenda = homeAgenda)
+        TileRow(row, state, model, columns, compact, resizeTiles, shortcutRow = shortcutRow, homeAgenda = homeAgenda,
+            room = room)
     }
 }
 
@@ -37,7 +40,7 @@ internal fun LazyListScope.tileRows(
 internal fun TileRow(
     row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean, resizeTiles: Boolean,
     modifier: Modifier = Modifier,
-    shortcutRow: Boolean = false, homeAgenda: Boolean = false,
+    shortcutRow: Boolean = false, homeAgenda: Boolean = false, room: Area? = null,
 ) {
     Layout(modifier = modifier.fillMaxWidth(), content = {
         for (tile in row) key(tile.entity) {
@@ -54,7 +57,9 @@ internal fun TileRow(
                 }
                 else -> if (compact) compactCellHeight else cellHeight
             }
-            PanelTile(tile, state, model, Modifier.heightIn(min = minimum), compactHistory = shortcutRow && tile.kind == TileKind.TREND,
+            val label = state.label(tile)
+            PanelTile(tile, state, model, Modifier.heightIn(min = minimum),
+                label = room?.tileName(label) ?: label, compactHistory = shortcutRow && tile.kind == TileKind.TREND,
                 expandedAgenda = homeAgenda)
         }
     }) { children, constraints ->

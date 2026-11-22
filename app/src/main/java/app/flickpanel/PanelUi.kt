@@ -19,6 +19,7 @@ internal sealed interface PanelViewer {
     data class Music(override val id: String) : PanelViewer
     data class Agenda(override val id: String) : PanelViewer
     data class Content(override val id: String) : PanelViewer
+    data class Light(override val id: String) : PanelViewer
 }
 
 private val whitespace = Regex("\\s+")

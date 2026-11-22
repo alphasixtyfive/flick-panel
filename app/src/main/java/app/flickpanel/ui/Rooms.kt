@@ -121,7 +121,8 @@ internal fun Rooms(
                                 }
                             }
                         } else {
-                            tileRows(rows, state, model, gridColumns, compact, resizeTiles = true, keyPrefix = "room-tile:")
+                            tileRows(rows, state, model, gridColumns, compact, resizeTiles = true,
+                                keyPrefix = "room-tile:", room = selected.area)
                         }
                     }
                 }

@@ -50,7 +50,7 @@ internal fun PlayerVolumeControl(volume: SpeakerVolume, modifier: Modifier = Mod
                 Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        MediaSlider(
+        ControlSlider(
             value = level / 100f,
             label = "Speaker volume",
             enabled = ready,

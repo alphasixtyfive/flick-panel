@@ -63,6 +63,7 @@ internal fun roomTileKind(entity: String): TileKind? = when (entity.substringBef
     "light", "switch" -> TileKind.TOGGLE
     "climate" -> TileKind.CLIMATE
     "media_player" -> TileKind.MEDIA
+    "scene" -> TileKind.ACTION
     else -> null
 }
 

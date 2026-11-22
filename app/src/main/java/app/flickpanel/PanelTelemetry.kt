@@ -85,7 +85,7 @@ private fun PanelUi.displayReport(): DisplayReport {
             is PanelViewer.Music -> "music"
             is PanelViewer.Agenda -> "agenda"
             is PanelViewer.Content -> "content"
-            null -> "dashboard"
+            is PanelViewer.Light, null -> "dashboard"
         }
     }
     return DisplayReport(mode, page, brightnessPercent, keepsDisplayAwake)

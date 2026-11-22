@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +25,7 @@ import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.GraphPoint
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.canDim
 import app.flickpanel.ha.personPicture
 import app.flickpanel.ha.readContent
 
@@ -34,7 +38,7 @@ internal val tileArtworkSize = 36.dp
 @Composable
 internal fun PanelTile(
     tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
-    compactHistory: Boolean = false, expandedAgenda: Boolean = false,
+    label: String, compactHistory: Boolean = false, expandedAgenda: Boolean = false,
 ) {
     if (tile.kind == TileKind.CAMERA) {
         CameraTile(tile, state, model, modifier)
@@ -42,7 +46,7 @@ internal fun PanelTile(
     }
     TileContent(
         tile = tile,
-        label = state.label(tile),
+        label = label,
         entity = state.entity(tile.entity),
         live = state.entities[tile.entity],
         status = tile.statusEntity?.let(state.entities::get),
@@ -69,7 +73,8 @@ private fun TileContent(
     when (tile.kind) {
         TileKind.TOGGLE, TileKind.ACTION -> {
             val on = entity?.state == "on"
-            ToggleActionTile(tile, label, on, status, pending, available, reduceMotion, modifier) {
+            val adjust = if (entity?.canDim == true) ({ model.openLight(tile.entity) }) else null
+            ToggleActionTile(tile, label, on, status, pending, available, reduceMotion, modifier, adjust) {
                 live?.let { if (tile.kind == TileKind.ACTION) model.action(it) else model.toggle(it, !on) }
             }
         }
@@ -107,10 +112,16 @@ private fun TileContent(
 }
 
 @Composable
-internal fun ControlTileTitle(label: String, icon: ImageVector, tint: Color) {
+internal fun ControlTileTitle(
+    label: String, icon: ImageVector, tint: Color, adjust: (() -> Unit)? = null, enabled: Boolean = true,
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
-        Icon(icon, null, tint = tint, modifier = Modifier.size(tileIconSize))
+        if (adjust == null) Icon(icon, null, tint = tint, modifier = Modifier.size(tileIconSize))
+        else IconButton(onClick = adjust, enabled = enabled) {
+            Icon(Icons.Rounded.Tune, "Adjust $label", tint = if (enabled) tint else Color.Unspecified,
+                modifier = Modifier.size(compactTileIconSize))
+        }
     }
 }
 

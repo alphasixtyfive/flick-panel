@@ -55,7 +55,8 @@ internal fun BrightnessTile(
             Modifier.fillMaxSize().tileFill((level ?: 0) / 100f, colors.primaryContainer).padding(tileContentPadding),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            ControlTileTitle(label, Icons.Rounded.Lightbulb, colors.primary)
+            ControlTileTitle(label, Icons.Rounded.Lightbulb, colors.primary,
+                adjust = entity?.let { { model.openLight(it.id) } }, enabled = enabled)
             if (status.endsWith('%') || enabled && pending == null) TileValue(status)
             else TileStatus(status)
         }

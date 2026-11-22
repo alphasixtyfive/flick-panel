@@ -112,6 +112,9 @@ internal fun PanelScreen(
                 }
             }
         }
+        if (viewer is PanelViewer.Light && !state.editor && !state.screenBlank) {
+            LightControlsSheet(viewer.id, state, model)
+        }
         if (state.unlocking) UnlockEditor(state, model::unlock, model::relock)
         BackHandler(state.configured && state.page != Page.FAVOURITES && !state.clock && !state.screenBlank &&
             !state.editor && !state.unlocking && !state.hasViewer) {

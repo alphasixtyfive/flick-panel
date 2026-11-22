@@ -31,7 +31,7 @@ import app.flickpanel.ha.Entity
 @Composable
 internal fun ToggleActionTile(
     tile: TileSpec, label: String, on: Boolean, timer: Entity?, pending: String?, available: Boolean,
-    reduceMotion: Boolean, modifier: Modifier, activate: () -> Unit,
+    reduceMotion: Boolean, modifier: Modifier, adjust: (() -> Unit)? = null, activate: () -> Unit,
 ) {
     val ready = available && pending == null
     val colors = MaterialTheme.colorScheme
@@ -74,6 +74,8 @@ internal fun ToggleActionTile(
                     else -> Icons.Rounded.PowerSettingsNew
                 },
                 if (active) colors.onPrimaryContainer else colors.primary,
+                adjust = adjust,
+                enabled = ready,
             )
             if (text != null) {
                 if (ready) TileValue(text, maxLines = 2)

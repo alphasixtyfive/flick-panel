@@ -10,8 +10,17 @@ import app.flickpanel.ha.Area
 import app.flickpanel.ha.Catalogue
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Entry
+import app.flickpanel.ha.canDim
 
 internal data class RoomSection(val area: Area, val tiles: List<TileSpec>)
+
+internal fun Area.tileName(name: String): String {
+    if (!name.startsWith(this.name, ignoreCase = true)) return name
+    val suffix = name.drop(this.name.length)
+    if (suffix.firstOrNull()?.let { it.isWhitespace() || it == ':' } != true) return name
+    return suffix.trimStart { it.isWhitespace() || it in ":-–—" }
+        .replaceFirstChar(Char::uppercase).ifBlank { name }
+}
 
 internal data class RoomControl(
     val preference: RoomTilePreference,
@@ -66,40 +75,28 @@ internal data class RoomLayout(
         return buildList {
             for (preference in saved.orEmpty()) {
                 val device = catalogue.roomEntity(preference.entity)
-                val tile = device?.let(::roomTile)
-                add(roomControl(preference, device, tile))
+                add(roomControl(preference, device))
             }
             for (device in discovered) {
-                val tile = roomTile(device)
                 val preference = RoomTilePreference(
-                    device.id, lightFormat = tile.kind.takeIf { device.domain == "light" },
+                    device.id,
                     hidden = !shownByDefault(device),
                 )
-                add(roomControl(preference, device, tile))
+                add(roomControl(preference, device))
             }
         }
     }
 
-    private fun roomControl(preference: RoomTilePreference, device: Entity?, tile: TileSpec?): RoomControl {
-        if (device == null || tile == null || !config.showRoomHeating && device.domain == "climate") {
+    private fun roomControl(preference: RoomTilePreference, device: Entity?): RoomControl {
+        if (device == null || !config.showRoomHeating && device.domain == "climate") {
             return RoomControl(preference, null)
         }
-        val light = device.domain == "light"
-        val canDim = light && TileKind.SLIDER in device.kinds()
-        val kind = when (preference.lightFormat) {
-            TileKind.SLIDER -> if (canDim) TileKind.SLIDER else TileKind.TOGGLE
-            TileKind.TOGGLE -> if (light) TileKind.TOGGLE else tile.kind
-            else -> tile.kind
-        }
-        return RoomControl(preference, tile.copy(kind = kind, wideOnTablet = preference.wideOnTablet), canDim)
-    }
-
-    private fun roomTile(device: Entity): TileSpec {
-        val kind = if (favourites[device.id]?.kind == TileKind.SLIDER && TileKind.SLIDER in device.kinds()) {
+        val canDim = device.canDim
+        val kind = if (canDim && preference.lightFormat != TileKind.TOGGLE) {
             TileKind.SLIDER
         } else {
             checkNotNull(roomTileKind(device.id))
         }
-        return TileSpec(device.id, kind)
+        return RoomControl(preference, TileSpec(device.id, kind, wideOnTablet = preference.wideOnTablet), canDim)
     }
 }

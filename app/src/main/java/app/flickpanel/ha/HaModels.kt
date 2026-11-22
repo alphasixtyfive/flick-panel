@@ -48,7 +48,7 @@ internal data class Entity(
     val domain = id.substringBefore('.')
     val name get() = attributes.text("friendly_name") ?: id.substringAfter('.').replace('_', ' ')
         .replaceFirstChar { it.uppercase() }
-    val available get() = state.isNotBlank() && state != "unavailable" && state != "unknown"
+    val available get() = state.isNotBlank() && state != "unavailable" && (state != "unknown" || domain == "scene")
     val unit get() = attributes.text("unit_of_measurement").orEmpty()
     val mediaFeatures get() = attributes.optLong("supported_features")
     val playingMedia get() = state == "playing" || state == "buffering"
@@ -83,15 +83,7 @@ internal data class Entity(
         }
 
     fun kinds(): List<TileKind> = when (domain) {
-        "light" -> {
-            val modes = attributes.optJSONArray("supported_color_modes")
-            val dimmable = brightness != null && state != "off" ||
-                (0 until (modes?.length() ?: 0)).any { index ->
-                    val mode = modes?.optString(index).orEmpty()
-                    mode.isNotEmpty() && mode != "onoff" && mode != "unknown"
-                }
-            if (dimmable) listOf(TileKind.SLIDER, TileKind.TOGGLE) else listOf(TileKind.TOGGLE)
-        }
+        "light" -> if (canDim) listOf(TileKind.SLIDER, TileKind.TOGGLE) else listOf(TileKind.TOGGLE)
         "switch", "input_boolean" -> listOf(TileKind.TOGGLE)
         "sensor" -> buildList {
             val numeric = state.toDoubleOrNull()?.isFinite() == true

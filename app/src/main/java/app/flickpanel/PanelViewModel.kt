@@ -23,6 +23,7 @@ import app.flickpanel.ha.Entity
 import app.flickpanel.ha.HaClient
 import app.flickpanel.ha.HaCredentials
 import app.flickpanel.ha.HaProblem
+import app.flickpanel.ha.LightColour
 import app.flickpanel.ha.MEDIA_SEEK
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.MEDIA_VOLUME_SET
@@ -35,13 +36,16 @@ import app.flickpanel.ha.PanelRemoteState
 import app.flickpanel.ha.PhotoAlbum
 import app.flickpanel.ha.adjacentTemperature
 import app.flickpanel.ha.canAddTasks
+import app.flickpanel.ha.canDim
 import app.flickpanel.ha.canMoveCover
 import app.flickpanel.ha.canUpdateTasks
 import app.flickpanel.ha.coverPosition
+import app.flickpanel.ha.colourTemperatures
 import app.flickpanel.ha.gateToggleAction
 import app.flickpanel.ha.hasMediaFeature
 import app.flickpanel.ha.parseServer
 import app.flickpanel.ha.playbackProgress
+import app.flickpanel.ha.supportsColour
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -358,6 +362,16 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun closeMusic() = closeViewer<PanelViewer.Music>()
 
+    fun openLight(id: String) {
+        val current = _ui.value
+        val light = current.entities[id] ?: return
+        if (current.showingDashboard && current.link == Link.ONLINE && light.available && light.canDim) {
+            openViewer(PanelViewer.Light(id))
+        }
+    }
+
+    fun closeLight() = closeViewer<PanelViewer.Light>()
+
     fun openContent(id: String) {
         val current = _ui.value
         if (!current.showingDashboard || current.config.favourites.none { it.entity == id && it.kind.hasContentScreen }) return
@@ -481,6 +495,17 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (value == 0) toggle(entity, false)
         else commands.send(entity, "turn_on", JSONObject().put("brightness_pct", value),
             pending = "$value%", matches = { state -> state.brightness?.let { abs(it - value) <= 1 } == true })
+    }
+
+    fun setLightColour(id: String, colour: LightColour) {
+        val light = _ui.value.entities[id]?.takeIf { it.supportsColour } ?: return
+        commands.send(light, "turn_on", JSONObject().put("rgb_color", colour.toJson()), pending = "Setting colour…")
+    }
+
+    fun setLightTemperature(id: String, kelvin: Int) {
+        val light = _ui.value.entities[id] ?: return
+        if (kelvin !in (light.colourTemperatures ?: return)) return
+        commands.send(light, "turn_on", JSONObject().put("color_temp_kelvin", kelvin), pending = "Setting white tone…")
     }
 
     fun stepTemperature(id: String, increase: Boolean) {

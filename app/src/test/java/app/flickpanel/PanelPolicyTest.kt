@@ -3,6 +3,7 @@ package app.flickpanel
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelConfigCodec
 import app.flickpanel.config.PanelTheme
+import app.flickpanel.config.RoomTilePreference
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.config.validPin
@@ -229,7 +230,7 @@ class PanelPolicyTest {
         assertTrue(RoomLayout(PanelConfig(roomIds = listOf(hall.id)), catalogue).sections.isEmpty())
     }
 
-    @Test fun roomTilesUseEntityNamesAndKeepAnExplicitBrightnessControl() {
+    @Test fun roomTilesShortenTheAreaNameAndRespectTheSwitchSetting() {
         val kitchen = Area("area_1", "Kitchen")
         val dimmer = Entity("light.pendant", "off", JSONObject("""{
             "friendly_name":"Kitchen pendant","supported_color_modes":["brightness"]
@@ -237,13 +238,19 @@ class PanelPolicyTest {
         val catalogue = Catalogue(listOf(Entry(dimmer, kitchen.id, diagnostic = false, visible = true)), listOf(kitchen))
         val config = PanelConfig(roomIds = listOf(kitchen.id))
         val automatic = RoomLayout(config, catalogue).sections.single().tiles.single()
-        assertEquals(TileSpec(dimmer.id, TileKind.TOGGLE), automatic)
+        assertEquals(TileSpec(dimmer.id, TileKind.SLIDER), automatic)
         val favourite = TileSpec(dimmer.id, TileKind.SLIDER, "Main light")
-        val state = PanelUi(layout = RoomLayout(config.copy(favourites = listOf(favourite)), catalogue))
+        val switched = config.copy(favourites = listOf(favourite),
+            roomTiles = mapOf(kitchen.id to listOf(RoomTilePreference(dimmer.id, TileKind.TOGGLE))))
+        val state = PanelUi(layout = RoomLayout(switched, catalogue))
         val tile = state.roomSections.single().tiles.single()
-        assertEquals(TileKind.SLIDER, tile.kind)
-        assertEquals("Kitchen pendant", state.label(tile))
+        assertEquals(TileKind.TOGGLE, tile.kind)
+        assertEquals("Pendant", kitchen.tileName(state.label(tile)))
         assertEquals("Main light", state.label(favourite))
+        assertEquals("Wall lights", kitchen.tileName("KITCHEN: Wall lights"))
+        assertEquals("Kitchen", kitchen.tileName("Kitchen"))
+        assertEquals("Kitchenette", kitchen.tileName("Kitchenette"))
+        assertEquals("Hallway lights", kitchen.tileName("Hallway lights"))
     }
 
     @Test fun enabledRoomsKeepTheirConfiguredOrder() {
