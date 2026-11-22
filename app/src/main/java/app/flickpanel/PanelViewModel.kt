@@ -283,7 +283,11 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun backupDocument(action: PanelBackupAction, uri: Uri?, done: (String) -> Unit) {
-        val requested = pendingBackup?.takeIf { it.first == action } ?: return
+        val requested = pendingBackup?.takeIf { it.first == action }
+        if (requested == null) {
+            if (uri != null) done("File selection was interrupted. Unlock setup and try again.")
+            return
+        }
         pendingBackup = null
         if (uri == null) return
         val resolver = getApplication<Application>().contentResolver

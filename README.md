@@ -1,30 +1,25 @@
 # Flick Panel
 
-Flick Panel is a native Android wall dashboard for Home Assistant. Favourites fits the
-pinned tiles into the available space. Page arrows appear if the tiles need another
-screen. Rooms uses Home Assistant areas to show lighting and thermostat controls.
-Before you choose rooms, the panel suggests areas of pinned lights and thermostats.
-The **Rooms** section in setup chooses individual areas and their order. Room tiles
-omit the area prefix from Home Assistant entity names. **Heating controls** adds thermostats assigned to each
-selected area, including in rooms with a custom layout. You can hide individual
-thermostats in the room editor. Tap an enabled room to edit its tiles. Tap a tile to set its
-visibility, choose **Standard** or **Wide**, or change a dimmable light between **Switch**
-and **Dimmer**. Use the handles to reorder shown tiles and the eye icon to restore a hidden
-tile. **Use automatic layout** restores the Home Assistant area defaults for that room.
-Select **Save changes** to apply the layout.
-Room editors can also show Home Assistant scenes assigned to the area.
-Dimmable lights use a brightness tile by default in Rooms. Swipe across the tile to set
-brightness, tap it to switch on or off, or use the adjustments icon for a brightness slider,
-colour presets and white tones where supported.
-Cameras
-shows pinned previews and opens one full-screen feed at a time.
-In setup, use **Cameras** to choose gallery feeds, edit their settings and star the
-ones you want on Home. On wider tablets, the camera pair sits beside the people
-grid, with the agenda and app shortcuts nearby.
-Use **Add tile → Android apps** to pin a launcher shortcut to an app already installed on the tablet.
-On a dedicated tablet, **Setup → Panel → Android Home app** opens Android's default
-launcher settings. Choosing Flick Panel there makes the Android Home gesture return to it
-from other apps.
+Flick Panel turns an Android tablet into a wall dashboard for Home Assistant.
+Choose what belongs on Favourites, organise room controls by Home Assistant area,
+and open cameras, music, calendars and task lists from their tiles. The idle screen
+can show a clock and a Home Assistant photo album.
+
+[Download the APK](https://github.com/alphasixtyfive/flick-panel/releases/latest) ·
+[Home Assistant integration](https://github.com/alphasixtyfive/flick-panel-home-assistant) ·
+[Report an issue](https://github.com/alphasixtyfive/flick-panel/issues)
+
+Requires Android 9 or later.
+
+## Install
+
+Download the signed APK from the latest release and open it on the tablet. Android
+may ask you to allow installation from the browser or file manager you used.
+
+If you're moving from a development-signed Pilot build, export its layout from
+**Panel → Backup & restore** first. Uninstall Pilot, install the release APK,
+connect to Home Assistant and restore your layout. The backup excludes the
+Home Assistant token and setup PIN.
 
 ## First run
 
@@ -54,6 +49,18 @@ across all sections.
 The token is encrypted with Android Keystore. Use HTTPS when available. The app also accepts
 explicit private IPv4 addresses such as a local Home Assistant server at
 `http://192.168.1.5:8123` for households with LAN-only HTTP.
+
+## Rooms and shortcuts
+
+Choose the areas and order under **Rooms** in setup. Tap an area to hide, move
+or resize its tiles, add scenes, and choose **Switch** or **Dimmer** for a
+dimmable light. **Use automatic layout** restores the area's defaults. **Heating
+controls** adds thermostats assigned to the selected areas. The adjustments
+button on a light opens brightness and the colour or white tones it supports.
+
+Use **Add tile → Android apps** to pin an installed app. **Setup → Panel →
+Android Home app** opens the Android launcher settings. On a dedicated tablet,
+set Flick Panel as the Home app to return to it with Android's Home gesture.
 
 ## Panel options
 
@@ -127,7 +134,7 @@ The Mobile App integration also creates a location entity on registration.
 Flick Panel sends no location updates, so you can disable that entity in
 Home Assistant.
 
-For native controls, install `custom_components/flick_panel` from this repository in
+For native controls, install the [Flick Panel integration](https://github.com/alphasixtyfive/flick-panel-home-assistant) in
 Home Assistant and restart Core. Add **Flick Panel** under **Settings → Devices &
 services** and choose the linked tablet. **Display** blanks and wakes Flick Panel
 while it is running. On the tablet's device page, **Controls** contains the

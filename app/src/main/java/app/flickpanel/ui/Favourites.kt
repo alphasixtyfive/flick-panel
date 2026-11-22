@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -27,7 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ActiveHomeBadge
 import app.flickpanel.PanelUi
@@ -65,10 +66,17 @@ internal fun Favourites(
             LaunchedEffect(pages.size) { requestedPage = current }
             val showPager = pages.size > 1
             val boardHeight = if (showPager) (height - homePagerHeight).coerceAtLeast(0.dp) else height
+            val page = pages[current]
             Column(Modifier.fillMaxSize()) {
-                Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(tileGap)) {
-                    for (band in pages[current]) key(band.lanes.first().first().tiles.first().entity) {
-                        FavouriteBand(band, minOf(band.height, boardHeight), groups, state, model)
+                key(current) {
+                    val board = Modifier.weight(1f).fillMaxWidth()
+                    val content = if (page.any { it.height > boardHeight }) {
+                        board.verticalScroll(rememberScrollState())
+                    } else board
+                    Column(content, verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                        for (band in page) key(band.lanes.first().first().tiles.first().entity) {
+                            FavouriteBand(band, groups, state, model)
+                        }
                     }
                 }
                 if (showPager) FavouritesPager(current, pages.size) { requestedPage = it }
@@ -79,9 +87,9 @@ internal fun Favourites(
 
 @Composable
 private fun FavouriteBand(
-    band: HomeBand, height: Dp, groups: HomeTileGroups, state: PanelUi, model: PanelViewModel,
+    band: HomeBand, groups: HomeTileGroups, state: PanelUi, model: PanelViewModel,
 ) {
-    Row(Modifier.fillMaxWidth().height(height), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
+    Row(Modifier.fillMaxWidth().height(band.height), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
         for (lane in band.lanes) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(tileGap)) {
                 for (row in lane) {
