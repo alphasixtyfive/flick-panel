@@ -20,6 +20,18 @@ On very short screens, Favourites uses one scrollable board so the alert and nav
 
 To pin an installed app, choose **Add tile** and tap **Apps** in the header. Open **Panel → Android Home app** in setup to make Flick Panel the launcher on a dedicated tablet. The Android Home gesture brings you back after using another app.
 
+### Example kitchen layout
+
+See the [demo dashboard and room controls](screenshots/) for a starting point.
+
+| Where | What to add | How to use it |
+| --- | --- | --- |
+| Favourites | A Slider tile for pendant lights, a Cover tile for the garden gate, and a Small graph tile for home power | Set brightness by dragging across the tile. Tap the gate to open or close it. The graph shows the last six hours when the sensor has recorded history. |
+| Favourites | A Tasks tile for groceries, a Calendar tile for upcoming events, and a Music player tile for the kitchen speaker | Tap a tile to open the full list, calendar or player. |
+| Kitchen room | Worktop lights, a window blind, a thermostat, and a dinner scene | Hold **Home** to enter setup. Open **Rooms → Kitchen** to choose which controls appear and in what order. |
+| Home alerts | A binary sensor for high pollen | In **Panel → Home Assistant → Home alerts**, select the sensor and choose **On** as the state to show. |
+| Idle display | A photo folder and a text sensor for the next appointment | Choose them under **Panel → Display**. Tap the clock to preview the result. |
+
 ## Choose a tile
 
 | Tile | Use it for |
@@ -41,13 +53,7 @@ The map works offline. It includes a worldwide overview and detailed road, park,
 
 ## Cameras and talkback
 
-Edit a camera under **Cameras** in setup. Use **Pin to Favourites** to show it there. Choose a different Home Assistant camera under **Live stream source** if your installation provides a separate feed for the viewer. Up to three **Camera actions** can run existing Home Assistant lights, switches, gate actions, buttons, scenes, or scripts.
-
-A microphone badge marks cameras configured for Talk. Flick Panel prefers native Home Assistant two-way audio where the camera advertises it. In Home Assistant 2026.11, the **Two-way audio** option is under **Settings → System → Labs**. Use **go2rtc fallback (optional)** for a named stream configured with the WebRTC Camera integration. [Home Assistant camera compatibility](https://www.home-assistant.io/integrations/camera/#two-way-audio) · [WebRTC Camera integration](https://github.com/AlexxIT/WebRTC)
-
-Use **Test connection** before saving to check the selected feed and see whether Talk connects. The test keeps the tablet's microphone and camera actions idle.
-
-Live sound plays when the stream provides audio. Tap the speaker to mute it. Tap **Talk** to use the tablet microphone and **End call** to release it. The first use requires Android microphone permission. Closing the viewer or leaving the app also releases it.
+Pin a camera to Favourites for a quick preview, or open it from the Cameras tab. On compatible cameras, **Talk** turns on the microphone and **End call** returns to listening. The [camera intercom guide](intercom.md) shows both states, covers native WebRTC and go2rtc setup, and includes an example for adding a porch light and gate to the viewer.
 
 Flick Panel can show the last saved preview as the camera loads or when it goes offline. The tablet keeps previews in its private cache for up to three days, scoped to the current Home Assistant connection. Use **Clear cache** in Android's Flick Panel app settings to remove them. The viewer shows **Live** once video starts.
 
