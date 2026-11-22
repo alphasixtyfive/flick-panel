@@ -100,7 +100,7 @@ internal data class RoomLayout(
         val default = checkNotNull(roomTileKind(device.id))
         val kind = if (canDim && preference.lightFormat != TileKind.TOGGLE) TileKind.SLIDER else default
         val tile = TileSpec(device.id, kind, label = preference.label?.trim()?.takeIf(String::isNotEmpty),
-            wideOnTablet = preference.wideOnTablet, accent = preference.accent)
+            wideOnTablet = preference.wideOnTablet, accent = preference.accent, icon = preference.icon)
         return RoomControl(preference, tile, canDim)
     }
 }

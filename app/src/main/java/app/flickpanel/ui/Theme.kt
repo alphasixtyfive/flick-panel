@@ -150,7 +150,7 @@ private fun ColorScheme.withHigherContrast(): ColorScheme {
     )
 }
 
-private fun contrastInk(surface: Color): Color = if (surface.luminance() >= .179f) Color.Black else Color.White
+internal fun contrastInk(surface: Color): Color = if (surface.luminance() >= .179f) Color.Black else Color.White
 
 @Composable
 internal fun PanelColors(theme: PanelTheme, highContrast: Boolean = false, content: @Composable () -> Unit) {

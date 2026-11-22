@@ -7,7 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private val areaPattern = Regex("[A-Za-z0-9_-]{1,128}")
-private fun validAreaId(areaId: String): Boolean = areaPattern.matches(areaId)
+internal fun validAreaId(areaId: String): Boolean = areaPattern.matches(areaId)
 
 internal object PanelConfigCodec {
     fun encode(config: PanelConfig): String = JSONObject()
@@ -18,9 +18,13 @@ internal object PanelConfigCodec {
                 .put("stream", tile.cameraStream)
                 .apply {
                     if (tile.wideOnTablet) put("wide", true)
+                    if (tile.kind.supportsIcon) tile.icon?.let { put("icon", it.name) }
                     if (tile.confirmAction) put("confirm", true)
                     tile.readerAttribute?.let { put("readerAttribute", it) }
                     if (tile.kind.supportsAccent) tile.accent?.let { put(tile.kind.accentKey, it.name) }
+                    if (tile.kind == TileKind.VACUUM) {
+                        put("vacuumMap", tile.vacuumMap).put("vacuumBattery", tile.vacuumBattery)
+                    }
                     if (tile.kind == TileKind.CAMERA) {
                         tile.intercomStream?.let { put("intercom", it) }
                         if (tile.cameraActions.isNotEmpty()) put("cameraActions", JSONArray(tile.cameraActions.map {
@@ -56,6 +60,7 @@ internal object PanelConfigCodec {
                         if (control.hidden) put("hidden", true)
                         control.label?.let { put("label", it) }
                         control.accent?.let { put("accent", it.name) }
+                        control.icon?.let { put("icon", it.name) }
                         if (control.followsArea) put("followsArea", true)
                     }
                 })
@@ -80,6 +85,10 @@ internal object PanelConfigCodec {
                 kind == TileKind.PERCENTAGE && !entity.startsWith("sensor.") ||
                 kind == TileKind.PERSON && !entity.startsWith("person.") ||
                 kind == TileKind.READER && entity.substringBefore('.') !in setOf("sensor", "input_text")) return@mapNotNull null
+            val vacuumMap = if (kind == TileKind.VACUUM) {
+                if (!entity.startsWith("vacuum.")) return@mapNotNull null
+                tile.text("vacuumMap")?.takeIf(::isVacuumMap) ?: return@mapNotNull null
+            } else null
             val readerAttribute = if (kind == TileKind.READER && !tile.isNull("readerAttribute")) {
                 (tile.opt("readerAttribute") as? String)?.takeIf(::validReaderAttribute) ?: return@mapNotNull null
             } else null
@@ -95,8 +104,11 @@ internal object PanelConfigCodec {
                 accent = if (kind.supportsAccent) tile.accent(kind.accentKey) else null,
                 intercomStream = tile.text("intercom")?.takeIf { kind == TileKind.CAMERA && validIntercomStream(it) },
                 cameraActions = if (kind == TileKind.CAMERA) decodeCameraActions(tile) else emptyList(),
+                vacuumMap = vacuumMap,
+                vacuumBattery = if (vacuumMap != null) tile.text("vacuumBattery")?.takeIf(::isVacuumBattery) else null,
+                icon = if (kind.supportsIcon) tile.tileIcon() else null,
             )
-        }.distinctBy { it.entity }
+        }.distinctBy { if (it.kind == TileKind.VACUUM) TileKind.VACUUM.name else it.entity }
         val homeMessage = obj.text("message")?.takeIf(::validEntity)
         return PanelConfig(
             favourites = tiles,
@@ -161,11 +173,15 @@ internal object PanelConfigCodec {
                     label = (control.opt("label") as? String)?.trim()?.take(72)?.takeIf(String::isNotBlank),
                     accent = control.accent("accent"),
                     followsArea = control.optBoolean("followsArea"),
+                    icon = control.tileIcon(),
                 )
             }.distinctBy(RoomTilePreference::entity)
             if (preferences.isNotEmpty()) put(id, preferences)
         }
     }
+
+    private fun JSONObject.tileIcon(): TileIcon? =
+        text("icon")?.let { name -> TileIcon.entries.firstOrNull { it.name == name } }
 
     private fun decodeBadges(rows: JSONArray?): List<HomeBadge> {
         if (rows == null) return emptyList()

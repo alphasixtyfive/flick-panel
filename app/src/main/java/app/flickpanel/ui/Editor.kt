@@ -90,7 +90,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
             if (dirty) confirmingDiscard = true else model.relock()
         }
     }
-    val detailTitle = if (state.connectionEditor) "Connection" else current?.title
+    val detailTitle = if (state.connectionEditor) "Home Assistant connection" else current?.title
     val picker = (current as? SetupDestination.Picker)?.source
 
     SetupLayout(

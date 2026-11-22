@@ -33,27 +33,33 @@ internal fun BrightnessTile(
     model: PanelViewModel,
     modifier: Modifier,
     accent: TileAccent?,
+    icon: ImageVector? = null,
 ) = LevelTile(
-    label, entity, entity?.brightness, pending, enabled, Icons.Rounded.Lightbulb, modifier,
+    label, entity, entity?.brightness, pending, enabled, icon ?: Icons.Rounded.Lightbulb, modifier,
     toggle = live?.let { { model.toggle(it, entity?.state != "on") } },
     setLevel = live?.let { { level -> model.dim(it, level) } },
     adjust = entity?.let { { model.openLight(it.id) } },
     accent = accent,
+    adjustIcon = icon,
 )
 
 @Composable
 internal fun LevelTile(
     label: String, entity: Entity?, reportedLevel: Int?, pending: String?, enabled: Boolean,
     icon: ImageVector, modifier: Modifier, toggle: (() -> Unit)?, setLevel: ((Int) -> Unit)?,
-    adjust: (() -> Unit)? = null, accent: TileAccent? = null, step: Int = 5,
+    adjust: (() -> Unit)? = null, accent: TileAccent? = null, step: Int = 5, adjustIcon: ImageVector? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val preview = remember(entity?.id) { mutableStateOf<Int?>(null) }
     val draggingLevel = preview.value
     val on = entity?.state == "on"
+    val active = on && (enabled || pending != null)
+    val surface = tileContainerColour(accent.takeIf { active })
+    val fill = tileContainerColour(accent, active = true)
     val level = if (enabled || pending != null) {
         draggingLevel ?: pending?.removeSuffix("%")?.toIntOrNull() ?: reportedLevel
     } else null
+    val filledLevel = level?.takeIf { active || draggingLevel != null || pending != null } ?: 0
     val status = when {
         draggingLevel != null -> "$draggingLevel%"
         pending != null -> pending
@@ -72,15 +78,17 @@ internal fun LevelTile(
             setLevel?.invoke(value)
         }.then(controls).semantics { stateDescription = status },
         shape = panelCardShape,
-        color = colors.surfaceContainer,
+        color = surface,
+        contentColor = colors.onSurface,
     ) {
         Column(
-            Modifier.fillMaxSize().tileFill((level ?: 0) / 100f, colors.primaryContainer)
+            Modifier.fillMaxSize().tileFill(filledLevel / 100f, fill)
                 .padding(horizontal = tileContentPadding, vertical = 12.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            val tint = tileAccentColour(accent, filledSurface = colors.primaryContainer)
-            ControlTileTitle(label, icon, tint, adjust = adjust, enabled = enabled, maxLines = 1)
+            val tint = tileAccentColour(accent, surface, filledSurface = fill)
+            ControlTileTitle(label, icon, surface, tint, adjust = adjust, enabled = enabled, maxLines = 1,
+                adjustIcon = adjustIcon)
             if (status.endsWith('%') || enabled && pending == null) TileValue(status)
             else TileStatus(status)
         }

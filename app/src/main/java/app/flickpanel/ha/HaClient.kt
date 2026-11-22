@@ -149,6 +149,15 @@ internal class HaClient(
         return rows.objects().mapNotNull(MediaChoice::from).toList()
     }
 
+    suspend fun vacuumRooms(entity: String): List<Area> {
+        require(validEntity(entity) && entity.startsWith("vacuum."))
+        val entry = request("config/entity_registry/get", JSONObject().put("entity_id", entity))
+            .optJSONObject("result")
+        val mapped = vacuumAreaIds(entry)
+        if (mapped.isEmpty()) return emptyList()
+        return decodeAreas(request("config/area_registry/list").optJSONArray("result")).filter { it.id in mapped }
+    }
+
     suspend fun history(entity: String): GraphHistory {
         require(validEntity(entity))
         val now = Instant.now()

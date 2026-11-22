@@ -26,6 +26,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.PersonLocation
@@ -44,16 +46,17 @@ internal fun PersonTile(
         enabled = location != null,
         modifier = modifier.semantics { if (location != null) onClick(label = "Open map", action = null) },
         shape = panelCardShape,
-        color = colors.surfaceContainer,
+        color = colors.surfaceContainerLow,
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = tileContentPadding, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PersonAvatar(label, avatar)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                TileTitle(label, maxLines = 1)
+                Text(label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
                 TileStatus(person?.personStatus() ?: "Unavailable", maxLines = 1)
             }
         }
@@ -63,7 +66,7 @@ internal fun PersonTile(
 @Composable
 private fun PersonAvatar(name: String, avatar: ImageBitmap?) {
     val colors = MaterialTheme.colorScheme
-    Surface(Modifier.size(48.dp).clearAndSetSemantics {}, shape = CircleShape,
+    Surface(Modifier.size(44.dp).clearAndSetSemantics {}, shape = CircleShape,
         color = colors.secondaryContainer, contentColor = colors.onSecondaryContainer) {
         if (avatar != null) {
             Image(avatar, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
@@ -71,10 +74,10 @@ private fun PersonAvatar(name: String, avatar: ImageBitmap?) {
             val initials = remember(name) { avatarInitials(name) }
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 if (initials.isEmpty()) {
-                    Icon(Icons.Rounded.Person, null, Modifier.size(compactTileIconSize))
+                    Icon(Icons.Rounded.Person, null, Modifier.size(24.dp))
                 } else {
                     val type = MaterialTheme.typography.titleMedium
-                    val style = with(LocalDensity.current) { type.copy(fontSize = 22.dp.toSp(), lineHeight = 28.dp.toSp()) }
+                    val style = with(LocalDensity.current) { type.copy(fontSize = 20.dp.toSp(), lineHeight = 26.dp.toSp()) }
                     Text(initials, style = style, maxLines = 1)
                 }
             }

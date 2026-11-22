@@ -50,19 +50,15 @@ internal fun WeatherSummary(entity: Entity?, compact: Boolean, prominent: Boolea
         "windy", "windy-variant" -> Icons.Rounded.Air
         else -> Icons.Rounded.Cloud
     }
+    val colors = MaterialTheme.colorScheme
     val type = MaterialTheme.typography
-    val iconSize = when {
-        prominent -> 38.dp
-        compact -> 23.dp
-        else -> tileIconSize
-    }
     val gap = if (prominent) 12.dp else 8.dp
     val temperatureStyle = if (prominent) type.displaySmall else type.titleLarge
     val showCondition = !compact && !prominent
     Row(Modifier.semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, if (showCondition) null else reading.condition, tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(iconSize))
+        if (showCondition) TileIconBadge(icon, colors.surfaceContainer, colors.primary)
+        else Icon(icon, reading.condition, tint = colors.primary, modifier = Modifier.size(if (prominent) 38.dp else 23.dp))
         Column {
             reading.temperature?.let {
                 val unit = reading.unit.ifEmpty { "°" }
@@ -70,7 +66,7 @@ internal fun WeatherSummary(entity: Entity?, compact: Boolean, prominent: Boolea
             }
             if (showCondition) {
                 Text(reading.condition, style = type.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

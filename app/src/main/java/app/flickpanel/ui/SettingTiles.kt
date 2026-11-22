@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import app.flickpanel.config.TileAccent
 import app.flickpanel.ha.Entity
@@ -37,18 +38,21 @@ import app.flickpanel.ha.Entity
 @Composable
 internal fun ChoiceTile(
     label: String, entity: Entity?, pending: String?, enabled: Boolean,
-    modifier: Modifier, accent: TileAccent?, select: (String) -> Unit,
+    modifier: Modifier, accent: TileAccent?, icon: ImageVector? = null, select: (String) -> Unit,
 ) {
+    val colors = MaterialTheme.colorScheme
+    val surface = tileContainerColour(accent)
     val options = remember(entity?.attributes) { entity?.options.orEmpty() }
     var open by remember(entity?.id) { mutableStateOf(false) }
     LaunchedEffect(enabled) { if (!enabled) open = false }
     Surface(onClick = { open = true }, enabled = enabled && options.isNotEmpty(), modifier = modifier,
-        shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+        shape = panelCardShape, color = surface, contentColor = colors.onSurface) {
         Box {
             Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TileTitle(label, Modifier.weight(1f))
-                    Icon(Icons.Rounded.ExpandMore, null, Modifier.size(compactTileIconSize), tint = tileAccentColour(accent))
+                    AccentedTileTitle(label, null, accent, Modifier.weight(1f), customIcon = icon, surface = surface)
+                    Icon(Icons.Rounded.ExpandMore, null, Modifier.size(compactTileIconSize),
+                        tint = tileAccentColour(accent, surface))
                 }
                 TileValue(pending ?: entity?.takeIf(Entity::available)?.state ?: "Unavailable", maxLines = 2)
             }
@@ -65,14 +69,15 @@ internal fun ChoiceTile(
 @Composable
 internal fun NumberTile(
     label: String, entity: Entity?, pending: String?, enabled: Boolean,
-    modifier: Modifier, accent: TileAccent?, step: (Boolean) -> Unit,
+    modifier: Modifier, accent: TileAccent?, icon: ImageVector? = null, step: (Boolean) -> Unit,
 ) {
     val value = entity?.numberValue
     val range = entity?.numberRange
-    Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(modifier, shape = panelCardShape, color = tileContainerColour(accent),
+        contentColor = MaterialTheme.colorScheme.onSurface) {
         Column(Modifier.fillMaxWidth().padding(tileContentPadding),
             verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            AccentedTileTitle(label, Icons.Rounded.Numbers, accent)
+            AccentedTileTitle(label, Icons.Rounded.Numbers, accent, customIcon = icon)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TileValue(pending ?: displayValue(entity), Modifier.weight(1f), maxLines = 2)

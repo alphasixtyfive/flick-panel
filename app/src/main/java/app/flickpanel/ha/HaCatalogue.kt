@@ -13,10 +13,7 @@ internal suspend fun loadCatalogue(request: suspend (String) -> JSONObject): Cat
         optionalList(request, "config/device_registry/list").objects().associateBy { it.text("id") }
     }
     val areas = async {
-        optionalList(request, "config/area_registry/list").objects().mapNotNull { row ->
-            val id = row.text("area_id") ?: return@mapNotNull null
-            Area(id, row.text("name") ?: id)
-        }.sortedBy { it.name.lowercase() }.toList()
+        decodeAreas(optionalList(request, "config/area_registry/list"))
     }
     val metadata = registry.await()
     val hardware = devices.await()
@@ -34,6 +31,11 @@ internal suspend fun loadCatalogue(request: suspend (String) -> JSONObject): Cat
     }.sortedBy { it.entity.name.lowercase() }.toList()
     Catalogue(entries, areas.await())
 }
+
+internal fun decodeAreas(rows: JSONArray?): List<Area> = rows.objects().mapNotNull { row ->
+    val id = row.text("area_id") ?: return@mapNotNull null
+    Area(id, row.text("name") ?: id)
+}.sortedBy { it.name.lowercase() }.toList()
 
 private data class RegistryEntry(val area: String?, val device: String?, val diagnostic: Boolean, val hidden: Boolean)
 

@@ -133,6 +133,7 @@ internal fun AppTile(tile: TileSpec, modifier: Modifier) {
         }
     }
     val image = remember(icon) { icon?.asImageBitmap() }
+    val colors = MaterialTheme.colorScheme
     Surface(onClick = {
         try {
             context.openPanelApp(pkg)
@@ -141,14 +142,14 @@ internal fun AppTile(tile: TileSpec, modifier: Modifier) {
         } catch (_: SecurityException) {
             Toast.makeText(context, "$label couldn't open", Toast.LENGTH_SHORT).show()
         }
-    }, modifier = modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+    }, modifier = modifier, shape = panelCardShape, color = colors.surfaceContainer) {
         Row(Modifier.fillMaxWidth().padding(horizontal = tileContentPadding, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically) {
             if (image != null) Image(image, null, Modifier.size(tileArtworkSize))
-            else Icon(Icons.Rounded.Apps, null, Modifier.size(tileArtworkSize), tint = MaterialTheme.colorScheme.primary)
+            else TileIconBadge(Icons.Rounded.Apps, colors.surfaceContainer, colors.primary, size = tileArtworkSize)
             TileTitle(label, Modifier.weight(1f))
-            Icon(Icons.Rounded.ArrowOutward, "Open app", Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(Icons.Rounded.ArrowOutward, "Open app", Modifier.size(20.dp), tint = colors.onSurfaceVariant)
         }
     }
 }

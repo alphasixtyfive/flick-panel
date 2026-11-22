@@ -40,10 +40,12 @@ internal data class MusicPlayback(
         else -> null
     }
     val current = entity?.takeIf { status != null }
+    val off get() = available && entity?.state == "off"
     val trackTitle get() = current?.attributes?.text("media_title")
     val artworkUrl get() = current?.attributes?.text("entity_picture")
     val title get() = trackTitle ?: when {
         status != null -> speaker
+        off -> "Speaker off"
         available -> "Nothing playing"
         else -> "Player unavailable"
     }

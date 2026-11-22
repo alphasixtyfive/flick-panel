@@ -3,6 +3,7 @@ package app.flickpanel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import app.flickpanel.config.TileAccent
+import app.flickpanel.config.TileIcon
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelConfigCodec
 import app.flickpanel.config.PanelTheme
@@ -21,7 +22,7 @@ import app.flickpanel.ha.parseServer
 import app.flickpanel.ha.reduceEntities
 import app.flickpanel.ha.sameOrigin
 import app.flickpanel.ha.weather
-import app.flickpanel.ui.timerSecondsRemaining
+import app.flickpanel.ha.timerSecondsRemaining
 import app.flickpanel.ui.accentInk
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
@@ -82,7 +83,7 @@ class PanelPolicyTest {
         val original = PanelConfig(
             favourites = listOf(
                 TileSpec("sensor.kitchen_temperature", TileKind.TREND),
-                TileSpec("input_button.boost", TileKind.ACTION, "Boost", "timer.hot_water_boost")
+                TileSpec("input_button.boost", TileKind.ACTION, "Boost", "timer.hot_water_boost", icon = TileIcon.WATER)
             ),
             theme = PanelTheme.AMBER,
             messageEntity = "input_text.panel_notice",

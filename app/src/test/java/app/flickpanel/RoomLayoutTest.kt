@@ -4,6 +4,7 @@ import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelConfigCodec
 import app.flickpanel.config.RoomTilePreference
 import app.flickpanel.config.TileAccent
+import app.flickpanel.config.TileIcon
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
@@ -109,14 +110,14 @@ class RoomLayoutTest {
         val fireplace = Entity("scene.fireplace", "unknown")
         val movies = Entity("scene.movies", "2026-11-21T00:00:00+00:00")
         val config = PanelConfig(roomIds = listOf(lounge.id), roomTiles = mapOf(lounge.id to listOf(
-            RoomTilePreference(movies.id),
+            RoomTilePreference(movies.id, icon = TileIcon.MOVIE),
         )))
         val catalogue = Catalogue(listOf(fireplace, movies).map {
             Entry(it, lounge.id, diagnostic = false, visible = true)
         }, listOf(lounge))
         val restored = PanelConfigCodec.decode(PanelConfigCodec.encode(config))
         val layout = RoomLayout(restored, catalogue)
-        assertEquals(listOf(TileSpec(movies.id, TileKind.ACTION)), layout.sections.single().tiles)
+        assertEquals(listOf(TileSpec(movies.id, TileKind.ACTION, icon = TileIcon.MOVIE)), layout.sections.single().tiles)
         assertTrue(layout.controls(lounge).last().preference.hidden)
         assertTrue(fireplace.available)
     }

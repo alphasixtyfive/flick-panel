@@ -16,6 +16,8 @@ Run `gradlew.bat` on Windows. `:app:assemblePilot` builds an optimized, developm
 - `ui` renders dashboard and setup screens. Tile formats live in their own files. Lights and fans share the same level control.
 - `camera` handles live WebRTC for the native Home Assistant and go2rtc transports. The viewer can use an HLS feed from Media3. `CameraPreviewFiles.kt` stores small camera previews in the app cache.
 
+See [Screen layout](screen-layout.md) for the shared header, footer, and navigation rules.
+
 Camera previews restore from a bounded disk cache and refresh only while visible. Concurrent requests for the same preview share work. The last observer leaving cancels an unfinished request. Live players release their resources when the viewer closes or the screen leaves the foreground. Run `adb logcat -s FlickPanelCamera:I` for first-frame and Talk timings.
 
 ## Prepare release assets

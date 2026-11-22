@@ -47,7 +47,11 @@ class HomeBadgesTest {
     @Test fun reuseMaintenanceItemsAndPersistRules() {
         val issue = JSONObject().put("name", "Low batteries").put("value", "Kitchen window")
         val entity = Entity(maintenance.entity, "on", JSONObject().put("items", JSONArray(listOf(issue))))
-        assertEquals(listOf("Low batteries" to "Kitchen window"), ActiveHomeBadge("Needs attention", entity).details())
+        val badge = ActiveHomeBadge("Needs attention", entity)
+        assertEquals(listOf("Low batteries" to "Kitchen window"), badge.details())
+        assertEquals(1, badge.issueCount)
+        assertEquals("Needs attention · 1", badge.summary)
+        assertEquals("High pollen", ActiveHomeBadge("High pollen", Entity(pollen.entity, "high")).summary)
         assertEquals(layout.config, PanelConfigCodec.decode(PanelConfigCodec.encode(layout.config)))
     }
 }

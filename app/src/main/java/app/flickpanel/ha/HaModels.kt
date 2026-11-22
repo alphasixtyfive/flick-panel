@@ -107,6 +107,7 @@ internal data class Entity(
         "input_button", "button", "scene", "script" -> listOf(TileKind.ACTION)
         "camera" -> listOf(TileKind.CAMERA)
         "image" -> listOf(TileKind.IMAGE)
+        "vacuum" -> listOf(TileKind.VACUUM)
         "climate" -> listOf(TileKind.CLIMATE)
         "media_player" -> if (mediaFeatures.hasMediaFeature(MediaTransport.PLAY.bit) || mediaFeatures.canBrowseMusic())
             listOf(TileKind.MEDIA) else emptyList()

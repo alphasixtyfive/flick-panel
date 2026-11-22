@@ -7,7 +7,7 @@ enum class PanelTheme(val label: String) {
 }
 
 enum class TileAccent(val label: String) {
-    BLUE("Blue"), TEAL("Teal"), GREEN("Green"), AMBER("Amber"), ROSE("Rose")
+    BLUE("Blue"), TEAL("Teal"), GREEN("Green"), AMBER("Amber"), CORAL("Coral"), ROSE("Rose")
 }
 
 enum class TileKind(val label: String) {
@@ -15,7 +15,7 @@ enum class TileKind(val label: String) {
     ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"),
     APP("Android app"), IMAGE("Image"), TIMER("Countdown"), CHOICE("Selector"), NUMBER("Number control"),
     TASKS("Tasks"), CALENDAR("Calendar"), COVER("Cover"), PERSON("Person location"), READER("Content reader"),
-    FAN("Fan"), PERCENTAGE("Percentage");
+    FAN("Fan"), PERCENTAGE("Percentage"), VACUUM("Vacuum");
 
     internal val resizable get() = this != CAMERA && this != WEATHER && this != APP
     internal val isAgenda get() = this == TASKS || this == CALENDAR
@@ -24,6 +24,7 @@ enum class TileKind(val label: String) {
         CAMERA, WEATHER, APP, IMAGE, PERSON -> false
         else -> true
     }
+    internal val supportsIcon get() = supportsAccent
 }
 
 data class TileSpec(
@@ -39,6 +40,9 @@ data class TileSpec(
     val accent: TileAccent? = null,
     val intercomStream: String? = null,
     val cameraActions: List<CameraAction> = emptyList(),
+    val vacuumMap: String? = null,
+    val vacuumBattery: String? = null,
+    val icon: TileIcon? = null,
 ) {
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
@@ -51,6 +55,7 @@ internal data class RoomTilePreference(
     val label: String? = null,
     val accent: TileAccent? = null,
     val followsArea: Boolean = false,
+    val icon: TileIcon? = null,
 )
 
 internal const val defaultScreensaverTimeoutSeconds = 300
@@ -73,6 +78,7 @@ internal data class PanelConfig(
     internal val idleAlbum: PhotoFolder? = null,
     val homeBadges: List<HomeBadge> = emptyList(),
 ) {
+    val vacuumTile get() = favourites.firstOrNull { it.kind == TileKind.VACUUM }
     val defaultScreensaverBrightness get() = if (idleAlbum == null) 13 else 55
 }
 
@@ -80,6 +86,10 @@ internal const val roomTileLimit = 32
 
 private val entityPattern = Regex("[a-z0-9_]+\\.[a-z0-9_]+")
 internal fun validEntity(entity: String): Boolean = entity.length <= 255 && entityPattern.matches(entity)
+
+internal fun isVacuumMap(id: String) = id.startsWith("image.") && validEntity(id)
+
+internal fun isVacuumBattery(id: String) = id.startsWith("sensor.") && validEntity(id)
 
 internal fun roomTileKind(entity: String): TileKind? = when (entity.substringBefore('.')) {
     "light", "switch", "input_boolean" -> TileKind.TOGGLE

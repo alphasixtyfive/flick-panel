@@ -15,52 +15,47 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.config.TileAccent
 import app.flickpanel.ha.Entity
-import app.flickpanel.ha.text
+import app.flickpanel.ha.TimerPhase
+import app.flickpanel.ha.timerSecondsRemaining
+import app.flickpanel.ha.timerSnapshot
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import java.time.Instant
 
-internal data class TimerReadout(val label: String, val progress: Float? = null)
+internal data class TimerReadout(val label: String, val progress: Float? = null, val running: Boolean = false)
 
 @Composable
-internal fun TimerTile(label: String, entity: Entity?, modifier: Modifier, accent: TileAccent?) {
+internal fun TimerTile(label: String, entity: Entity?, modifier: Modifier, accent: TileAccent?, icon: ImageVector? = null) {
     val colors = MaterialTheme.colorScheme
+    val surface = tileContainerColour(accent)
+    val fill = tileContainerColour(accent, active = true)
     val countdown = timerReadout(entity)
-    Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
+    Surface(modifier, shape = panelCardShape, color = surface, contentColor = colors.onSurface) {
         Column(
-            Modifier.fillMaxSize().tileFill(countdown.progress ?: 0f, colors.primaryContainer).padding(tileContentPadding),
+            Modifier.fillMaxSize().tileFill(countdown.progress ?: 0f, fill).padding(tileContentPadding),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            AccentedTileTitle(label, Icons.Rounded.Timer, accent, filledSurface = colors.primaryContainer)
+            AccentedTileTitle(label, Icons.Rounded.Timer, accent, customIcon = icon,
+                surface = surface, filledSurface = fill)
             TileValue(countdown.label, maxLines = 2)
         }
     }
 }
 
 @Composable
-internal fun timerReadout(timer: Entity?): TimerReadout {
-    if (timer?.available != true) return TimerReadout("Unavailable")
-    val seconds = when (timer.state) {
-        "active" -> timer.attributes.text("finishes_at")
-            ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-            ?.let { activeSecondsRemaining(it) }
-        "paused" -> timerDuration(timer.attributes.text("remaining"))
-        else -> null
-    }
-    val progress = if (timer.state == "active" || timer.state == "paused") {
-        val total = timerDuration(timer.attributes.text("duration"))
-        if (seconds != null && total != null && total > 0) (seconds.toFloat() / total).coerceIn(0f, 1f) else null
-    } else null
-    return when (timer.state) {
-        "active" -> TimerReadout(seconds?.let { "${clockDuration(it)} left" } ?: "Running", progress)
-        "paused" -> TimerReadout(seconds?.let { "Paused · ${clockDuration(it)}" } ?: "Paused", progress)
-        else -> TimerReadout("Idle")
-    }
+internal fun timerReadout(timer: Entity?, idleLabel: String = "Idle", unavailableLabel: String = "Unavailable"): TimerReadout {
+    val snapshot = remember(timer) { timer?.timerSnapshot() } ?: return TimerReadout(unavailableLabel)
+    if (snapshot.phase == TimerPhase.IDLE) return TimerReadout(idleLabel)
+    val active = snapshot.phase == TimerPhase.ACTIVE
+    val seconds = if (active) snapshot.endsAtMillis?.let { activeSecondsRemaining(it) } else snapshot.pausedSeconds
+    val label = if (active) seconds?.let { "${clockDuration(it)} left" } ?: "Running"
+        else seconds?.let { "Paused · ${clockDuration(it)}" } ?: "Paused"
+    return TimerReadout(label, snapshot.remainingFraction(seconds), running = true)
 }
 
 @Composable
@@ -78,14 +73,6 @@ private fun activeSecondsRemaining(deadline: Long): Long {
         }
     }
     return remaining
-}
-
-internal fun timerSecondsRemaining(deadline: Long, now: Long): Long = ((deadline - now).coerceAtLeast(0) + 999) / 1000
-
-private fun timerDuration(value: String?): Long? {
-    val parts = value?.split(':')?.map { it.toLongOrNull() ?: return null } ?: return null
-    if (parts.size != 3 || parts[0] !in 0..100_000 || parts[1] !in 0..59 || parts[2] !in 0..59) return null
-    return parts[0] * 3600 + parts[1] * 60 + parts[2]
 }
 
 private fun clockDuration(seconds: Long): String {

@@ -29,12 +29,32 @@ import kotlinx.coroutines.CancellationException
 
 @Composable
 internal fun ImageTile(id: String, title: String, state: String?, available: Boolean, model: PanelViewModel, modifier: Modifier) {
+    val (bitmap, failed) = rememberPanelSnapshot(id, state, available, model)
+    val image = remember(bitmap) { bitmap?.asImageBitmap() }
+    Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+        Column(Modifier.fillMaxSize().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            TileTitle(title)
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                if (image != null) Image(image, null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
+                else TileStatus(if (!available || failed) "Image unavailable" else "Loading image…")
+            }
+        }
+    }
+}
+
+internal data class PanelSnapshot(val bitmap: Bitmap?, val failed: Boolean)
+
+@Composable
+internal fun rememberPanelSnapshot(
+    id: String, state: String?, available: Boolean, model: PanelViewModel, retry: Int = 0,
+): PanelSnapshot {
     val revision = state.orEmpty().take(120)
     var bitmap by remember(model, id) { mutableStateOf<Bitmap?>(model.cachedSnapshot(id, revision)) }
     var failed by remember(model, id, revision) { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    if (available) LaunchedEffect(model, id, revision, lifecycle) {
+    if (available) LaunchedEffect(model, id, revision, lifecycle, retry) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            failed = false
             try {
                 val loaded = model.snapshot(id, revision)
                 if (loaded != null) bitmap = loaded
@@ -47,14 +67,5 @@ internal fun ImageTile(id: String, title: String, state: String?, available: Boo
         }
     }
 
-    val image = remember(bitmap) { bitmap?.asImageBitmap() }
-    Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.fillMaxSize().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            TileTitle(title)
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                if (image != null) Image(image, null, Modifier.matchParentSize(), contentScale = ContentScale.Fit)
-                else TileStatus(if (!available || failed) "Image unavailable" else "Loading image…")
-            }
-        }
-    }
+    return PanelSnapshot(bitmap, failed)
 }

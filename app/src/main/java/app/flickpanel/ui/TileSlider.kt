@@ -71,8 +71,11 @@ internal fun Modifier.tileSlider(
     }
 }
 
-internal fun Modifier.tileFill(fraction: Float, color: Color) = drawBehind {
-    val width = size.width * fraction.coerceIn(0f, 1f)
-    val left = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - width
-    drawRect(color, Offset(left, 0f), Size(width, size.height))
+internal fun Modifier.tileFill(fraction: Float, color: Color): Modifier {
+    if (!fraction.isFinite() || fraction <= 0f) return this
+    return drawBehind {
+        val width = size.width * fraction.coerceAtMost(1f)
+        val left = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - width
+        drawRect(color, Offset(left, 0f), Size(width, size.height))
+    }
 }

@@ -94,7 +94,7 @@ internal fun RoomControlsEditor(
         Modifier.fillMaxSize().padding(horizontal = setupPadding),
         state = scroll,
         contentPadding = PaddingValues(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -178,13 +178,17 @@ private fun RoomTileSettings(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         val format = if (tile.kind == TileKind.SLIDER) "Dimmer" else tile.kind.label
-        TileEditorPreview(tile.label ?: defaultName, format, entityIcon(tile.entity.substringBefore('.')), settings.accent)
+        val automaticIcon = entityIcon(tile.entity.substringBefore('.'))
+        TileEditorPreview(tile.label ?: defaultName, format, settings.icon?.symbol ?: automaticIcon, settings.accent)
         TileNameField(settings.label.orEmpty(), defaultName) { name ->
             onInput()
             edit(settings.copy(label = name.takeIf(String::isNotEmpty)))
         }
         SettingsListGroup {
             SetupSwitchRow("Show in room", null, !settings.hidden) { edit(settings.copy(hidden = !it)) }
+        }
+        if (tile.kind.supportsIcon) TileIconPicker(settings.icon, automaticIcon) { icon ->
+            edit(settings.copy(icon = icon))
         }
         if (canDim) {
             SettingsListGroup("Light control") {

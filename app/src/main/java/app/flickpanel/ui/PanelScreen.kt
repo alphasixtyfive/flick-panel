@@ -77,6 +77,13 @@ internal fun PanelScreen(
                 MusicPlayerScreen(viewer.id, state, model)
                 SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
             }
+            viewer is PanelViewer.Vacuum && tile?.kind == TileKind.VACUUM -> {
+                Box(Modifier.fillMaxSize()) {
+                    key(viewer.id) { OpenVacuum(tile, state, model) }
+                    SnackbarHost(snacks, Modifier.align(Alignment.BottomCenter).padding(bottom = 84.dp))
+                }
+                BackHandler(onBack = model::closeVacuum)
+            }
             viewer is PanelViewer.Agenda && tile?.kind?.isAgenda == true -> {
                 OpenAgenda(tile, state, model)
                 BackHandler(onBack = model::closeAgenda)

@@ -49,6 +49,7 @@ internal fun GraphTile(
 ) {
     val colors = MaterialTheme.colorScheme
     val accent = tileAccentColour(tile.accent)
+    val icon = tile.icon?.symbol
     val graph = history?.takeIf { it.points.isNotEmpty() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     if (link == Link.ONLINE) LaunchedEffect(tile.entity, loadHistory, lifecycle) {
@@ -67,7 +68,8 @@ internal fun GraphTile(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    TileTitle(label, maxLines = 1)
+                    AccentedTileTitle(label, null, tile.accent, maxLines = 1, customIcon = icon,
+                        surface = colors.surfaceContainer)
                     GraphReading(entity)
                 }
                 if (graph != null) Sparkline(graph, accent, Modifier.weight(.85f).height(36.dp))
@@ -79,7 +81,8 @@ internal fun GraphTile(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TileTitle(label, Modifier.weight(1f), maxLines = 1)
+                    AccentedTileTitle(label, null, tile.accent, Modifier.weight(1f), maxLines = 1, customIcon = icon,
+                        surface = colors.surfaceContainer)
                     if (graph != null) Text("6 h", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
                 }
                 GraphReading(entity, prominent = true)

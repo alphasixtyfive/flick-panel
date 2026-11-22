@@ -24,12 +24,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ElectricBolt
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Thermostat
@@ -93,7 +93,7 @@ internal data class TileFormat(
 
 private enum class DeviceFilter(val label: String, private vararg val domains: String) {
     ALL("All"),
-    CONTROLS("Controls", "light", "switch", "input_boolean", "climate", "input_select", "select", "number", "input_number", "cover", "fan"),
+    CONTROLS("Controls", "light", "switch", "input_boolean", "climate", "input_select", "select", "number", "input_number", "cover", "fan", "vacuum"),
     SENSORS("Sensors", "sensor", "binary_sensor", "timer", "input_text", "weather", "image", "person"),
     CAMERAS("Cameras", "camera"),
     MEDIA("Media", "media_player"),
@@ -117,6 +117,7 @@ internal fun EntityPicker(
         val badges = draft.homeBadges.mapTo(hashSetOf()) { it.entity }
         catalog.entries.filter { entry -> when (source) {
             SetupPicker.TILE -> entry.entity.id !in present &&
+                (entry.entity.domain != "vacuum" || draft.vacuumTile == null) &&
                 (entry.visible || entry.entity.available && entry.entity.domain in setOf("todo", "calendar"))
             SetupPicker.APP -> false
             SetupPicker.MESSAGE, SetupPicker.SCREENSAVER_MESSAGE ->
@@ -211,11 +212,12 @@ internal fun entityIcon(domain: String) = when (domain) {
     "switch", "input_boolean" -> Icons.Rounded.PowerSettingsNew
     "climate" -> Icons.Rounded.Thermostat
     "camera" -> Icons.Rounded.Videocam
+    "vacuum" -> Icons.Rounded.SmartToy
     "media_player" -> Icons.Rounded.MusicNote
     "calendar" -> Icons.Rounded.CalendarMonth
     "todo" -> Icons.Rounded.Checklist
     "person" -> Icons.Rounded.Person
-    "button", "input_button", "scene", "script" -> Icons.Rounded.ElectricBolt
+    "button", "input_button", "scene", "script" -> actionTileIcon(domain)
     else -> Icons.Rounded.Sensors
 }
 
@@ -232,9 +234,12 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, model: PanelViewMod
     val intercomAlias = intercomStream.trim()
     val validIntercom = intercomAlias.isEmpty() || validIntercomStream(intercomAlias)
     var cameraStream by remember(format) { mutableStateOf(format.current?.cameraStream) }
+    var vacuumMap by remember(format) { mutableStateOf(format.current?.vacuumMap) }
+    var vacuumBattery by remember(format) { mutableStateOf(format.current?.vacuumBattery) }
     var confirmAction by remember(format) { mutableStateOf(format.current?.confirmAction ?: false) }
     var readerAttribute by remember(format) { mutableStateOf(format.current?.readerAttribute) }
     var accent by remember(format) { mutableStateOf(format.current?.accent) }
+    var customIcon by remember(format) { mutableStateOf(format.current?.icon) }
     Column(Modifier.widthIn(max = 680.dp).fillMaxSize()) {
         Column(Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = setupPadding, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -247,10 +252,13 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, model: PanelViewMod
                 TileKind.PERSON -> "Open location in maps"
                 TileKind.TASKS -> "To-do list"
                 TileKind.CALENDAR -> "Upcoming events"
+                TileKind.VACUUM -> "Open map and room controls"
                 TileKind.COVER -> preview.coverStatus().takeUnless { it == "Unavailable" } ?: kind.label
                 else -> displayValue(preview).takeUnless { it == "Unavailable" } ?: kind.label
             }
-            TileEditorPreview(label.trim().ifBlank { format.entity.name }, example, entityIcon(preview.domain),
+            val icon = if (kind == TileKind.ACTION) actionTileIcon(preview.domain, status != null) else entityIcon(preview.domain)
+            TileEditorPreview(label.trim().ifBlank { format.entity.name }, example,
+                customIcon?.symbol?.takeIf { kind.supportsIcon } ?: icon,
                 accent.takeIf { kind.supportsAccent })
             TileNameField(label, format.entity.name) {
                 model.touch()
@@ -268,6 +276,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, model: PanelViewMod
             if (kind.supportsAccent) {
                 TileAccentPicker(accent) { accent = it }
             }
+            if (kind.supportsIcon) TileIconPicker(customIcon, icon) { customIcon = it }
             if (kind.resizable) {
                 TileSizePicker(wideOnTablet) { wideOnTablet = it }
             }
@@ -314,6 +323,24 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, model: PanelViewMod
                 }
                 CameraActionsEditor(cameraActions, state, onInput = model::touch) { cameraActions = it }
             }
+            if (kind == TileKind.VACUUM) {
+                val images = remember(state.catalogue) {
+                    state.catalogue.entries.map { it.entity }.filter { it.domain == "image" }
+                }
+                val batteries = remember(state.catalogue) {
+                    state.catalogue.entries.map { it.entity }.filter {
+                        it.domain == "sensor" && (it.attributes.optString("device_class") == "battery" || it.unit == "%")
+                    }
+                }
+                LinkedEntitySetting("Vacuum map", vacuumMap, images, state, "Choose an image") {
+                    model.touch()
+                    vacuumMap = it
+                }
+                LinkedEntitySetting("Battery sensor", vacuumBattery, batteries, state, "Use vacuum battery") {
+                    model.touch()
+                    vacuumBattery = it
+                }
+            }
             if (kind == TileKind.READER) {
                 val attributes = remember(preview.attributes) { preview.readerAttributes() }
                 ReaderSource(readerAttribute, attributes) { readerAttribute = it }
@@ -330,8 +357,15 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, model: PanelViewMod
                     intercomStream = intercomAlias.takeIf { kind == TileKind.CAMERA && it.isNotEmpty() && validIntercom },
                     cameraActions = if (kind == TileKind.CAMERA) cameraActions else emptyList(),
                     accent = accent.takeIf { kind.supportsAccent },
+                    vacuumMap = vacuumMap.takeIf { kind == TileKind.VACUUM },
+                    vacuumBattery = vacuumBattery.takeIf { kind == TileKind.VACUUM },
+                    icon = customIcon.takeIf { kind.supportsIcon },
                 ))
-            }, enabled = kind != TileKind.CAMERA || validIntercom) { Text(if (format.current == null) "Add tile" else "Apply") }
+            }, enabled = when (kind) {
+                TileKind.CAMERA -> validIntercom
+                TileKind.VACUUM -> vacuumMap != null
+                else -> true
+            }) { Text(if (format.current == null) "Add tile" else "Apply") }
         }
     }
 }

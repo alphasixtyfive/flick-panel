@@ -17,6 +17,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import app.flickpanel.config.TileAccent
 import app.flickpanel.ha.Entity
@@ -26,18 +27,19 @@ import app.flickpanel.ha.targetTemperature
 @Composable
 internal fun ClimateTile(
     label: String, entity: Entity?, live: Entity?, pending: String?, enabled: Boolean,
-    modifier: Modifier, accent: TileAccent?, step: (Boolean) -> Unit,
+    modifier: Modifier, accent: TileAccent?, icon: ImageVector? = null, step: (Boolean) -> Unit,
 ) {
     val current = entity?.attributes?.optDouble("current_temperature")?.takeIf(Double::isFinite)
     val setpoint = pending ?: entity?.targetTemperature?.let { "${formatNumber(it, 1)}°" }
-    Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
+    Surface(modifier, shape = panelCardShape, color = tileContainerColour(accent),
+        contentColor = MaterialTheme.colorScheme.onSurface) {
         Column(
             Modifier.fillMaxWidth().padding(tileContentPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                AccentedTileTitle(label, Icons.Rounded.Thermostat, accent, Modifier.weight(1f))
+                AccentedTileTitle(label, Icons.Rounded.Thermostat, accent, Modifier.weight(1f), customIcon = icon)
                 if (current != null) TileStatus("${formatNumber(current, 1)}°", maxLines = 1)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp),

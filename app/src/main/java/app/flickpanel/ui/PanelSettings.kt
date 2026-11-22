@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +57,7 @@ internal enum class PanelPage(val label: String, val readOnly: Boolean = false) 
     REMOTE_CONTROL("Tablet link"),
     HOME_BADGES("Home alerts"),
     BACKUP("Backup & restore"),
+    UPDATES("Updates", readOnly = true),
     ABOUT("About", readOnly = true),
     FONT_LICENCE("Google Sans Flex licence", readOnly = true),
 }
@@ -99,6 +101,7 @@ internal fun PanelSettings(
                 }
                 SettingsListGroup {
                     SettingLink(PanelPage.BACKUP.label, null, { open(PanelPage.BACKUP) }, Icons.Rounded.Backup)
+                    SettingLink(PanelPage.UPDATES.label, null, { open(PanelPage.UPDATES) }, Icons.Rounded.SystemUpdate)
                     SettingLink(PanelPage.ABOUT.label, null, { open(PanelPage.ABOUT) }, Icons.Rounded.Info)
                 }
             }
@@ -176,6 +179,7 @@ internal fun PanelSettings(
                 Text("Backups leave your setup PIN and Home Assistant connection on this device.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            PanelPage.UPDATES -> PanelUpdates(hasChanges = draft != state.config)
             PanelPage.ABOUT -> PanelAbout { open(PanelPage.FONT_LICENCE) }
             PanelPage.FONT_LICENCE -> FontLicence()
         }

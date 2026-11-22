@@ -88,6 +88,7 @@ private fun PanelUi.displayReport(): DisplayReport {
             is PanelViewer.Music -> "music"
             is PanelViewer.Agenda -> "agenda"
             is PanelViewer.Content -> "content"
+            is PanelViewer.Vacuum -> "vacuum"
             is PanelViewer.Light, null -> "dashboard"
         }
     }

@@ -30,6 +30,10 @@ import app.flickpanel.ha.HaProblem
 import app.flickpanel.ha.LightColour
 import app.flickpanel.ha.MEDIA_SEEK
 import app.flickpanel.ha.Link
+import app.flickpanel.ha.Area
+import app.flickpanel.ha.VacuumAction
+import app.flickpanel.ha.canRunVacuum
+import app.flickpanel.ha.supportsVacuum
 import app.flickpanel.ha.MEDIA_VOLUME_SET
 import app.flickpanel.ha.MEDIA_VOLUME_MUTE
 import app.flickpanel.ha.MediaChoice
@@ -472,14 +476,47 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun closeAgenda() = closeViewer<PanelViewer.Agenda>()
 
+    fun openVacuum(id: String) {
+        val current = _ui.value
+        if (current.showingDashboard && current.config.vacuumTile?.entity == id) {
+            openViewer(PanelViewer.Vacuum(id))
+        }
+    }
+
+    fun closeVacuum() = closeViewer<PanelViewer.Vacuum>()
+
+    suspend fun loadVacuumRooms(id: String): List<Area> {
+        val current = _ui.value
+        val vacuum = current.entities[id]
+        val active = client ?: return emptyList()
+        if (!foreground || current.viewer != PanelViewer.Vacuum(id) ||
+            current.config.vacuumTile?.entity != id || current.link != Link.ONLINE ||
+            vacuum?.supportsVacuum(VacuumAction.CLEAN_AREA) != true
+        ) return emptyList()
+        return active.vacuumRooms(id)
+    }
+
+    fun controlVacuum(id: String, action: VacuumAction, rooms: List<String>) {
+        val current = _ui.value
+        if (!foreground || current.viewer != PanelViewer.Vacuum(id) ||
+            current.config.vacuumTile?.entity != id || current.link != Link.ONLINE || id in current.pending
+        ) return
+        val vacuum = current.entities[id]?.takeIf { it.canRunVacuum(action) } ?: return
+        if (action == VacuumAction.CLEAN_AREA && rooms.isEmpty()) return
+        commands.send(vacuum, action.service, action.data(rooms), matches = action::confirmed)
+    }
+
     private fun openViewer(viewer: PanelViewer) {
         cancelIdle()
         _ui.update { it.showViewer(viewer) }
+        if (viewer is PanelViewer.Vacuum) updateLiveSelection()
     }
 
     private inline fun <reified T : PanelViewer> closeViewer() {
         if (_ui.value.viewer !is T) return
+        val wasVacuum = _ui.value.viewer is PanelViewer.Vacuum
         _ui.update { it.copy(viewer = null) }
+        if (wasVacuum) updateLiveSelection()
         touch()
     }
 
@@ -856,7 +893,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         _ui.value = next
         if (command is PanelCommand.SetBrightness || command is PanelCommand.KeepAwake) return
         if (next.page == Page.ROOMS && !next.hasViewer && !next.clock && !next.screenBlank) showRoomControls()
-        if (next.screenBlank != current.screenBlank) updateLiveSelection()
+        if (next.screenBlank != current.screenBlank ||
+            (next.viewer is PanelViewer.Vacuum) != (current.viewer is PanelViewer.Vacuum)
+        ) updateLiveSelection()
         if (next.showingDashboard) touch() else cancelIdle()
     }
 

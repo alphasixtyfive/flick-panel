@@ -69,9 +69,8 @@ import app.flickpanel.ha.cameraActionKind
 import app.flickpanel.ha.cameraActionReady
 
 private val cameraHeaderControlSize = 48.dp
-private val cameraHeaderShade = Brush.verticalGradient(
-    0f to Color(0xb4000000), .54f to Color(0x8c000000), 1f to Color.Transparent,
-)
+private val cameraStatusSurface = Color(0xee16212a)
+private val cameraLiveColour = Color(0xff77e3ad)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -138,7 +137,7 @@ internal fun CameraControls(
                 label, status, startingCall, micOn, notice, testResult, close, speakerControl,
                 narrow = narrow,
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                    .background(cameraHeaderShade)
+                    .background(viewerHeaderShade)
                     .padding(start = headerInset, top = headerTop, end = headerInset, bottom = 36.dp),
             )
         }
@@ -326,7 +325,7 @@ private fun CameraHeader(
                 label, Modifier.weight(1f).semantics { heading() },
                 color = Color.White,
                 style = if (narrow) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
-                maxLines = if (narrow) 2 else 1, overflow = TextOverflow.Ellipsis,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             speakerControl?.invoke(Modifier.size(cameraHeaderControlSize))
             CameraHeaderStatus(
@@ -355,17 +354,21 @@ private fun CameraHeader(
 private fun CameraHeaderStatus(
     label: String, liveDot: Boolean, compact: Boolean, describeLiveVideo: Boolean,
 ) {
-    Row(
-        Modifier.widthIn(max = if (compact) 126.dp else 170.dp).semantics {
+    Surface(
+        modifier = Modifier.height(cameraHeaderControlSize).widthIn(max = if (compact) 126.dp else 190.dp).semantics {
             liveRegion = LiveRegionMode.Polite
             if (describeLiveVideo) stateDescription = "Live video"
         },
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        shape = CircleShape, color = cameraStatusSurface, contentColor = Color.White,
     ) {
-        if (liveDot) Box(Modifier.size(7.dp).background(Color(0xff7fe6a8), CircleShape))
-        Text(label, color = Color.White,
-            style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
-            maxLines = if (compact) 2 else 1, overflow = TextOverflow.Ellipsis)
+        Row(
+            Modifier.padding(horizontal = if (compact) 10.dp else 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (liveDot) Box(Modifier.size(7.dp).background(cameraLiveColour, CircleShape))
+            Text(label, style = MaterialTheme.typography.labelMedium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }

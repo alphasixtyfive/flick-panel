@@ -12,12 +12,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Checklist
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -31,20 +31,29 @@ import app.flickpanel.ha.AgendaTask
 @Composable
 internal fun AgendaPreview(
     title: String, kind: TileKind, state: AgendaState, online: Boolean, modifier: Modifier,
-    expanded: Boolean, wide: Boolean, accent: TileAccent?, open: () -> Unit,
+    expanded: Boolean, wide: Boolean, accent: TileAccent?, customIcon: ImageVector? = null, open: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val surface = tileContainerColour(accent)
     val dates = rememberAgendaDates()
     val content = state.content
     val tasks = (content as? AgendaContent.Tasks)?.open.orEmpty()
+    val calendar = kind == TileKind.CALENDAR
+    val stale = content != null && (!online || state.issue != null)
     Surface(onClick = open, modifier = modifier.semantics { onClick(label = "Open $title", action = null) },
-        color = colors.surfaceContainer, shape = panelCardShape) {
-        Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        color = surface, contentColor = colors.onSurface, shape = panelCardShape) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = tileContentPadding, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                val icon = if (kind == TileKind.TASKS) Icons.Rounded.Checklist else Icons.Rounded.CalendarMonth
-                Icon(icon, null, Modifier.size(compactTileIconSize), tint = tileAccentColour(accent))
-                TileTitle(title, Modifier.weight(1f))
-                if (expanded && tasks.isNotEmpty()) TileStatus("${tasks.size} left", maxLines = 1, color = colors.primary)
+                val icon = customIcon ?: if (calendar) Icons.Rounded.CalendarMonth else Icons.Rounded.Checklist
+                TileIconBadge(icon, surface, tileAccentColour(accent, surface), size = compactTileIconSize)
+                TileTitle(title, Modifier.weight(1f), maxLines = if (calendar) 1 else 2)
+                when {
+                    calendar && stale -> TileStatus("Last update", maxLines = 1)
+                    expanded && tasks.isNotEmpty() -> TileStatus("${tasks.size} left", maxLines = 1, color = colors.primary)
+                }
             }
             when (content) {
                 is AgendaContent.Tasks -> TasksPreview(tasks, dates, expanded, wide)
@@ -55,7 +64,7 @@ internal fun AgendaPreview(
                     else -> "Loading…"
                 })
             }
-            if (state.content != null && (!online || state.issue != null)) TileStatus("Last update")
+            if (!calendar && stale) TileStatus("Last update")
         }
     }
 }
@@ -98,17 +107,22 @@ private fun CalendarPreview(events: List<AgendaEvent>, dates: AgendaDates, expan
             TileValue("No upcoming events", maxLines = 2)
         }
     } else {
-        for ((index, event) in events.take(if (expanded || wide) 2 else 1).withIndex()) {
-            AgendaPreviewItem(event.summary, dates.eventSubtitle(event), prominent = index == 0)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((index, event) in events.take(if (expanded || wide) 2 else 1).withIndex()) {
+                AgendaPreviewItem(event.summary, dates.eventSubtitle(event), prominent = index == 0, singleLine = true)
+            }
         }
     }
 }
 
 @Composable
-private fun AgendaPreviewItem(title: String, detail: String?, prominent: Boolean = true) {
+private fun AgendaPreviewItem(title: String, detail: String?, prominent: Boolean = true, singleLine: Boolean = false) {
     val colors = MaterialTheme.colorScheme
+    val maxLines = if (singleLine) 1 else 2
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        if (prominent) TileValue(title, maxLines = 2) else TileTitle(title, maxLines = 1)
-        if (detail != null) TileStatus(detail, color = if (prominent) colors.primary else colors.onSurfaceVariant)
+        if (prominent) TileValue(title, maxLines = maxLines) else TileTitle(title, maxLines = 1)
+        if (detail != null) {
+            TileStatus(detail, maxLines = maxLines, color = if (prominent) colors.primary else colors.onSurfaceVariant)
+        }
     }
 }

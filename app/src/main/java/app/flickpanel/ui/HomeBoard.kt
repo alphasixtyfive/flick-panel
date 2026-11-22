@@ -6,6 +6,7 @@ import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 
 internal val homePagerHeight = 56.dp
+private val compactControlHeight = 80.dp
 
 internal data class HomeTileRow(
     val tiles: List<TileSpec>,
@@ -16,8 +17,13 @@ internal data class HomeTileRow(
 )
 
 internal data class HomeBand(val lanes: List<List<HomeTileRow>>) {
-    val height = lanes.maxOf { rows -> rows.fold(tileGap * (rows.size - 1)) { sum, row -> sum + row.height } }
+    val height = lanes.maxOf { it.laneHeight() }
 }
+
+private fun List<HomeTileRow>.laneHeight() =
+    fold(tileGap * (size - 1).coerceAtLeast(0)) { sum, row -> sum + row.height }
+
+private fun HomeTileRow.band() = HomeBand(listOf(listOf(this)))
 
 internal fun homeBands(
     groups: HomeTileGroups, fontScale: Float, availableHeight: Dp, gateIds: Set<String> = emptySet(),
@@ -36,31 +42,46 @@ internal fun homeBands(
     val remainingPeople = groups.people.drop(sidePeople.size).flatten()
     val controls = groups.controls.flatten()
     val gates = controls.filter { it.entity in gateIds }
-    val gatesBesideCameras = sideBySide && gates.isNotEmpty() &&
-        gates.sumOf { tileSpan(it, 2, groups.compact, groups.resizeTiles) } <= 2
-    val controlRows = if (gatesBesideCameras) {
+    val gatesFit = gates.sumOf { tileSpan(it, 2, groups.compact, groups.resizeTiles) } <= 2
+    val controlsWithoutGates = if (gatesFit && gates.isNotEmpty()) {
         packTileRows(controls.filterNot { it.entity in gateIds }, columns, groups.compact, groups.resizeTiles)
     } else groups.controls
 
-    fun HomeTileRow.band() = HomeBand(listOf(listOf(this)))
     val standardControlHeight = if (columns == 1) 100.dp else 110.dp
-    fun controlHeight(tiles: List<TileSpec>) = tiles.maxOf { tile ->
+    fun controlHeight(tiles: List<TileSpec>, default: Dp = standardControlHeight) = tiles.maxOf { tile ->
         when (tile.kind) {
             TileKind.COVER -> 128.dp
             TileKind.CHOICE, TileKind.CLIMATE, TileKind.NUMBER -> 152.dp
             TileKind.IMAGE -> 164.dp
-            TileKind.TOGGLE, TileKind.ACTION, TileKind.MEDIA -> if (availableHeight < 300.dp) 88.dp else standardControlHeight
-            else -> standardControlHeight
+            TileKind.TOGGLE, TileKind.ACTION, TileKind.MEDIA -> if (availableHeight < 300.dp) 88.dp else default
+            else -> default
         }
     } * scale
 
+    val footer = groups.shortcuts.chunked(columns).map { HomeTileRow(it, columns, 68.dp * scale, shortcuts = true).band() } +
+        groups.history.map { HomeTileRow(it, columns, 116.dp * scale).band() }
+
+    if (columns == 4 && groups.cameras.size == 1 && cameras?.size == 1 && agenda != null && gatesFit) {
+        val agendaLane = listOf(HomeTileRow(agenda, 2, agendaHeight, expandedAgenda = true)) +
+            groups.people.map { HomeTileRow(it, groups.peopleColumns, 64.dp * scale) }
+        val gateRow = gates.takeIf { it.isNotEmpty() }?.let { HomeTileRow(it, 2, compactControlHeight * scale) }
+        val gateSpace = gateRow?.let { it.height + tileGap } ?: 0.dp
+        val cameraSize = maxOf(208.dp * scale, agendaLane.laneHeight() - gateSpace)
+        val cameraLane = listOfNotNull(HomeTileRow(cameras, 2, cameraSize), gateRow)
+        val top = controlsWithoutGates.map { HomeTileRow(it, columns, controlHeight(it, compactControlHeight)).band() }
+        val overview = top + HomeBand(listOf(cameraLane, agendaLane)) + footer
+        if (homePageHeight(overview) <= availableHeight) return overview
+    }
+
+    val gatesBesideCameras = sideBySide && gates.isNotEmpty() && gatesFit
+    val controlRows = if (gatesBesideCameras) controlsWithoutGates else groups.controls
     return buildList {
         for ((index, row) in controlRows.withIndex()) {
             val height = if (index == 0 && gatesBesideCameras) maxOf(128.dp * scale, controlHeight(row)) else controlHeight(row)
             add(HomeTileRow(row, columns, height).band())
         }
         if (sideBySide) {
-            val gateRow = if (gatesBesideCameras) HomeTileRow(gates, 2, 100.dp * scale) else null
+            val gateRow = if (gatesBesideCameras) HomeTileRow(gates, 2, compactControlHeight * scale) else null
             val peopleSpace = overviewHeight - (gateRow?.let { it.height + tileGap } ?: 0.dp)
             val personHeight = if (sidePeople.size == 3) (peopleSpace - tileGap * 2) / 3f else 86.dp * scale
             add(HomeBand(listOf(
@@ -69,7 +90,8 @@ internal fun homeBands(
             )))
         }
         for (row in groups.cameras.drop(if (sideBySide) 1 else 0)) {
-            add(HomeTileRow(row, if (columns == 1) 1 else 4, cameraHeight).band())
+            val cameraColumns = if (columns == 1) 1 else row.size * 2
+            add(HomeTileRow(row, cameraColumns, cameraHeight).band())
         }
         if (!sideBySide) {
             for (row in groups.agenda) add(HomeTileRow(row, groups.agendaColumns, agendaHeight, expandedAgenda = true).band())
@@ -77,8 +99,7 @@ internal fun homeBands(
         for (row in packTileRows(remainingPeople, columns, groups.compact, groups.resizeTiles)) {
             add(HomeTileRow(row, columns, personTileHeight * scale).band())
         }
-        for (row in groups.shortcuts.chunked(columns)) add(HomeTileRow(row, columns, 68.dp * scale, shortcuts = true).band())
-        for (row in groups.history) add(HomeTileRow(row, columns, 116.dp * scale).band())
+        addAll(footer)
     }
 }
 

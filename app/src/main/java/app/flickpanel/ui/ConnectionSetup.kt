@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -54,9 +55,11 @@ internal fun ConnectionForm(
     Box(modifier.fillMaxWidth().imePadding(), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = 540.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (state.configured) "Home Assistant connection" else "Flick Panel", style = MaterialTheme.typography.headlineMedium)
-            if (!state.configured) Text("Connect with your server address and a long-lived access token.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!state.configured) {
+                Text("Flick Panel", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                Text("Connect with your server address and a long-lived access token.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             OutlinedTextField(url, {
                 url = it
                 onInput()

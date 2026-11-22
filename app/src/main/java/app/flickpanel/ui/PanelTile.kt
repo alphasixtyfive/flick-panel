@@ -1,12 +1,13 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
@@ -49,7 +51,7 @@ internal fun PanelTile(
         label = label,
         entity = state.entity(tile.entity),
         live = state.entities[tile.entity],
-        status = tile.statusEntity?.let(state.entities::get),
+        status = (tile.statusEntity ?: tile.vacuumBattery)?.let(state.entities::get),
         pending = state.pending[tile.entity],
         link = state.link,
         history = state.graphs[tile.entity],
@@ -71,6 +73,7 @@ private fun TileContent(
     val online = link == Link.ONLINE
     val available = online && live?.available == true
     val ready = available && pending == null
+    val icon = tile.icon?.symbol
     when (tile.kind) {
         TileKind.TOGGLE, TileKind.ACTION -> {
             val on = entity?.state == "on"
@@ -79,19 +82,19 @@ private fun TileContent(
                 live?.let { if (tile.kind == TileKind.ACTION) model.action(it) else model.toggle(it, !on) }
             }
         }
-        TileKind.SLIDER -> BrightnessTile(label, entity, live, pending.takeIf { online }, ready, model, modifier, tile.accent)
-        TileKind.FAN -> FanTile(label, entity, live, pending.takeIf { online }, ready, model, modifier, tile.accent)
-        TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier, tile.accent) { increase ->
+        TileKind.SLIDER -> BrightnessTile(label, entity, live, pending.takeIf { online }, ready, model, modifier, tile.accent, icon)
+        TileKind.FAN -> FanTile(label, entity, live, pending.takeIf { online }, ready, model, modifier, tile.accent, icon)
+        TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier, tile.accent, icon) { increase ->
             model.stepTemperature(tile.entity, increase)
         }
-        TileKind.MEDIA -> MusicTile(label, entity, available, model, modifier, tile.accent, compactControls)
-        TileKind.CHOICE -> ChoiceTile(label, entity, pending, ready, modifier, tile.accent) { option ->
+        TileKind.MEDIA -> MusicTile(label, entity, available, model, modifier, tile.accent, compactControls, icon)
+        TileKind.CHOICE -> ChoiceTile(label, entity, pending, ready, modifier, tile.accent, icon) { option ->
             live?.let { model.selectOption(it, option) }
         }
-        TileKind.NUMBER -> NumberTile(label, entity, pending, ready, modifier, tile.accent) { increase ->
+        TileKind.NUMBER -> NumberTile(label, entity, pending, ready, modifier, tile.accent, icon) { increase ->
             live?.let { model.stepNumber(it, increase) }
         }
-        TileKind.COVER -> CoverTile(label, entity, live, online, pending, modifier, tile.accent, compactControls) { action ->
+        TileKind.COVER -> CoverTile(label, entity, live, online, pending, modifier, tile.accent, compactControls, icon) { action ->
             model.controlCover(tile.entity, action)
         }
         TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, label, available, model, modifier, expandedAgenda)
@@ -100,14 +103,18 @@ private fun TileContent(
                 model::cachedPersonAvatar, model::loadPersonAvatar)
             PersonTile(label, live, online, modifier, avatar = photo) { model.openContent(tile.entity) }
         }
-        TileKind.READER -> ReaderTile(label, readContent(entity, tile.readerAttribute), modifier, tile.accent) {
+        TileKind.READER -> ReaderTile(label, readContent(entity, tile.readerAttribute), modifier, tile.accent, icon) {
             model.openContent(tile.entity)
         }
+        TileKind.VACUUM -> VacuumTile(
+            label, live.takeIf { online }, status.takeIf { online },
+            tile.accent, modifier, compact = compactControls, icon = icon,
+        ) { model.openVacuum(tile.entity) }
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, online && entity?.available == true, model, modifier)
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
-        TileKind.TIMER -> TimerTile(label, entity, modifier, tile.accent)
-        TileKind.VALUE -> ValueTile(label, entity, link, modifier, tile.accent)
-        TileKind.PERCENTAGE -> PercentageTile(label, entity, link, modifier, tile.accent)
+        TileKind.TIMER -> TimerTile(label, entity, modifier, tile.accent, icon)
+        TileKind.VALUE -> ValueTile(label, entity, link, modifier, tile.accent, icon)
+        TileKind.PERCENTAGE -> PercentageTile(label, entity, link, modifier, tile.accent, icon)
         TileKind.TREND -> GraphTile(tile, label, entity, link, history, model::loadGraph, modifier, compactHistory)
         TileKind.APP -> AppTile(tile, modifier)
         TileKind.CAMERA -> Unit
@@ -115,17 +122,70 @@ private fun TileContent(
 }
 
 @Composable
+internal fun ControlTileContent(
+    label: String,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+    titleLines: Int = 2,
+    regularPadding: Dp = 12.dp,
+    headingDetail: @Composable () -> Unit = {},
+    badge: @Composable () -> Unit,
+    detail: @Composable () -> Unit,
+) {
+    val content = modifier.fillMaxSize().padding(
+        horizontal = tileContentPadding,
+        vertical = if (compact) 10.dp else regularPadding,
+    )
+    val iconGap = Arrangement.spacedBy(8.dp)
+    if (compact) {
+        Row(content, horizontalArrangement = iconGap, verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                TileTitle(label, maxLines = 1)
+                detail()
+            }
+            badge()
+        }
+    } else {
+        Column(content, verticalArrangement = Arrangement.SpaceBetween) {
+            Row(horizontalArrangement = iconGap, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).align(Alignment.Top)) {
+                    TileTitle(label, maxLines = titleLines)
+                    headingDetail()
+                }
+                badge()
+            }
+            detail()
+        }
+    }
+}
+
+@Composable
+internal fun CompactControlStatus(
+    text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    Text(text, modifier, style = MaterialTheme.typography.bodyLarge, color = color,
+        maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+
+@Composable
 internal fun ControlTileTitle(
-    label: String, icon: ImageVector, tint: Color, adjust: (() -> Unit)? = null, enabled: Boolean = true,
-    maxLines: Int = 2,
+    label: String, icon: ImageVector, surface: Color, tint: Color, adjust: (() -> Unit)? = null, enabled: Boolean = true,
+    maxLines: Int = 2, adjustIcon: ImageVector? = null,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         TileTitle(label, Modifier.weight(1f).align(Alignment.Top), maxLines = maxLines)
-        if (adjust == null) Icon(icon, null, tint = tint, modifier = Modifier.size(tileIconSize))
-        else IconButton(onClick = adjust, enabled = enabled) {
-            Icon(Icons.Rounded.Tune, "Adjust $label", tint = if (enabled) tint else Color.Unspecified,
-                modifier = Modifier.size(compactTileIconSize))
-        }
+        ControlTileBadge(label, icon, surface, tint, adjust, enabled, adjustIcon)
+    }
+}
+
+@Composable
+internal fun ControlTileBadge(
+    label: String, icon: ImageVector, surface: Color, tint: Color,
+    adjust: (() -> Unit)?, enabled: Boolean, adjustIcon: ImageVector?,
+) {
+    if (adjust == null) TileIconBadge(icon, surface, tint)
+    else IconButton(onClick = adjust, enabled = enabled) {
+        TileIconBadge(adjustIcon ?: Icons.Rounded.Tune, surface, tint, description = "Adjust $label")
     }
 }
 

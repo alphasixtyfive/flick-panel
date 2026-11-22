@@ -9,11 +9,19 @@
 
 Use HTTPS for remote connections. A private IPv4 address such as `http://192.168.1.5:8123` works on a LAN. Flick Panel stores the token using Android Keystore. To upgrade in place, install an APK signed with the same certificate. If you are moving from a development-signed Pilot APK to a signed release, export the layout before switching builds.
 
+### Update Flick Panel
+
+Hold **Home**, enter the setup PIN, then open **Panel → Updates**. If a newer release is available, tap **Download update** and then **Install update**. Confirm the installation in Android. If Android asks you to allow installs from Flick Panel, grant permission, then unlock setup and return to **Updates** to finish.
+
 ## Favourites and rooms
 
-Choose **Add tile** in setup and search by entity name, ID, or room. Choose a tile format and optionally give it a shorter label. **Standard** and **Wide** set its size in the grid. Choose **Accent** on supported tiles to personalise the icon or graph line. **Theme** follows the panel's colours. To reorder a tile, drag its handle or tap the handle to move it one place. Use the tile menu to resize or remove it. **Undo removal** is available before saving.
+Choose **Add tile** in setup and search by entity name, ID, or room. Choose a tile format and optionally give it a shorter label. **Standard** and **Wide** set its size in the grid. Choose **Accent** on supported tiles to tint the tile and its icon, or to colour a graph line. **Theme** follows the panel's colours. To reorder a tile, drag its handle or tap the handle to move it one place. Use the tile menu to resize or remove it. **Undo removal** is available before saving.
 
 Under **Rooms**, choose which Home Assistant areas to show and set their order. Open a room to hide, show, resize, rename, recolour, or reorder controls. A custom name applies to that room. Search hidden controls by name, entity ID, or type. Use **Switch** or **Dimmer** for dimmable lights. **Use automatic layout** restores that room's defaults. **Heating controls** determines whether assigned thermostats appear in rooms.
+
+A button with a linked **Status timer** shows the remaining time and a progress fill while its timer runs.
+
+Choose **Icon** when editing a tile in Favourites or a room, then browse or search the built-in symbols. **Automatic** uses Flick Panel's default for that control.
 
 Wide displays show the room list beside the tiles. On a small display, tap the room name to choose another room.
 On very short screens, Favourites uses one scrollable board so the alert and navigation leave space for the tiles.
@@ -46,7 +54,8 @@ See the [demo dashboard and room controls](screenshots/) for a starting point.
 | Music player | See whether the player is playing, buffering, or paused. Open artwork, playback controls, position, volume, and the media library when supported. |
 | Tasks or Calendar | Check off and add items, restore completed items, or see the next seven days of events. |
 | Person location | Show a person's Home Assistant picture and zone. Open the built-in map when Home Assistant supplies a position. |
-| Image or Content reader | Show an image entity such as a vacuum map, or open text such as a recipe from a sensor state or attribute. |
+| Vacuum | See the robot's status and battery. Tap to open its map and choose rooms to clean. |
+| Image or Content reader | Show an image entity or open text such as a recipe from a sensor state or attribute. |
 | Weather or Camera | Put current weather near the clock, or open a camera preview for live video. |
 
 The map works offline. It includes a worldwide overview and detailed road, park, and water data for north and central London and Varna. [Map data credits](../app/src/main/assets/offline_map/ATTRIBUTION.md)
@@ -57,10 +66,16 @@ Pin a camera to Favourites for a quick preview, or open it from the Cameras tab.
 
 Flick Panel can show the last saved preview as the camera loads or when it goes offline. The tablet keeps previews in its private cache for up to three days, scoped to the current Home Assistant connection. Use **Clear cache** in Android's Flick Panel app settings to remove them. The viewer shows **Live** once video starts.
 
+## Vacuum map and rooms
+
+Add a vacuum tile and choose its map image. If the vacuum reports its battery through a separate sensor, select that sensor under **Battery sensor**. A panel supports one vacuum.
+
+Map the vacuum's segments to areas in its Home Assistant entity settings. Flick Panel lists those rooms beside the map on tablets and beneath it on phones. Select rooms to clean them individually, or leave the selection empty to clean everywhere if the vacuum supports it. Pinch to zoom the map and tap **Fit map** to return to the full floor plan. [Home Assistant room mapping](https://www.home-assistant.io/actions/vacuum.clean_area/)
+
 ## Appearance, alerts, and photos
 
 - **Appearance** has Graphite, Charcoal amber, Porcelain, and Android colours, plus **Higher contrast** and **Reduce motion**.
-- Under **Panel → Home Assistant**, choose a text source for **Home message** or select the sensor states that should appear as **Home alerts**. Tap an alert on Home to read the details.
+- Under **Panel → Home Assistant**, choose a text source for **Home message** or select the sensor states that should appear as **Home alerts**. When an alert supplies named entries in its `items` attribute, Flick Panel shows the count next to the alert name. Tap the alert to read the entries.
 - Set **Panel → Display → Idle photos** to a Home Assistant media folder or an album exposed by your Home Assistant server. Choose **Use this folder** and save, then tap the dashboard clock to preview it.
 - Under **Panel → Display → Screensaver message**, choose a Home Assistant text sensor or input text. The message appears beneath the date on the photo clock. The dashboard has a separate **Home message** setting.
 - **Dashboard brightness** can follow Android or use a fixed level. **Screensaver brightness** sets the backlight for the clock and photos. **Reset** returns to 55% for photos or 13% for the clock alone. **Wall display** keeps Flick Panel awake while it is visible.
@@ -102,5 +117,5 @@ data:
 | `keep_awake` | `enabled` as `true`, `false`, or `auto` |
 | `show_page` | `page` as `favourites`, `rooms`, or `cameras` |
 | `open_camera` | `camera` as a saved camera entity ID |
-| `open_tile` | `entity_id` as a saved camera, player, list, calendar, map, or reader |
+| `open_tile` | `entity_id` as a saved camera, player, list, calendar, map, reader, or vacuum |
 | `launch_app` | `package_name` as a saved Android shortcut |

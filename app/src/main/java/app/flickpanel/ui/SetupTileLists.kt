@@ -163,7 +163,11 @@ internal fun RoomSetup(
         else if (groups.isEmpty()) Text("No matching rooms", Modifier.padding(horizontal = 16.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         else {
-            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 12.dp)) {
+            LazyColumn(
+                Modifier.weight(1f),
+                contentPadding = PaddingValues(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 for ((title, choices) in groups) {
                     item(key = title) {
                         Text(title, Modifier.padding(start = 16.dp, top = 10.dp, bottom = 4.dp).semantics { heading() },

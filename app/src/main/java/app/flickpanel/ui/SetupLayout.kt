@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -22,7 +23,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MeetingRoom
 import androidx.compose.material.icons.rounded.Settings
@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import app.flickpanel.config.PanelTheme
 
 internal val setupPadding = 24.dp
+internal val setupBackButtonSize = 48.dp
 
 internal enum class SetupSection(val label: String, val icon: ImageVector) {
     FAVOURITES("Favourites", Icons.Rounded.FavoriteBorder),
@@ -85,37 +86,35 @@ internal fun SetupLayout(
     BackHandler(onBack = back)
     PanelColors(theme, highContrast) {
         Surface(Modifier.fillMaxSize()) {
-            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(top = appBarTopPadding)) {
                 val fontScale = LocalDensity.current.fontScale
                 val twoPanes = maxWidth >= tabletWidthDp.dp && maxWidth >= 640.dp * fontScale
                 val shortScreen = !twoPanes && maxHeight < 360.dp && maxWidth >= 440.dp
                 val categoryWidth = (224.dp * fontScale.coerceAtLeast(1f)).coerceAtMost(maxWidth / 3)
                 Row(Modifier.fillMaxSize()) {
                     if (twoPanes) {
-                        SetupCategoryPane(section, openSection, close, busy, Modifier.width(categoryWidth))
+                        SetupCategoryPane(section, openSection, busy, Modifier.width(categoryWidth))
                     } else if (shortScreen) {
                         SetupNavigationRail(section, busy, openSection)
                     }
-                    Box(Modifier.weight(1f).fillMaxHeight().padding(start = if (twoPanes) 12.dp else 0.dp),
-                        contentAlignment = if (twoPanes) Alignment.TopStart else Alignment.TopCenter) {
-                        Column(Modifier.widthIn(max = detailWidth).fillMaxSize()) {
-                            SetupToolbar(
-                                title = detailTitle ?: section.label,
-                                detail = detailTitle != null,
-                                showNavigation = detailTitle != null || !twoPanes,
-                                busy = busy,
-                                navigate = if (detailTitle != null) back else close,
-                                action = toolbarAction,
-                            )
+                    Column(Modifier.weight(1f).fillMaxHeight().padding(start = if (twoPanes) 12.dp else 0.dp)) {
+                        SetupToolbar(
+                            title = detailTitle ?: section.label,
+                            busy = busy,
+                            back = back.takeIf { detailTitle != null },
+                            close = close,
+                            action = toolbarAction,
+                        )
+                        Column(
+                            Modifier.weight(1f).align(if (twoPanes) Alignment.Start else Alignment.CenterHorizontally)
+                                .widthIn(max = detailWidth).fillMaxWidth(),
+                        ) {
                             Box(Modifier.weight(1f).fillMaxWidth().panelEntrance(destination, reduceMotion)) {
                                 content()
                                 SnackbarHost(feedback, Modifier.align(Alignment.BottomCenter).padding(horizontal = setupPadding))
                             }
                             if (showSave) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = setupPadding, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.End,
-                                ) {
+                                PanelActionFooter(setupPadding) {
                                     Button(onClick = save, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
                                         Text("Save changes")
                                     }
@@ -153,10 +152,9 @@ private fun SetupNavigationRail(section: SetupSection, busy: Boolean, open: (Set
 @Composable
 private fun SetupToolbar(
     title: String,
-    detail: Boolean,
-    showNavigation: Boolean,
     busy: Boolean,
-    navigate: () -> Unit,
+    back: (() -> Unit)?,
+    close: () -> Unit,
     action: (@Composable () -> Unit)?,
 ) {
     TopAppBar(
@@ -166,15 +164,15 @@ private fun SetupToolbar(
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         },
-        actions = { action?.invoke() },
-        modifier = Modifier.padding(start = if (showNavigation) 0.dp else setupPadding - 16.dp, end = 12.dp),
+        actions = {
+            action?.invoke()
+            ViewerCloseButton("Close settings", close, enabled = !busy)
+        },
+        modifier = Modifier.padding(start = setupPadding - 16.dp, end = 12.dp),
         navigationIcon = {
-            if (showNavigation) {
-                IconButton(onClick = navigate, enabled = !busy) {
-                    Icon(
-                        if (detail) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Close,
-                        if (detail) "Back" else "Close settings",
-                    )
+            if (back != null) {
+                IconButton(onClick = back, modifier = Modifier.padding(end = 8.dp).size(setupBackButtonSize), enabled = !busy) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
                 }
             }
         },
@@ -184,13 +182,13 @@ private fun SetupToolbar(
 
 @Composable
 private fun SetupCategoryPane(
-    section: SetupSection, open: (SetupSection) -> Unit, close: () -> Unit, busy: Boolean, modifier: Modifier,
+    section: SetupSection, open: (SetupSection) -> Unit, busy: Boolean, modifier: Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(modifier.fillMaxHeight().background(colors.surfaceContainerLow).padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = close, enabled = !busy) { Icon(Icons.Rounded.Close, "Close settings") }
-            Text("Settings", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
+            Text("Settings", Modifier.padding(start = 12.dp).semantics { heading() },
+                style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).selectableGroup().padding(bottom = 16.dp),

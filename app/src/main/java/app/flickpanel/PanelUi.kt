@@ -9,6 +9,7 @@ import app.flickpanel.ha.GraphHistory
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.PanelCommand
 import app.flickpanel.ha.PanelRemoteState
+import org.json.JSONObject
 
 internal enum class Page(val label: String) { FAVOURITES("Favourites"), ROOMS("Rooms"), CAMERAS("Cameras") }
 
@@ -20,6 +21,7 @@ internal sealed interface PanelViewer {
     data class Agenda(override val id: String) : PanelViewer
     data class Content(override val id: String) : PanelViewer
     data class Light(override val id: String) : PanelViewer
+    data class Vacuum(override val id: String) : PanelViewer
 }
 
 private val whitespace = Regex("\\s+")
@@ -94,6 +96,7 @@ internal data class PanelUi(
         return when {
             kind == TileKind.CAMERA -> showCamera(id, openedAt)
             kind == TileKind.MEDIA -> showViewer(PanelViewer.Music(id))
+            kind == TileKind.VACUUM -> showViewer(PanelViewer.Vacuum(id))
             kind.isAgenda -> showViewer(PanelViewer.Agenda(id))
             kind.hasContentScreen -> showViewer(PanelViewer.Content(id))
             else -> this
@@ -142,6 +145,8 @@ internal fun PanelUi.liveEntityIds(roomsRequested: Boolean): Set<String> = build
         tile.statusEntity?.let(::add)
         tile.cameraActions.forEach { add(it.entity) }
         tile.cameraStream?.let(::add)
+        tile.vacuumBattery?.let(::add)
+        if (viewer == PanelViewer.Vacuum(tile.entity)) tile.vacuumMap?.let(::add)
     }
     if (!screenBlank && (roomsRequested || config.roomIds?.isNotEmpty() == true)) {
         roomSections.forEach { section -> section.tiles.mapTo(this) { it.entity } }
@@ -153,13 +158,23 @@ internal fun PanelUi.liveEntityIds(roomsRequested: Boolean): Set<String> = build
 }
 
 internal data class ActiveHomeBadge(val label: String, val entity: Entity) {
+    val issueCount: Int?
+        get() {
+            val items = entity.attributes.optJSONArray("items") ?: return null
+            return (0 until items.length()).count { items.optJSONObject(it).badgeItemName() != null }.takeIf { it > 0 }
+        }
+
+    val summary: String get() = issueCount?.let { "$label · $it" } ?: label
+
     fun details(): List<Pair<String, String?>> {
         val items = entity.attributes.optJSONArray("items") ?: return emptyList()
         return (0 until minOf(items.length(), 48)).mapNotNull { index ->
             val item = items.optJSONObject(index) ?: return@mapNotNull null
-            val name = (item.opt("name") as? String)?.trim()?.take(120)?.takeIf(String::isNotEmpty)
-                ?: return@mapNotNull null
+            val name = item.badgeItemName()?.take(120) ?: return@mapNotNull null
             name to (item.opt("value") as? String)?.trim()?.take(300)?.takeIf(String::isNotEmpty)
         }
     }
 }
+
+private fun JSONObject?.badgeItemName(): String? =
+    (this?.opt("name") as? String)?.trim()?.takeIf(String::isNotEmpty)

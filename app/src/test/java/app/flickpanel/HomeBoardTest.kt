@@ -56,6 +56,28 @@ class HomeBoardTest {
     }
 
     @Test
+    fun singleCameraOverviewPairsGatesAndKeepsAllOtherFavouritesOnTheTablet() {
+        val favourites = tiles.filterNot { it.entity == "camera.side" }
+        val groups = homeTileGroups(favourites, 4, compact = true, resizeTiles = true)
+        val gates = setOf("cover.front", "cover.back")
+        val height = 609.dp
+        val page = homePages(homeBands(groups, 1f, height, gateIds = gates), height).single()
+
+        assertEquals(favourites.take(4), page.first().lanes.single().single().tiles)
+        assertEquals(80.dp, page.first().height)
+        val (entry, household) = page[1].lanes
+        assertEquals("camera.front", entry.first().tiles.single().entity)
+        assertEquals(2, entry.first().columns)
+        assertEquals(gates, entry.last().tiles.map(TileSpec::entity).toSet())
+        assertEquals(80.dp, entry.last().height)
+        assertTrue(household.first().expandedAgenda)
+        assertTrue(household.drop(1).all { it.tiles.size == 2 && it.height >= 64.dp })
+        val shown = page.flatMap { it.lanes.flatten().flatMap { row -> row.tiles } }
+        assertEquals(favourites.size, shown.size)
+        assertEquals(favourites.toSet(), shown.toSet())
+    }
+
+    @Test
     fun tinyDashboardKeepsAllTilesOnOneScrollSurfaceWithoutASeparatePager() {
         val groups = homeTileGroups(tiles, 2, compact = false, resizeTiles = true, inlineGraph = true)
         val height = 108.dp

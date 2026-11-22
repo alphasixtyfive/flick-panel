@@ -8,27 +8,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Article
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.flickpanel.config.TileAccent
@@ -38,9 +33,11 @@ private val readerMaxWidth = 720.dp
 
 @Composable
 internal fun ReaderTile(
-    label: String, content: ReadingContent?, modifier: Modifier, accent: TileAccent?, open: () -> Unit,
+    label: String, content: ReadingContent?, modifier: Modifier, accent: TileAccent?,
+    icon: ImageVector? = null, open: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val surface = tileContainerColour(accent)
     Surface(
         onClick = open,
         enabled = content != null,
@@ -48,7 +45,8 @@ internal fun ReaderTile(
             if (content != null) onClick(label = "Read $label", action = null)
         },
         shape = panelCardShape,
-        color = colors.surfaceContainer,
+        color = surface,
+        contentColor = colors.onSurface,
     ) {
         Column(
             Modifier.padding(tileContentPadding),
@@ -58,7 +56,8 @@ internal fun ReaderTile(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.AutoMirrored.Rounded.Article, null, Modifier.size(compactTileIconSize), tint = tileAccentColour(accent))
+                TileIconBadge(icon ?: Icons.AutoMirrored.Rounded.Article, surface, tileAccentColour(accent, surface),
+                    size = compactTileIconSize)
                 TileTitle(label, Modifier.weight(1f))
             }
             TileStatus(content?.preview ?: "Text unavailable")
@@ -66,19 +65,17 @@ internal fun ReaderTile(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ReaderScreen(title: String, content: ReadingContent?, close: () -> Unit, modifier: Modifier = Modifier) {
+    val gutter = 24.dp
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                TopAppBar(
-                    modifier = Modifier.widthIn(max = readerMaxWidth).fillMaxWidth().padding(horizontal = 8.dp),
-                    title = {
-                        Text(title, Modifier.semantics { heading() }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
-                    actions = { ViewerCloseButton("Close reader", close) },
+                ViewerTopAppBar(
+                    title, "Close reader", close,
+                    modifier = Modifier.widthIn(max = readerMaxWidth).fillMaxWidth(),
+                    contentGutter = gutter,
                 )
             }
         },
@@ -87,7 +84,7 @@ internal fun ReaderScreen(title: String, content: ReadingContent?, close: () -> 
             Column(
                 Modifier.widthIn(max = readerMaxWidth).fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                    .padding(horizontal = gutter, vertical = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 if (content == null) {

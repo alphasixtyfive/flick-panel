@@ -1,20 +1,16 @@
 package app.flickpanel.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,8 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
@@ -75,18 +69,12 @@ private fun MusicLibraryScreen(
         val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
         val wide = minOf(maxWidth, 1080.dp) >= 760.dp * fontScale
         val sidePadding = if (wide) 28.dp else 16.dp
-        val verticalPadding = if (maxHeight < 460.dp) 8.dp else 18.dp
-        Column(
-            Modifier.widthIn(max = 1080.dp).fillMaxSize().padding(horizontal = sidePadding, vertical = verticalPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Music library", Modifier.weight(1f).semantics { heading() },
-                    style = MaterialTheme.typography.headlineSmall)
-                ViewerCloseButton("Close music", model::closeMusic)
-            }
+        Column(Modifier.widthIn(max = 1080.dp).fillMaxSize()) {
+            ViewerTopAppBar("Music library", "Close music", model::closeMusic,
+                windowInsets = WindowInsets(0, 0, 0, 0), contentGutter = sidePadding)
             MusicBrowser(
-                id, library, model, wide, playback, artwork, transport, volume, showPlayer, Modifier.weight(1f),
+                id, library, model, wide, playback, artwork, transport, volume, showPlayer,
+                Modifier.weight(1f).padding(horizontal = sidePadding).padding(top = 8.dp, bottom = 12.dp),
             )
         }
     }

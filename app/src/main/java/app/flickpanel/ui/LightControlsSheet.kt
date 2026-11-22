@@ -18,11 +18,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -89,7 +87,7 @@ internal fun LightControlsSheet(id: String, state: PanelUi, model: PanelViewMode
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(state.entityName(id), Modifier.weight(1f).semantics { heading() },
                     style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                IconButton(onClick = model::closeLight) { Icon(Icons.Rounded.Close, "Close light controls") }
+                ViewerCloseButton("Close light controls", model::closeLight)
             }
             if (entity?.canDim == true) {
                 Column {

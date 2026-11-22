@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -139,13 +140,13 @@ internal fun MusicBrowser(
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(folder?.title ?: "Sources", Modifier.weight(1f).semantics { heading() },
-                        style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (canGoUp) {
-                        TextButton(onClick = ::back, enabled = !starting, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text("Back")
+                        IconButton(onClick = ::back, enabled = !starting, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back")
                         }
                     }
+                    Text(folder?.title ?: "Sources", Modifier.weight(1f).semantics { heading() },
+                        style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (starting) {
                         CircularProgressIndicator(Modifier.padding(8.dp).size(22.dp), strokeWidth = 2.dp)
                     } else if (folder?.playable == true) {
