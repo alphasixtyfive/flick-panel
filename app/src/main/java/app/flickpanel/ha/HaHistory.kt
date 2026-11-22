@@ -7,6 +7,8 @@ import java.time.format.DateTimeParseException
 
 private const val MAX_GRAPH_POINTS = 160
 
+internal data class GraphHistory(val start: Long, val end: Long, val points: List<GraphPoint>)
+
 internal fun decodeHistory(rows: JSONArray?): List<GraphPoint> {
     val points = rows.objects().mapNotNull { row ->
         val value = (row.text("s") ?: row.text("state"))?.toDoubleOrNull()?.takeIf(Double::isFinite)
@@ -16,9 +18,23 @@ internal fun decodeHistory(rows: JSONArray?): List<GraphPoint> {
     }.toMutableList()
     points.sortBy(GraphPoint::time)
     if (points.size <= MAX_GRAPH_POINTS) return points
-    // Keep both endpoints and distribute the remaining points across the period.
-    return List(MAX_GRAPH_POINTS) { index ->
-        points[(index.toLong() * points.lastIndex / (MAX_GRAPH_POINTS - 1)).toInt()]
+    val buckets = (MAX_GRAPH_POINTS - 2) / 2
+    val interior = points.size - 2
+    return buildList(MAX_GRAPH_POINTS) {
+        add(points.first())
+        repeat(buckets) { bucket ->
+            val start = 1 + (bucket.toLong() * interior / buckets).toInt()
+            val end = 1 + ((bucket + 1L) * interior / buckets).toInt()
+            var low = start
+            var high = start
+            for (index in start + 1 until end) {
+                if (points[index].value < points[low].value) low = index
+                if (points[index].value >= points[high].value) high = index
+            }
+            add(points[minOf(low, high)])
+            if (low != high) add(points[maxOf(low, high)])
+        }
+        add(points.last())
     }
 }
 

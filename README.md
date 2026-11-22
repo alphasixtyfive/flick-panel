@@ -32,7 +32,8 @@ from other apps.
    non-admin account.
 2. Open Flick Panel, enter the Home Assistant URL and token, and choose a setup PIN.
 3. Open **Add tile** and search by entity name, ID, or room. For a numeric sensor choose **Value** or
-   **Small graph**. For a dimmable light choose **Slider** or **Switch**. Swipe across a
+   **Small graph**. Use **Graph colour** to pick an accent for a graph tile.
+   For a dimmable light choose **Slider** or **Switch**. Swipe across a
    brightness tile to set the level, or tap it to turn the light on or off. **Save changes** saves
    the layout.
    **Image** displays a Home Assistant image entity like a vacuum map. Size previews in

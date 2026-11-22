@@ -145,14 +145,16 @@ internal class HaClient(
         return rows.objects().mapNotNull(MediaChoice::from).toList()
     }
 
-    suspend fun history(entity: String): List<GraphPoint> {
+    suspend fun history(entity: String): GraphHistory {
         require(validEntity(entity))
         val now = Instant.now()
+        val start = now.minusSeconds(6 * 3600)
         val response = request("history/history_during_period", JSONObject()
-            .put("start_time", now.minusSeconds(6 * 3600).toString())
+            .put("start_time", start.toString())
             .put("end_time", now.toString()).put("entity_ids", JSONArray(listOf(entity)))
             .put("minimal_response", true).put("no_attributes", true).put("significant_changes_only", false))
-        return decodeHistory(response.optJSONObject("result")?.optJSONArray(entity))
+        return GraphHistory(start.toEpochMilli(), now.toEpochMilli(),
+            decodeHistory(response.optJSONObject("result")?.optJSONArray(entity)))
     }
 
     suspend fun snapshot(entity: String): ByteArray? {

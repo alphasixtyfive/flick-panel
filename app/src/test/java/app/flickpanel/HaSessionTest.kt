@@ -24,6 +24,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -71,7 +72,9 @@ class HaSessionTest {
                 client.command("light.lamp", "light", "turn_on", JSONObject().put("brightness_pct", 50))
                 withTimeout(6_000) { client.entities.first { it["light.lamp"]?.state == "on" } }
                 assertEquals(50, client.entities.value.getValue("light.lamp").brightness)
-                assertEquals(listOf(801.0, 840.0), client.history("sensor.power").map { it.value })
+                val history = client.history("sensor.power")
+                assertEquals(listOf(801.0, 840.0), history.points.map { it.value })
+                assertEquals(6L * 3600 * 1000, history.end - history.start)
                 assertEquals("/api/hls/abcdefgh123456/master_playlist.m3u8", client.cameraStream("camera.front_door").url.encodedPath)
                 assertNotNull(client.snapshot("camera.front_door"))
                 assertNotNull(client.snapshot("image.vacuum_map"))
@@ -155,6 +158,21 @@ class HaSessionTest {
         assertEquals(1_000L, points.first().time)
         assertEquals(319_000L, points.last().time)
         assertEquals(points.sortedBy { it.time }, points)
+    }
+
+    @Test fun denseHistoryKeepsBriefPeaksAndDips() {
+        val rows = JSONArray((1..640).map { second ->
+            val value = when (second) {
+                17 -> 4800
+                19 -> -260
+                else -> 120
+            }
+            JSONObject().put("s", value.toString()).put("lu", second)
+        })
+        val points = decodeHistory(rows)
+        assertTrue(points.size <= 160)
+        assertEquals(4800.0, points.maxOf { it.value }, 0.0)
+        assertEquals(-260.0, points.minOf { it.value }, 0.0)
     }
 }
 

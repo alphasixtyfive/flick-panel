@@ -20,6 +20,7 @@ internal object PanelConfigCodec {
                     if (tile.wideOnTablet) put("wide", true)
                     if (tile.confirmAction) put("confirm", true)
                     tile.readerAttribute?.let { put("readerAttribute", it) }
+                    if (tile.kind == TileKind.TREND) tile.graphColour?.let { put("graphColour", it.name) }
                 }
         }))
         .put("theme", config.theme.name)
@@ -75,7 +76,12 @@ internal object PanelConfigCodec {
                 readerAttribute = readerAttribute,
                 cameraStream = tile.text("stream")?.takeIf {
                     kind == TileKind.CAMERA && it != entity && validEntity(it) && it.startsWith("camera.")
-                })
+                },
+                graphColour = if (kind == TileKind.TREND) {
+                    val colour = tile.text("graphColour")
+                    GraphColour.entries.firstOrNull { it.name == colour }
+                } else null,
+            )
         }.distinctBy { it.entity }
         return PanelConfig(
             favourites = tiles,

@@ -232,6 +232,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
     var cameraStream by remember(format) { mutableStateOf(format.current?.cameraStream) }
     var confirmAction by remember(format) { mutableStateOf(format.current?.confirmAction ?: false) }
     var readerAttribute by remember(format) { mutableStateOf(format.current?.readerAttribute) }
+    var graphColour by remember(format) { mutableStateOf(format.current?.graphColour) }
     Column(Modifier.widthIn(max = 680.dp).fillMaxSize()) {
         Column(Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = setupPadding, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -272,6 +273,9 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                     }
                 }
             }
+            if (kind == TileKind.TREND) {
+                GraphColourPicker(graphColour) { graphColour = it }
+            }
             if (kind.resizable) {
                 TileSizePicker(wideOnTablet) { wideOnTablet = it }
             }
@@ -311,6 +315,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                     confirmAction = kind == TileKind.ACTION && confirmAction,
                     readerAttribute = readerAttribute.takeIf { kind == TileKind.READER },
                     cameraStream = cameraStream.takeIf { kind == TileKind.CAMERA },
+                    graphColour = graphColour.takeIf { kind == TileKind.TREND },
                 ))
             }) { Text(if (format.current == null) "Add tile" else "Apply") }
         }

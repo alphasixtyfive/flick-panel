@@ -5,7 +5,7 @@ import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Catalogue
 import app.flickpanel.ha.Entity
-import app.flickpanel.ha.GraphPoint
+import app.flickpanel.ha.GraphHistory
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.PanelCommand
 import app.flickpanel.ha.PanelRemoteState
@@ -47,7 +47,7 @@ internal data class PanelUi(
     val busy: Boolean = false,
     val error: String? = null,
     val pending: Map<String, String> = emptyMap(),
-    val graphs: Map<String, List<GraphPoint>> = emptyMap()
+    val graphs: Map<String, GraphHistory> = emptyMap()
 ) {
     val config get() = layout.config
     val catalogue get() = layout.catalogue

@@ -23,7 +23,7 @@ import app.flickpanel.PanelViewModel
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Entity
-import app.flickpanel.ha.GraphPoint
+import app.flickpanel.ha.GraphHistory
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.canDim
 import app.flickpanel.ha.personPicture
@@ -64,7 +64,7 @@ internal fun PanelTile(
 @Composable
 private fun TileContent(
     tile: TileSpec, label: String, entity: Entity?, live: Entity?, status: Entity?, pending: String?,
-    link: Link, history: List<GraphPoint>?, reduceMotion: Boolean, model: PanelViewModel,
+    link: Link, history: GraphHistory?, reduceMotion: Boolean, model: PanelViewModel,
     modifier: Modifier, compactHistory: Boolean, expandedAgenda: Boolean,
 ) {
     val online = link == Link.ONLINE
@@ -104,8 +104,8 @@ private fun TileContent(
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, online && entity?.available == true, model, modifier)
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
         TileKind.TIMER -> TimerTile(label, entity, modifier)
-        TileKind.VALUE, TileKind.TREND -> ValueTile(tile, label, entity, link, history,
-            model::loadGraph, modifier, compactHistory)
+        TileKind.VALUE -> ValueTile(label, entity, link, modifier)
+        TileKind.TREND -> GraphTile(tile, label, entity, link, history, model::loadGraph, modifier, compactHistory)
         TileKind.APP -> AppTile(tile, modifier)
         TileKind.CAMERA -> Unit
     }

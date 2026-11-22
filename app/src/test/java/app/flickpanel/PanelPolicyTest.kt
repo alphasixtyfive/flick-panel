@@ -1,5 +1,6 @@
 package app.flickpanel
 
+import app.flickpanel.config.GraphColour
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelConfigCodec
 import app.flickpanel.config.PanelTheme
@@ -28,6 +29,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PanelPolicyTest {
+    @Test fun graphColoursRoundTripAndOlderLayoutsUseTheTheme() {
+        val graph = TileSpec("sensor.power", TileKind.TREND, graphColour = GraphColour.AMBER)
+        val value = TileSpec("sensor.temperature", TileKind.VALUE)
+        val saved = PanelConfigCodec.encode(PanelConfig(favourites = listOf(graph, value)))
+        assertEquals(listOf(graph, value), PanelConfigCodec.decode(saved).favourites)
+
+        val oldTile = """{"version":1,"tiles":[{"entity":"sensor.power","kind":"TREND"}]}"""
+        assertEquals(graph.copy(graphColour = null), PanelConfigCodec.decode(oldTile).favourites.single())
+        val unknownColour = saved.replace("AMBER", "UNRECOGNISED")
+        assertEquals(listOf(graph.copy(graphColour = null), value), PanelConfigCodec.decode(unknownColour).favourites)
+    }
+
     @Test fun temperatureStepsRespectDeviceLimitsAndAvailability() {
         val attributes = JSONObject().put("temperature", 22.0).put("min_temp", 15.0)
             .put("max_temp", 22.0).put("target_temp_step", .5)

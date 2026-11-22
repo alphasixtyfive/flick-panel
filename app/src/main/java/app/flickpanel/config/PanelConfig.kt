@@ -6,6 +6,10 @@ enum class PanelTheme(val label: String) {
     SLATE("Graphite"), AMBER("Charcoal amber"), PORCELAIN("Porcelain"), SYSTEM("Android colours")
 }
 
+enum class GraphColour(val label: String) {
+    BLUE("Blue"), TEAL("Teal"), GREEN("Green"), AMBER("Amber"), ROSE("Rose")
+}
+
 enum class TileKind(val label: String) {
     TOGGLE("Switch"), VALUE("Value"), SLIDER("Slider"), TREND("Small graph"),
     ACTION("Button"), CAMERA("Camera"), CLIMATE("Thermostat"), WEATHER("Weather"), MEDIA("Music player"),
@@ -28,6 +32,7 @@ data class TileSpec(
     val confirmAction: Boolean = false,
     val readerAttribute: String? = null,
     val cameraStream: String? = null,
+    val graphColour: GraphColour? = null,
 ) {
     internal val appPackage get() = entity.removePrefix("app:").takeIf { kind == TileKind.APP && validAppTarget(entity) }
 }
