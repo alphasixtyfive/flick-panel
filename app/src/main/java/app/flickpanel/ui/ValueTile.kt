@@ -4,23 +4,26 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import app.flickpanel.config.TileAccent
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.binaryStatus
 import java.text.NumberFormat
 
 @Composable
-internal fun ValueTile(label: String, entity: Entity?, link: Link, modifier: Modifier) {
+internal fun ValueTile(label: String, entity: Entity?, link: Link, modifier: Modifier, accent: TileAccent?) {
     val value = remember(entity) { displayValue(entity) }
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            TileTitle(label)
+            AccentedTileTitle(label, Icons.Rounded.Sensors, accent)
             if (entity?.available == true) {
                 val numeric = entity.state.toDoubleOrNull()?.isFinite() == true
                 TileValue(value, prominent = numeric, maxLines = 2)

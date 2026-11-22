@@ -56,6 +56,15 @@ class HomeBoardTest {
     }
 
     @Test
+    fun tinyDashboardKeepsAllTilesOnOneScrollSurfaceWithoutASeparatePager() {
+        val groups = homeTileGroups(tiles, 2, compact = false, resizeTiles = true, inlineGraph = true)
+        val height = 108.dp
+        val bands = homeBands(groups, 1f, height)
+        assertTrue(bands.first().height <= height)
+        assertEquals(bands, homePages(bands, height).single())
+    }
+
+    @Test
     fun narrowWindowsReserveSpaceForPageButtonsAndKeepEveryTile() {
         val groups = homeTileGroups(tiles, 2, compact = false, resizeTiles = true)
         val height = 400.dp

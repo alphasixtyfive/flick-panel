@@ -62,7 +62,13 @@ internal data class RoomLayout(
     fun controls(area: Area): List<RoomControl> {
         val saved = config.roomTiles[area.id]
         val savedIds = saved.orEmpty().mapTo(hashSetOf(), RoomTilePreference::entity)
-        val savedCount = savedIds.count { catalogue.roomEntity(it) != null }
+        val savedDevices = saved.orEmpty().map { preference ->
+            val device = catalogue.roomEntity(preference.entity)
+            val assignedHere = device != null && catalogue.areaOf(preference.entity) == area.id
+            // Layouts made before area tracking could explicitly include controls from other rooms.
+            val tracked = if (assignedHere && !preference.followsArea) preference.copy(followsArea = true) else preference
+            tracked to device.takeUnless { preference.followsArea && !assignedHere }
+        }
         fun shownByDefault(device: Entity) = when (device.domain) {
             "climate" -> true
             "light" -> saved == null
@@ -72,16 +78,14 @@ internal data class RoomLayout(
         val discovered = catalogue.room(area.id).asSequence().map(Entry::entity)
             .filterNot { it.id in savedIds }
             .sortedWith(compareBy({ !shownByDefault(it) }, { it.domain != "light" }, { it.id !in favourites }))
-            .take((roomTileLimit - savedCount).coerceAtLeast(0))
+            .take((roomTileLimit - savedDevices.count { (_, device) -> device != null }).coerceAtLeast(0))
         return buildList {
-            for (preference in saved.orEmpty()) {
-                val device = catalogue.roomEntity(preference.entity)
-                add(roomControl(preference, device))
-            }
+            for ((preference, device) in savedDevices) add(roomControl(preference, device))
             for (device in discovered) {
                 val preference = RoomTilePreference(
                     device.id,
                     hidden = !shownByDefault(device),
+                    followsArea = true,
                 )
                 add(roomControl(preference, device))
             }
@@ -95,6 +99,8 @@ internal data class RoomLayout(
         val canDim = device.canDim
         val default = checkNotNull(roomTileKind(device.id))
         val kind = if (canDim && preference.lightFormat != TileKind.TOGGLE) TileKind.SLIDER else default
-        return RoomControl(preference, TileSpec(device.id, kind, wideOnTablet = preference.wideOnTablet), canDim)
+        val tile = TileSpec(device.id, kind, label = preference.label?.trim()?.takeIf(String::isNotEmpty),
+            wideOnTablet = preference.wideOnTablet, accent = preference.accent)
+        return RoomControl(preference, tile, canDim)
     }
 }

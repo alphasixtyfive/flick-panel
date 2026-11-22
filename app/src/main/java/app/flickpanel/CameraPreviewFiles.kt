@@ -29,11 +29,16 @@ internal class CameraPreviewFiles(
     suspend fun write(entity: String, bytes: ByteArray) {
         if (bytes.size !in 1..maxPreviewBytes) return
         onDisk {
+            val target = path(entity)
+            val age = System.currentTimeMillis() - target.lastModified()
+            if (age in 0 until previewWriteIntervalMillis && target.length() in 1..maxPreviewBytes.toLong()) {
+                return@onDisk
+            }
             Files.createDirectories(directory.toPath())
             val temporary = Files.createTempFile(directory.toPath(), "preview-", ".part")
             try {
                 Files.write(temporary, bytes)
-                Files.move(temporary, path(entity).toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                Files.move(temporary, target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             } finally {
                 Files.deleteIfExists(temporary)
             }
@@ -78,6 +83,7 @@ internal class CameraPreviewFiles(
 }
 
 private const val maxPreviewAgeMillis = 72 * 60 * 60 * 1_000L
+private const val previewWriteIntervalMillis = 2 * 60_000L
 private const val maxPreviewBytes = 512 * 1024
 private const val maxPreviewFiles = 32
 private val previewFileLock = Mutex()

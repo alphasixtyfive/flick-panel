@@ -5,6 +5,7 @@ import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelStoreProblem
 import app.flickpanel.config.PanelTheme
 import app.flickpanel.config.RoomTilePreference
+import app.flickpanel.config.TileAccent
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.PhotoFolder
@@ -16,10 +17,13 @@ class PanelBackupTest {
     @Test
     fun preservesRoomSelectionTilesThemeAndDisplayPreferences() {
         val config = PanelConfig(
-            favourites = listOf(TileSpec("light.wall", TileKind.TOGGLE)),
+            favourites = listOf(TileSpec("light.wall", TileKind.TOGGLE, accent = TileAccent.AMBER)),
             theme = PanelTheme.AMBER,
             roomIds = listOf("kitchen"),
-            roomTiles = mapOf("kitchen" to listOf(RoomTilePreference("media_player.kitchen"))),
+            roomTiles = mapOf("kitchen" to listOf(
+                RoomTilePreference("media_player.kitchen", label = "Kitchen speaker",
+                    accent = TileAccent.TEAL, followsArea = true),
+            )),
             idleAlbum = PhotoFolder("media-source://media_source/media/local/photos", "Family photos"),
             dashboardBrightness = 100,
             screensaverBrightness = 8,

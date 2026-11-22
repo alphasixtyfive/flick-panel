@@ -31,12 +31,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.flickpanel.config.TileAccent
 import app.flickpanel.ha.ReadingContent
 
 private val readerMaxWidth = 720.dp
 
 @Composable
-internal fun ReaderTile(label: String, content: ReadingContent?, modifier: Modifier = Modifier, open: () -> Unit) {
+internal fun ReaderTile(
+    label: String, content: ReadingContent?, modifier: Modifier, accent: TileAccent?, open: () -> Unit,
+) {
     val colors = MaterialTheme.colorScheme
     Surface(
         onClick = open,
@@ -55,7 +58,7 @@ internal fun ReaderTile(label: String, content: ReadingContent?, modifier: Modif
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.AutoMirrored.Rounded.Article, null, Modifier.size(compactTileIconSize), tint = colors.primary)
+                Icon(Icons.AutoMirrored.Rounded.Article, null, Modifier.size(compactTileIconSize), tint = tileAccentColour(accent))
                 TileTitle(label, Modifier.weight(1f))
             }
             TileStatus(content?.preview ?: "Text unavailable")

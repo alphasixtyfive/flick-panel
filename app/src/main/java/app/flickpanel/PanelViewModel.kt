@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.util.LruCache
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.flickpanel.config.PanelConfig
@@ -58,7 +60,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -67,6 +68,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import org.json.JSONObject
 import kotlin.math.abs
+
+private const val setupIdleMillis = 5 * 60_000L
 
 internal class PanelViewModel(application: Application) : AndroidViewModel(application) {
     private val store = PanelStore(application)
@@ -79,9 +82,16 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var remoteJob: Job? = null
     private var telemetryJob: Job? = null
     private var catalogueJob: Job? = null
-    private var idleJob: Job? = null
-    private var idleDeadline = 0L
-    private var editorTimer: Job? = null
+    private val dashboardIdle = InactivityTimer(viewModelScope, SystemClock::elapsedRealtime) {
+        if (foreground) showIdleScreen()
+    }
+    private val setupIdle = InactivityTimer(viewModelScope, SystemClock::elapsedRealtime) {
+        if (foreground && _ui.value.editor) relock()
+    }
+    private val _setupDraft = mutableStateOf<PanelConfig?>(null)
+    val setupDraft: State<PanelConfig?> = _setupDraft
+    private val _restorePreview = MutableStateFlow<PanelConfig?>(null)
+    val restorePreview = _restorePreview.asStateFlow()
     private val commands = DeviceCommandQueue(viewModelScope, _ui, { client.takeIf { foreground } }, ::reportFailure)
     private val graphTimes = mutableMapOf<String, Long>()
     private val graphRequests = mutableSetOf<String>()
@@ -117,6 +127,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (foreground == value) return
         foreground = value
         if (value) {
+            updateLiveSelection()
             client?.start()
             touch()
         } else {
@@ -131,26 +142,17 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun touch() {
+        if (!foreground) return
         val current = _ui.value
-        if (!foreground || !current.showingDashboard || current.config.idleSeconds == 0) return
-        idleDeadline = SystemClock.elapsedRealtime() + current.config.idleSeconds * 1_000L
-        if (idleJob?.isActive == true) return
-        idleJob = viewModelScope.launch {
-            while (true) {
-                val remaining = idleDeadline - SystemClock.elapsedRealtime()
-                if (remaining <= 0L) break
-                delay(remaining)
-            }
-            idleJob = null
-            if (foreground && _ui.value.showingDashboard) {
-                _ui.update { it.copy(clock = true) }
-            }
+        if (current.editor) {
+            setupIdle.restart(setupIdleMillis)
+        } else if (current.showingDashboard && current.config.idleSeconds > 0) {
+            dashboardIdle.restart(current.config.idleSeconds * 1_000L)
         }
     }
 
     private fun cancelIdle() {
-        idleJob?.cancel()
-        idleJob = null
+        dashboardIdle.cancel()
     }
 
     fun wake() {
@@ -158,6 +160,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val next = current.wakeDisplay()
         if (next === current) return
         _ui.value = next
+        if (current.screenBlank) updateLiveSelection()
         touch()
     }
 
@@ -197,17 +200,33 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    fun cancelUnlock() {
+        _restorePreview.value = null
+        relock()
+    }
+
     fun relock() {
         securityEpoch++
-        editorTimer?.cancel()
+        setupIdle.cancel()
         _ui.update { it.copy(unlocking = false, editor = false, connectionEditor = false, error = null) }
         touch()
     }
 
+    fun updateSetupDraft(config: PanelConfig) {
+        if (!foreground || !_ui.value.editor) return
+        _setupDraft.value = config.takeUnless { it == _ui.value.config }
+        touch()
+    }
+
+    fun discardSetup() {
+        _setupDraft.value = null
+        _restorePreview.value = null
+        relock()
+    }
+
     private fun openEditor() {
         _ui.update { it.copy(unlocking = false, editor = true, error = null) }
-        editorTimer?.cancel()
-        editorTimer = viewModelScope.launch { delay(5 * 60_000L); relock() }
+        touch()
         if (_ui.value.catalogue.entries.isEmpty()) loadCatalogue()
     }
 
@@ -278,17 +297,31 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun save(config: PanelConfig, saved: () -> Unit) {
         if (!_ui.value.editor) return
+        touch()
         submitSettingsOperation {
-            saveLayout(config)
+            saveDraft(config)
             if (_ui.value.editor) saved()
         }
     }
 
-    fun beginBackup(action: PanelBackupAction): Boolean {
+    fun beginBackup(action: PanelBackupAction, saveChanges: Boolean = false, openFilePicker: (PanelBackupAction) -> Unit) {
         val current = _ui.value
-        if (!foreground || !current.editor || current.busy || pendingBackup != null) return false
-        pendingBackup = action to current.config
-        return true
+        if (!foreground || !current.editor || current.busy || pendingBackup != null) return
+        touch()
+        fun openPicker() {
+            pendingBackup = action to _ui.value.config
+            openFilePicker(action)
+        }
+        val draft = _setupDraft.value.takeIf { action == PanelBackupAction.BACK_UP && saveChanges }
+        if (draft == null) {
+            openPicker()
+        } else {
+            val epoch = securityEpoch
+            submitSettingsOperation {
+                saveDraft(draft)
+                if (foreground && _ui.value.editor && securityEpoch == epoch) openPicker()
+            }
+        }
     }
 
     fun backupDocument(action: PanelBackupAction, uri: Uri?, done: (String) -> Unit) {
@@ -314,12 +347,36 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
                         resolver.openInputStream(uri)?.use(PanelBackup::read)
                             ?: throw PanelStoreProblem("Couldn't open the backup")
                     }
-                    saveLayout(config)
-                    relock()
-                    done("Backup restored")
+                    _restorePreview.value = config
+                    if (!_ui.value.editor) {
+                        if (foreground) showUnlock()
+                        if (!_ui.value.unlocking) done("Unlock setup to review the backup")
+                    }
                 }
             }
         }
+    }
+
+    fun cancelRestore() {
+        _restorePreview.value = null
+        touch()
+    }
+
+    fun restoreBackup(restored: () -> Unit) {
+        val config = _restorePreview.value ?: return
+        if (!foreground || !_ui.value.editor) return
+        touch()
+        submitSettingsOperation {
+            saveLayout(config)
+            _setupDraft.value = null
+            _restorePreview.value = null
+            if (_ui.value.editor) restored()
+        }
+    }
+
+    private suspend fun saveDraft(config: PanelConfig) {
+        saveLayout(config)
+        if (_setupDraft.value == config) _setupDraft.value = null
     }
 
     private suspend fun saveLayout(config: PanelConfig) {
@@ -799,6 +856,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         _ui.value = next
         if (command is PanelCommand.SetBrightness || command is PanelCommand.KeepAwake) return
         if (next.page == Page.ROOMS && !next.hasViewer && !next.clock && !next.screenBlank) showRoomControls()
+        if (next.screenBlank != current.screenBlank) updateLiveSelection()
         if (next.showingDashboard) touch() else cancelIdle()
     }
 
@@ -806,26 +864,20 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         val current = _ui.value
         val agendas = mutableSetOf<String>()
         val trends = mutableSetOf<String>()
-        val ids = mutableSetOf<String>()
         for (tile in current.config.favourites) {
             if (tile.kind.isAgenda) agendas += tile.entity
             if (tile.kind == TileKind.TREND) trends += tile.entity
-            if (tile.kind != TileKind.APP) ids += tile.entity
-            tile.statusEntity?.let(ids::add)
-            tile.cameraActions.forEach { ids += it.entity }
-            tile.cameraStream?.let(ids::add)
         }
         agenda.keep(agendas)
         graphTimes.keys.retainAll(trends)
         if (!trends.containsAll(current.graphs.keys)) {
             _ui.update { it.copy(graphs = it.graphs.filterKeys(trends::contains)) }
         }
-        if (current.config.roomIds?.isNotEmpty() == true || roomControlsRequested) {
-            current.roomSections.forEach { section -> section.tiles.mapTo(ids) { it.entity } }
-        }
-        current.config.messageEntity?.let(ids::add)
-        current.config.homeBadges.mapTo(ids) { it.entity }
-        client?.select(ids)
+        updateLiveSelection()
+    }
+
+    private fun updateLiveSelection() {
+        client?.select(_ui.value.liveEntityIds(roomControlsRequested))
     }
 
     private suspend inline fun safely(block: () -> Unit) {

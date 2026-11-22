@@ -76,7 +76,7 @@ internal fun rememberOpenWebLink(): (String) -> Unit {
 }
 
 @Composable
-internal fun AppPicker(added: Set<String>, choose: (TileSpec) -> Unit) {
+internal fun AppPicker(added: Set<String>, onInput: () -> Unit, choose: (TileSpec) -> Unit) {
     val context = LocalContext.current
     var apps by remember(context.packageName) { mutableStateOf<List<LauncherApp>?>(null) }
     LaunchedEffect(context.packageName) {
@@ -91,7 +91,10 @@ internal fun AppPicker(added: Set<String>, choose: (TileSpec) -> Unit) {
     }
     var query by remember { mutableStateOf("") }
     Column(Modifier.fillMaxWidth().padding(horizontal = setupPadding, vertical = 9.dp)) {
-        SetupSearchField(query, { query = it }, "Search apps", Modifier.fillMaxWidth())
+        SetupSearchField(query, {
+            query = it
+            onInput()
+        }, "Search apps", Modifier.fillMaxWidth())
         val available = apps
         if (available == null) {
             CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally).padding(15.dp))

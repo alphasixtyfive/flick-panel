@@ -113,13 +113,13 @@ private fun PlayerControls(
     val current = playback.current
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                playback.title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = if (current == null) colors.onSurfaceVariant else colors.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            playback.status?.let { PlaybackIndicator(it) }
+            val title = if (current != null) playback.trackTitle else playback.title
+            title?.let {
+                Text(it, style = MaterialTheme.typography.headlineSmall,
+                    color = if (current == null) colors.onSurfaceVariant else colors.onSurface,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
             playback.artist?.let { artist ->
                 Text(artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -18,6 +18,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,7 +45,9 @@ internal fun Favourites(
     Column(modifier.padding(bottom = 12.dp)) {
         if (alerts.isNotEmpty()) HomeWarnings(alerts, Modifier.padding(bottom = tileGap))
         if (tiles.isEmpty() && alerts.isEmpty()) {
-            EmptyState("No favourites yet", "Hold Home to unlock setup and add tiles.")
+            EmptyState("No favourites yet", "Add tiles for the devices you use most.") {
+                TextButton(onClick = model::showUnlock) { Text("Open setup") }
+            }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val fontScale = LocalDensity.current.fontScale
@@ -70,12 +73,17 @@ internal fun Favourites(
             Column(Modifier.fillMaxSize()) {
                 key(current) {
                     val board = Modifier.weight(1f).fillMaxWidth()
-                    val content = if (page.any { it.height > boardHeight }) {
-                        board.verticalScroll(rememberScrollState())
-                    } else board
-                    Column(content, verticalArrangement = Arrangement.spacedBy(tileGap)) {
-                        for (band in page) key(band.lanes.first().first().tiles.first().entity) {
-                            FavouriteBand(band, groups, state, model)
+                    if (homePageHeight(page) > boardHeight) {
+                        LazyColumn(board, verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                            items(page, key = { it.lanes.first().first().tiles.first().entity }) { band ->
+                                FavouriteBand(band, groups, state, model)
+                            }
+                        }
+                    } else {
+                        Column(board, verticalArrangement = Arrangement.spacedBy(tileGap)) {
+                            for (band in page) key(band.lanes.first().first().tiles.first().entity) {
+                                FavouriteBand(band, groups, state, model)
+                            }
                         }
                     }
                 }
@@ -89,12 +97,14 @@ internal fun Favourites(
 private fun FavouriteBand(
     band: HomeBand, groups: HomeTileGroups, state: PanelUi, model: PanelViewModel,
 ) {
+    val shortControlHeight = 110.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
     Row(Modifier.fillMaxWidth().height(band.height), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
         for (lane in band.lanes) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(tileGap)) {
                 for (row in lane) {
                     TileRow(row.tiles, state, model, row.columns, groups.compact, groups.resizeTiles,
-                        shortcutRow = row.shortcuts, homeAgenda = row.expandedAgenda, modifier = Modifier.height(row.height))
+                        shortcutRow = row.shortcuts, homeAgenda = row.expandedAgenda, modifier = Modifier.height(row.height),
+                        compactControls = row.height <= shortControlHeight)
                 }
             }
         }

@@ -48,7 +48,7 @@ internal fun GraphTile(
     loadHistory: suspend (String) -> Unit, modifier: Modifier, compact: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
-    val accent = graphAccent(tile.graphColour)
+    val accent = tileAccentColour(tile.accent)
     val graph = history?.takeIf { it.points.isNotEmpty() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     if (link == Link.ONLINE) LaunchedEffect(tile.entity, loadHistory, lifecycle) {

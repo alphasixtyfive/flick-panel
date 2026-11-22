@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,23 +66,17 @@ private fun clockTime(): ZonedDateTime {
 }
 
 @Composable
-internal fun AmbientClock(message: String?, albumId: String?, reduceMotion: Boolean, model: PanelViewModel) {
+internal fun AmbientClock(message: String?, messageEnabled: Boolean, albumId: String?, reduceMotion: Boolean, model: PanelViewModel) {
     val now = clockTime()
     val time = now.format(clockFormatter())
     val date = now.format(dateFormatter())
-    val shadow = if (albumId == null) null else Shadow(Color(0x66000000), Offset(0f, 2f), blurRadius = 10f)
+    val shadow = if (albumId == null) null else Shadow(Color(0xb0000000), Offset(0f, 2f), blurRadius = 12f)
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xff10151b))
         .clickable(interactionSource = null, indication = null, onClickLabel = "Open home controls", onClick = model::wake)) {
         val short = maxHeight < 480.dp
-        val captionInset = if (short || maxWidth < mediumWindowWidthDp.dp) 14.dp else 34.dp
-        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val density = LocalDensity.current
+        val fontScale = density.fontScale.coerceAtLeast(1f)
         IdlePhotos(albumId, model::browsePhotos, model::loadPhoto, reduceMotion, Modifier.matchParentSize())
-        if (message != null) {
-            Text(message, color = Color(0xffeef4fa), textAlign = TextAlign.Center,
-                style = (if (short) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).copy(shadow = shadow),
-                maxLines = if (short) 1 else 2, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.TopCenter).padding(captionInset))
-        }
         val availableClock = minOf((maxWidth - 24.dp).value * .18f, maxHeight.value * .35f)
         val size = minOf(160f, availableClock / fontScale).sp
         Column(Modifier.align(Alignment.Center).padding(horizontal = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -90,6 +85,19 @@ internal fun AmbientClock(message: String?, albumId: String?, reduceMotion: Bool
             Text(date, style = MaterialTheme.typography.titleLarge.copy(shadow = shadow),
                 color = Color(0xffedf3fa), modifier = Modifier.padding(top = if (short) 4.dp else 12.dp),
                 textAlign = TextAlign.Center, maxLines = if (short) 1 else 2, overflow = TextOverflow.Ellipsis)
+            if (messageEnabled) {
+                val caption = if (short) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.titleMedium
+                Box(
+                    Modifier.widthIn(max = 600.dp).padding(top = if (short) 10.dp else 20.dp)
+                        .heightIn(min = with(density) { caption.lineHeight.toDp() }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (message != null) {
+                        Text(message, color = Color(0xffeef4fa), textAlign = TextAlign.Center,
+                            style = caption.copy(shadow = shadow), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
         }
     }
 }

@@ -17,6 +17,12 @@ Flick Panel requires Android 9 or later. Install the APK, enter your Home Assist
 
 The [user manual](docs/manual.md) covers connection, editing, cameras, room layouts, photos, backups, and tablet actions. The optional Home Assistant integration adds a display switch and actions for automations.
 
+## Screenshots
+
+[![Flick Panel About screen on an Android tablet](docs/screenshots/about.png)](docs/screenshots/about.png)
+
+[Appearance settings](docs/screenshots/appearance.png)
+
 ## Project
 
 [Build and release instructions](docs/development.md) · [Report an issue](https://github.com/alphasixtyfive/flick-panel/issues) · [License](LICENSE)

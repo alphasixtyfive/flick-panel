@@ -29,14 +29,21 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -62,6 +69,9 @@ import app.flickpanel.ha.cameraActionKind
 import app.flickpanel.ha.cameraActionReady
 
 private val cameraHeaderControlSize = 48.dp
+private val cameraHeaderShade = Brush.verticalGradient(
+    0f to Color(0xb4000000), .54f to Color(0x8c000000), 1f to Color.Transparent,
+)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -71,6 +81,7 @@ internal fun CameraControls(
     startingCall: Boolean,
     micOn: Boolean,
     notice: String?,
+    testResult: CameraTestResult?,
     close: () -> Unit,
     state: PanelUi,
     actions: List<CameraAction>,
@@ -81,9 +92,15 @@ internal fun CameraControls(
 ) {
     BoxWithConstraints(modifier.windowInsetsPadding(WindowInsets.safeDrawing)) {
         val inset = if (maxHeight < 480.dp || maxWidth < 600.dp) 12.dp else 20.dp
+        val headerInset = inset + 4.dp
         val compact = maxWidth < 480.dp || maxHeight < 360.dp
         val narrow = maxWidth < 420.dp
-        val headerTop = inset + if (compact) 12.dp else 20.dp
+        val short = maxHeight < 300.dp
+        val headerTop = inset + if (short) 0.dp else if (compact) 12.dp else 20.dp
+        val dockWidth = maxWidth - inset * 2
+        val actionCount = actions.size + if (talkControl == null) 0 else 1
+        val useActionMenu = short && actions.size > 1 &&
+            (maxWidth < 360.dp || dockWidth < 100.dp * actionCount - 4.dp)
         Box(Modifier.fillMaxSize()) {
             if (talkControl != null || actions.isNotEmpty()) {
                 Box(
@@ -92,24 +109,37 @@ internal fun CameraControls(
                         .padding(start = inset, end = inset, top = 22.dp, bottom = inset),
                     contentAlignment = Alignment.Center,
                 ) {
-                    val beforeTalk = if (talkControl != null) actions.size / 2 else actions.size
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        actions.forEachIndexed { index, action ->
-                            if (index == beforeTalk) talkControl?.invoke(compact)
-                            CameraActionButton(action, state, compact) { runAction(action.entity) }
+                    if (useActionMenu) {
+                        val showFirst = dockWidth >= if (talkControl == null) 148.dp else 248.dp
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (showFirst) {
+                                val first = actions.first()
+                                CameraActionButton(first, state, compact = true) { runAction(first.entity) }
+                            }
+                            talkControl?.invoke(true)
+                            CameraActionsMenu(if (showFirst) actions.drop(1) else actions, state, runAction)
                         }
-                        if (beforeTalk == actions.size) talkControl?.invoke(compact)
+                    } else {
+                        val beforeTalk = if (talkControl != null) actions.size / 2 else actions.size
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            actions.forEachIndexed { index, action ->
+                                if (index == beforeTalk) talkControl?.invoke(compact)
+                                CameraActionButton(action, state, compact) { runAction(action.entity) }
+                            }
+                            if (beforeTalk == actions.size) talkControl?.invoke(compact)
+                        }
                     }
                 }
             }
             CameraHeader(
-                label, status, startingCall, micOn, notice, close, speakerControl,
+                label, status, startingCall, micOn, notice, testResult, close, speakerControl,
                 narrow = narrow,
                 modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
-                    .padding(start = inset, top = headerTop, end = inset),
+                    .background(cameraHeaderShade)
+                    .padding(start = headerInset, top = headerTop, end = headerInset, bottom = 36.dp),
             )
         }
     }
@@ -134,6 +164,49 @@ internal fun IntercomTalkButton(talking: Boolean, live: Boolean, retry: Boolean,
 
 @Composable
 private fun CameraActionButton(action: CameraAction, state: PanelUi, compact: Boolean, run: () -> Unit) {
+    val control = cameraActionPresentation(action, state)
+    val colors = MaterialTheme.colorScheme
+    ViewerAction(
+        control.label, cameraActionSymbol(action.icon, action.entity), run, compact,
+        enabled = control.enabled,
+        status = control.status,
+        pending = control.pending,
+        background = if (control.selected) colors.secondaryContainer else viewerSurface,
+        foreground = if (control.selected) colors.onSecondaryContainer else Color.White,
+    )
+}
+
+@Composable
+private fun CameraActionsMenu(actions: List<CameraAction>, state: PanelUi, runAction: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        ViewerIconButton(Icons.Rounded.MoreHoriz, "More camera actions", { expanded = true }, Modifier.size(48.dp))
+        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+            for (action in actions) {
+                val control = cameraActionPresentation(action, state)
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(control.label)
+                            control.status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        runAction(action.entity)
+                    },
+                    enabled = control.enabled,
+                )
+            }
+        }
+    }
+}
+
+private data class CameraActionPresentation(
+    val label: String, val status: String?, val enabled: Boolean, val pending: Boolean, val selected: Boolean,
+)
+
+private fun cameraActionPresentation(action: CameraAction, state: PanelUi): CameraActionPresentation {
     val entity = state.entities[action.entity]
     val pending = state.pending[action.entity]
     val kind = entity?.cameraActionKind
@@ -149,15 +222,7 @@ private fun CameraActionButton(action: CameraAction, state: PanelUi, compact: Bo
         kind == CameraActionKind.TOGGLE -> if (selected) "On" else "Off"
         else -> null
     }
-    val colors = MaterialTheme.colorScheme
-    ViewerAction(
-        label, cameraActionSymbol(action.icon, action.entity), run, compact,
-        enabled = enabled,
-        status = status,
-        pending = pending != null,
-        background = if (selected) colors.secondaryContainer else viewerSurface,
-        foreground = if (selected) colors.onSecondaryContainer else Color.White,
-    )
+    return CameraActionPresentation(label, status, enabled, pending != null, selected)
 }
 
 @Composable
@@ -239,12 +304,13 @@ private fun CameraHeader(
     startingCall: Boolean,
     micOn: Boolean,
     notice: String?,
+    testResult: CameraTestResult?,
     close: () -> Unit,
     speakerControl: (@Composable (Modifier) -> Unit)?,
     narrow: Boolean,
     modifier: Modifier,
 ) {
-    val statusLabel = when {
+    val statusLabel = testResult?.label ?: when {
         startingCall -> if (narrow) "Connecting…" else "Connecting call…"
         micOn -> "Live · Mic on"
         status == CameraStatus.UNAVAILABLE -> "Unavailable"
@@ -256,43 +322,23 @@ private fun CameraHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(Modifier.weight(1f)) {
-                Surface(
-                    Modifier.widthIn(max = 360.dp).height(cameraHeaderControlSize),
-                    color = viewerSurface, contentColor = Color.White, shape = CircleShape,
-                ) {
-                    Box(
-                        Modifier.padding(horizontal = if (narrow) 10.dp else 16.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        Text(
-                            label, Modifier.semantics { heading() },
-                            style = if (narrow) MaterialTheme.typography.labelMedium else MaterialTheme.typography.titleMedium,
-                            maxLines = if (narrow) 2 else 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
+            Text(
+                label, Modifier.weight(1f).semantics { heading() },
+                color = Color.White,
+                style = if (narrow) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                maxLines = if (narrow) 2 else 1, overflow = TextOverflow.Ellipsis,
+            )
             speakerControl?.invoke(Modifier.size(cameraHeaderControlSize))
-            Surface(
-                Modifier.width(if (narrow) 112.dp else 148.dp).height(cameraHeaderControlSize)
-                    .semantics { liveRegion = LiveRegionMode.Polite },
-                color = viewerSurface, contentColor = Color.White, shape = CircleShape,
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (status == CameraStatus.LIVE) Box(Modifier.size(7.dp).background(Color(0xff7fe6a8), CircleShape))
-                    Text(
-                        statusLabel,
-                        style = if (narrow) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            ViewerIconButton(Icons.Rounded.Close, "Close camera", close, Modifier.size(cameraHeaderControlSize))
+            CameraHeaderStatus(
+                statusLabel,
+                liveDot = status == CameraStatus.LIVE && (testResult == null || testResult == CameraTestResult.TALK_READY),
+                compact = narrow,
+                describeLiveVideo = status == CameraStatus.LIVE && testResult != null,
+            )
+            ViewerIconButton(
+                Icons.Rounded.Close, "Close camera", close,
+                Modifier.padding(start = if (narrow) 8.dp else 12.dp).size(cameraHeaderControlSize),
+            )
         }
         if (notice != null) {
             Surface(
@@ -302,5 +348,24 @@ private fun CameraHeader(
                 Text(notice, Modifier.padding(horizontal = 14.dp, vertical = 8.dp), style = MaterialTheme.typography.bodyMedium)
             }
         }
+    }
+}
+
+@Composable
+private fun CameraHeaderStatus(
+    label: String, liveDot: Boolean, compact: Boolean, describeLiveVideo: Boolean,
+) {
+    Row(
+        Modifier.widthIn(max = if (compact) 126.dp else 170.dp).semantics {
+            liveRegion = LiveRegionMode.Polite
+            if (describeLiveVideo) stateDescription = "Live video"
+        },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (liveDot) Box(Modifier.size(7.dp).background(Color(0xff7fe6a8), CircleShape))
+        Text(label, color = Color.White,
+            style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+            maxLines = if (compact) 2 else 1, overflow = TextOverflow.Ellipsis)
     }
 }

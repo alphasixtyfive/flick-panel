@@ -26,7 +26,7 @@ internal fun AgendaTile(
     tile: TileSpec, label: String, online: Boolean, model: PanelViewModel, modifier: Modifier, expanded: Boolean,
 ) {
     val state = agendaState(tile.entity, online, model)
-    AgendaPreview(label, tile.kind, state, online, modifier, expanded, wide = tile.wideOnTablet) {
+    AgendaPreview(label, tile.kind, state, online, modifier, expanded, wide = tile.wideOnTablet, accent = tile.accent) {
         model.openAgenda(tile.entity)
     }
 }

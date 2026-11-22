@@ -32,15 +32,13 @@ import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.MediaTransport
-import app.flickpanel.ha.text
 
 @Composable
 internal fun MusicPlayerScreen(id: String, state: PanelUi, model: PanelViewModel) {
     val entity = state.entities[id]
     val label = state.entityName(id)
     val playback = MusicPlayback(label, entity, state.link == Link.ONLINE && entity?.available == true, id in state.pending)
-    val artwork = rememberPanelImage(playback.current?.attributes?.text("entity_picture"),
-        model::cachedArtwork, model::loadArtwork)
+    val artwork = rememberPanelImage(playback.artworkUrl, model::cachedArtwork, model::loadArtwork)
     val library = remember(id) { MusicLibraryState() }
     var browsing by rememberSaveable(id) { mutableStateOf(false) }
     val transport: (MediaTransport) -> Unit = { model.mediaTransport(id, it) }

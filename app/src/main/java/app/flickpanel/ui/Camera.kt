@@ -55,16 +55,23 @@ internal enum class CameraStatus(val label: String) {
     val hasVideo get() = this == LIVE || this == RECONNECTING
 }
 
-private enum class IntercomPlayback { CONNECTING, RETRYING, LIVE, UNAVAILABLE }
+internal enum class CameraTestResult(val label: String) {
+    TALK_READY("Talk ready"),
+    TALK_UNAVAILABLE("Talk unavailable"),
+    VIDEO_UNAVAILABLE("Video unavailable"),
+}
 
-private const val intercomFallbackDelayMs = 650L
+private enum class IntercomPlayback { CONNECTING, RETRYING, LIVE, UNAVAILABLE }
 
 @Composable
 internal fun CameraViewer(
     id: String, label: String?, openedAt: Long, tile: TileSpec?, state: PanelUi, model: PanelViewModel,
+    testMode: Boolean = false, close: () -> Unit = model::closeCamera,
 ) {
     val online = state.link == Link.ONLINE
-    val (nativeCamera, streamCamera, stream) = cameraSources(id, tile, state.entities)
+    val alternate = tile?.cameraStream?.takeIf { testMode && it !in state.entities }?.let(state::entity)
+    val sources = if (alternate == null) state.entities else state.entities + (alternate.id to alternate)
+    val (nativeCamera, streamCamera, stream) = cameraSources(id, tile, sources)
     val features = state.entity(streamCamera)?.attributes?.optLong("supported_features", -1L) ?: -1L
     val canStream = features and 2L != 0L
     val initialHlsStatus = when {
@@ -74,7 +81,7 @@ internal fun CameraViewer(
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val context = LocalContext.current
-    val hasMic = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE) }
+    val hasMic = !testMode && remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE) }
     var capabilities by remember(nativeCamera, online) { mutableStateOf<CameraCapabilities?>(null) }
     var talking by remember(stream, online) { mutableStateOf(false) }
     var micOn by remember(stream, online) { mutableStateOf(false) }
@@ -85,7 +92,6 @@ internal fun CameraViewer(
     var canTalk by remember(stream, online) { mutableStateOf(false) }
     var intercomHasAudio by remember(stream, online) { mutableStateOf(false) }
     var notice by remember(stream, online) { mutableStateOf<String?>(null) }
-    var hlsPreview by remember(stream, online) { mutableStateOf(false) }
     var hlsStatus by remember(streamCamera, initialHlsStatus) { mutableStateOf(initialHlsStatus) }
     var hlsHasAudio by remember(streamCamera, initialHlsStatus) { mutableStateOf(false) }
     var loggedFirstFrame by remember(openedAt) { mutableStateOf(false) }
@@ -93,10 +99,9 @@ internal fun CameraViewer(
     val findingRoute = online && capabilities == null
     val useIntercom = !findingRoute && online && routes.isNotEmpty() && intercom != IntercomPlayback.UNAVAILABLE
     val intercomLive = useIntercom && intercom == IntercomPlayback.LIVE
-    val showHls = (!findingRoute && !useIntercom) ||
-        (canStream && !intercomLive && (stream == null || hlsPreview))
+    val showHls = online && canStream && !findingRoute && !useIntercom
     val hasAudio = if (intercomLive) intercomHasAudio else showHls && hlsHasAudio
-    val audioRequested = talking || (!muted && (hasAudio || (useIntercom && intercomHasAudio)))
+    val audioRequested = !testMode && (talking || !muted && hasAudio)
     val audioFocused = rememberCameraAudioFocus(audioRequested) {
         notice = if (talking) "Call disconnected" else "Camera audio paused"
         muted = true
@@ -108,14 +113,6 @@ internal fun CameraViewer(
             capabilities = withTimeoutOrNull(900) { model.cameraCapabilities(nativeCamera) } ?: CameraCapabilities.None
         }
     }
-    val tryVideoFallback = stream != null && canStream && (findingRoute || useIntercom) && !intercomLive
-    LaunchedEffect(tryVideoFallback) {
-        if (tryVideoFallback) {
-            delay(intercomFallbackDelayMs)
-            hlsPreview = true
-        }
-    }
-
     fun setTalkMode(enabled: Boolean) {
         notice = null
         talking = enabled
@@ -155,6 +152,7 @@ internal fun CameraViewer(
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        val fitPortrait = maxWidth < maxHeight
         if (useIntercom) {
             CameraIntercom(
                 id = nativeCamera,
@@ -163,21 +161,21 @@ internal fun CameraViewer(
                 attempt = attempt,
                 audioEnabled = audioFocused && intercomLive && (!muted || talking),
                 talk = audioFocused && intercomLive && talking && canTalk,
+                fitPortrait = fitPortrait,
                 model = model,
                 modifier = Modifier.matchParentSize(),
                 connecting = { intercom = IntercomPlayback.CONNECTING },
                 retrying = {
                     intercom = IntercomPlayback.RETRYING
-                    hlsPreview = true
                     if (talking) notice = "Call disconnected"
                     talking = false
                     micOn = false
+                    intercomHasAudio = false
                 },
                 live = { hasStreamAudio, talkSupported, transport ->
                     canTalk = talkSupported
                     intercomHasAudio = hasStreamAudio
                     intercom = IntercomPlayback.LIVE
-                    hlsPreview = false
                     hlsStatus = initialHlsStatus
                     hlsHasAudio = false
                     logFrame(transport)
@@ -219,28 +217,30 @@ internal fun CameraViewer(
         val status = when {
             intercomLive -> CameraStatus.LIVE
             showHls -> hlsStatus
-            intercom == IntercomPlayback.RETRYING -> CameraStatus.RECONNECTING
-            else -> CameraStatus.CONNECTING
+            useIntercom && intercom == IntercomPlayback.RETRYING -> CameraStatus.RECONNECTING
+            useIntercom || findingRoute -> CameraStatus.CONNECTING
+            else -> initialHlsStatus
         }
         if (!intercomLive && !(showHls && hlsStatus.hasVideo)) {
             CameraStill(id, model, online, Modifier.matchParentSize(), blurred = status.buffering,
-                allowStored = state.link != Link.AUTH_REJECTED)
+                allowStored = state.link != Link.AUTH_REJECTED, fit = fitPortrait)
         }
         val expectsTalk = routes.any { it.talk }
         val retry = online && expectsTalk && (intercom == IntercomPlayback.UNAVAILABLE || intercomLive && !canTalk)
-        val talkControl: (@Composable (Boolean) -> Unit)? = if (online && expectsTalk && (hasMic || retry)) {
+        val talkControl: (@Composable (Boolean) -> Unit)? = if (!testMode && online && expectsTalk && (hasMic || retry)) {
             { compact ->
                 IntercomTalkButton(talking, intercomLive && canTalk, retry, compact) {
                     if (retry) {
                         notice = null
-                        hlsPreview = true
+                        hlsStatus = initialHlsStatus
+                        hlsHasAudio = false
                         intercom = IntercomPlayback.CONNECTING
                         attempt++
                     } else toggleTalk()
                 }
             }
         } else null
-        val speakerControl: (@Composable (Modifier) -> Unit)? = if (hasAudio && !talking) {
+        val speakerControl: (@Composable (Modifier) -> Unit)? = if (!testMode && hasAudio && !talking) {
             { controlModifier ->
                 ViewerIconButton(
                     icon = if (muted) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
@@ -257,14 +257,19 @@ internal fun CameraViewer(
             label ?: "Camera", status,
             startingCall = intercomLive && talking && !micOn,
             micOn = intercomLive && micOn,
-            notice = notice ?: when {
-                useIntercom && expectsTalk && !intercomLive && showHls && hlsStatus.hasVideo ->
-                    if (intercom == IntercomPlayback.RETRYING) "Reconnecting audio…" else "Connecting audio…"
+            notice = notice.takeUnless { testMode },
+            testResult = if (testMode) when (status) {
+                CameraStatus.LIVE -> when {
+                    intercomLive && canTalk -> CameraTestResult.TALK_READY
+                    expectsTalk -> CameraTestResult.TALK_UNAVAILABLE
+                    else -> null
+                }
+                CameraStatus.STILL, CameraStatus.UNAVAILABLE -> CameraTestResult.VIDEO_UNAVAILABLE
                 else -> null
-            },
-            close = model::closeCamera,
+            } else null,
+            close = close,
             state = state,
-            actions = tile?.cameraActions.orEmpty(),
+            actions = if (testMode) emptyList() else tile?.cameraActions.orEmpty(),
             runAction = { entity -> model.runCameraAction(id, entity) },
             talkControl = talkControl,
             speakerControl = speakerControl,

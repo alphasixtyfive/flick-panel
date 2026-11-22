@@ -5,6 +5,7 @@ import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Link
 import app.flickpanel.ha.PanelCommand
+import app.flickpanel.ha.PhotoFolder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -25,6 +26,15 @@ class PanelRemotePolicyTest {
         val dimmed = panel.remoteCommand(PanelCommand.SetBrightness(4), 0)
         assertEquals(4, dimmed.copy(clock = true).displayBrightness)
         assertEquals(100, dimmed.remoteCommand(PanelCommand.SetBrightness(null), 0).displayBrightness)
+    }
+
+    @Test
+    fun automaticPhotoBrightnessKeepsTheClockOnlyModeDim() {
+        val config = PanelConfig(dashboardBrightness = 100)
+        val clock = linked.copy(layout = RoomLayout(config), clock = true)
+        assertEquals(13, clock.displayBrightness)
+        val photos = config.copy(idleAlbum = PhotoFolder("media-source://media_source/local/photos", "Family photos"))
+        assertEquals(55, clock.copy(layout = RoomLayout(photos)).displayBrightness)
     }
 
     @Test

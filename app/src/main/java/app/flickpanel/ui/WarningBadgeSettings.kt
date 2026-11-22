@@ -49,7 +49,7 @@ internal fun WarningBadgeSettings(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun WarningBadgeEditor(badge: HomeBadge, state: PanelUi, apply: (HomeBadge) -> Unit) {
+internal fun WarningBadgeEditor(badge: HomeBadge, state: PanelUi, onInput: () -> Unit, apply: (HomeBadge) -> Unit) {
     val entity = state.entity(badge.entity)
     var label by remember(badge) { mutableStateOf(badge.label.orEmpty()) }
     var states by remember(badge) { mutableStateOf(badge.activeStates.joinToString(", ")) }
@@ -62,7 +62,10 @@ internal fun WarningBadgeEditor(badge: HomeBadge, state: PanelUi, apply: (HomeBa
             Text("Current state · ${entity.state}", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        OutlinedTextField(label, { label = it.take(48) }, Modifier.fillMaxWidth(), singleLine = true,
+        OutlinedTextField(label, {
+            label = it.take(48)
+            onInput()
+        }, Modifier.fillMaxWidth(), singleLine = true,
             label = { Text("Badge label") }, placeholder = { Text(entity?.name ?: badge.entity) })
         if (options.isNotEmpty() && active.all(options::contains)) {
             Text("Show when", style = MaterialTheme.typography.titleMedium)
@@ -71,11 +74,15 @@ internal fun WarningBadgeEditor(badge: HomeBadge, state: PanelUi, apply: (HomeBa
                     val selected = option in active
                     FilterChip(selected = selected, onClick = {
                         states = (if (selected) active - option else active + option).joinToString(", ")
+                        onInput()
                     }, label = { Text(badgeStateLabel(option)) })
                 }
             }
         } else {
-            OutlinedTextField(states, { states = it.take(512) }, Modifier.fillMaxWidth(), singleLine = true,
+            OutlinedTextField(states, {
+                states = it.take(512)
+                onInput()
+            }, Modifier.fillMaxWidth(), singleLine = true,
                 label = { Text("Show for these states") },
                 supportingText = { Text("Separate multiple states with commas, for example high, very-high.") })
         }

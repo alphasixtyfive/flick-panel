@@ -20,7 +20,7 @@ internal object PanelConfigCodec {
                     if (tile.wideOnTablet) put("wide", true)
                     if (tile.confirmAction) put("confirm", true)
                     tile.readerAttribute?.let { put("readerAttribute", it) }
-                    if (tile.kind == TileKind.TREND) tile.graphColour?.let { put("graphColour", it.name) }
+                    if (tile.kind.supportsAccent) tile.accent?.let { put(tile.kind.accentKey, it.name) }
                     if (tile.kind == TileKind.CAMERA) {
                         tile.intercomStream?.let { put("intercom", it) }
                         if (tile.cameraActions.isNotEmpty()) put("cameraActions", JSONArray(tile.cameraActions.map {
@@ -33,6 +33,7 @@ internal object PanelConfigCodec {
         }))
         .put("theme", config.theme.name)
         .put("message", config.messageEntity)
+        .put("screensaverMessage", config.screensaverMessageEntity ?: JSONObject.NULL)
         .put("homeBadges", config.homeBadges.takeIf { it.isNotEmpty() }?.let { badges ->
             JSONArray(badges.map { badge ->
                 JSONObject().put("entity", badge.entity).put("label", badge.label)
@@ -53,6 +54,9 @@ internal object PanelConfigCodec {
                     JSONObject().put("entity", control.entity).put("format", control.lightFormat?.name).apply {
                         if (control.wideOnTablet) put("wide", true)
                         if (control.hidden) put("hidden", true)
+                        control.label?.let { put("label", it) }
+                        control.accent?.let { put("accent", it.name) }
+                        if (control.followsArea) put("followsArea", true)
                     }
                 })
             })
@@ -88,20 +92,22 @@ internal object PanelConfigCodec {
                 cameraStream = tile.text("stream")?.takeIf {
                     kind == TileKind.CAMERA && it != entity && validEntity(it) && it.startsWith("camera.")
                 },
-                graphColour = if (kind == TileKind.TREND) {
-                    val colour = tile.text("graphColour")
-                    GraphColour.entries.firstOrNull { it.name == colour }
-                } else null,
+                accent = if (kind.supportsAccent) tile.accent(kind.accentKey) else null,
                 intercomStream = tile.text("intercom")?.takeIf { kind == TileKind.CAMERA && validIntercomStream(it) },
                 cameraActions = if (kind == TileKind.CAMERA) decodeCameraActions(tile) else emptyList(),
             )
         }.distinctBy { it.entity }
+        val homeMessage = obj.text("message")?.takeIf(::validEntity)
         return PanelConfig(
             favourites = tiles,
             theme = PanelTheme.entries.firstOrNull { it.name == obj.optString("theme") } ?: PanelTheme.SLATE,
-            messageEntity = obj.text("message")?.takeIf(::validEntity),
+            messageEntity = homeMessage,
+            screensaverMessageEntity = if (obj.has("screensaverMessage")) {
+                obj.text("screensaverMessage")?.takeIf(::validEntity)
+            } else homeMessage,
             homeBadges = decodeBadges(obj.optJSONArray("homeBadges")),
-            idleSeconds = obj.optInt("idle", 60).let { if (it == 0) 0 else it.coerceIn(15, 900) },
+            idleSeconds = obj.optInt("idle", defaultScreensaverTimeoutSeconds)
+                .let { if (it == 0) 0 else it.coerceIn(screensaverTimeoutRange) },
             wallMode = obj.optBoolean("wall", true),
             dashboardBrightness = obj.optInt("dashboardBrightness").takeIf { it in 1..100 },
             screensaverBrightness = obj.optInt("screensaverBrightness").takeIf { it in 1..100 },
@@ -148,7 +154,14 @@ internal object PanelConfigCodec {
                     TileKind.SLIDER.name -> TileKind.SLIDER
                     else -> null
                 } else null
-                RoomTilePreference(entity, lightFormat, control.optBoolean("wide"), control.optBoolean("hidden"))
+                RoomTilePreference(
+                    entity, lightFormat,
+                    wideOnTablet = control.optBoolean("wide"),
+                    hidden = control.optBoolean("hidden"),
+                    label = (control.opt("label") as? String)?.trim()?.take(72)?.takeIf(String::isNotBlank),
+                    accent = control.accent("accent"),
+                    followsArea = control.optBoolean("followsArea"),
+                )
             }.distinctBy(RoomTilePreference::entity)
             if (preferences.isNotEmpty()) put(id, preferences)
         }
@@ -168,4 +181,12 @@ internal object PanelConfigCodec {
 
     private fun JSONObject.text(key: String): String? =
         if (isNull(key)) null else optString(key).takeIf(String::isNotBlank)
+
+    private fun JSONObject.accent(key: String): TileAccent? {
+        val name = text(key)
+        return TileAccent.entries.firstOrNull { it.name == name }
+    }
+
+    // Retain graph accents when layouts are opened by earlier versions.
+    private val TileKind.accentKey get() = if (this == TileKind.TREND) "graphColour" else "accent"
 }

@@ -1,6 +1,8 @@
 package app.flickpanel.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -15,6 +17,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.HomeBadge
@@ -47,11 +51,13 @@ private sealed class SetupDestination(val title: String, val allowsSaving: Boole
 
 @Composable
 internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBackupAction) -> Unit) {
-    var draft by remember(state.config) { mutableStateOf(state.config) }
+    val restorePreview by model.restorePreview.collectAsStateWithLifecycle()
+    val draft by remember(state.config) { derivedStateOf { model.setupDraft.value ?: state.config } }
     var section by rememberSaveable { mutableStateOf(SetupSection.FAVOURITES) }
     var destinations by remember { mutableStateOf(emptyList<SetupDestination>()) }
     var choosingPhotos by remember { mutableStateOf(false) }
     var confirmingDiscard by remember { mutableStateOf(false) }
+    var confirmingExport by remember { mutableStateOf(false) }
     var search by rememberSaveable { mutableStateOf("") }
     var removed by remember { mutableStateOf<Pair<Int, TileSpec>?>(null) }
     val editorPages = rememberSaveableStateHolder()
@@ -59,8 +65,18 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
     val scope = rememberCoroutineScope()
     val current = destinations.lastOrNull()
     val dirty = draft != state.config
-    fun navigateTo(destination: SetupDestination) { destinations = destinations + destination }
-    fun backToPrevious() { destinations = destinations.dropLast(1) }
+    fun navigateTo(destination: SetupDestination) {
+        model.touch()
+        destinations = destinations + destination
+    }
+    fun backToPrevious() {
+        model.touch()
+        destinations = destinations.dropLast(1)
+    }
+    fun updateSearch(value: String) {
+        model.touch()
+        search = value
+    }
     fun choose(source: SetupPicker) {
         search = ""
         navigateTo(SetupDestination.Picker(source))
@@ -84,6 +100,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
         destination = if (state.connectionEditor) "connection" else current ?: section,
         section = section,
         openSection = {
+            model.touch()
             destinations = emptyList()
             model.cancelConnectionChange()
             section = it
@@ -118,18 +135,18 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
         feedback = feedback,
     ) {
         if (state.connectionEditor) {
-            ConnectionForm(state, model::connect)
+            ConnectionForm(state, model::connect, onInput = model::touch)
         } else when (current) {
-            is SetupDestination.Format -> FormatPanel(current.tile, state) { spec ->
+            is SetupDestination.Format -> FormatPanel(current.tile, state, model) { spec ->
                 val original = current.tile.current
                 val tiles = draft.favourites
-                draft = draft.copy(favourites = if (original == null) tiles + spec
-                    else tiles.map { if (it.entity == original.entity) spec else it })
+                model.updateSetupDraft(draft.copy(favourites = if (original == null) tiles + spec
+                    else tiles.map { if (it.entity == original.entity) spec else it }))
                 destinations = destinations.dropLast(if (original == null) 2 else 1)
             }
             is SetupDestination.Picker -> when (val source = current.source) {
                 SetupPicker.TILE -> editorPages.SaveableStateProvider("device-picker") {
-                    EntityPicker(source, draft, state, search, { search = it }, model::loadCatalogue) { entity ->
+                    EntityPicker(source, draft, state, search, ::updateSearch, model::loadCatalogue) { entity ->
                         val featured = entity.domain != "camera" ||
                             draft.favourites.none { it.kind == TileKind.CAMERA && it.showOnHome }
                         navigateTo(SetupDestination.Format(TileFormat(entity, null, entity.kinds(), featured)))
@@ -137,17 +154,18 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                 }
                 SetupPicker.APP -> {
                     val added = remember(draft.favourites) { draft.favourites.mapNotNull { it.appPackage }.toSet() }
-                    AppPicker(added) { tile ->
-                        draft = draft.copy(favourites = draft.favourites + tile)
+                    AppPicker(added, model::touch) { tile ->
+                        model.updateSetupDraft(draft.copy(favourites = draft.favourites + tile))
                         destinations = destinations.dropLast(2)
                     }
                 }
-                SetupPicker.MESSAGE, SetupPicker.BADGE -> EntityPicker(
-                    source, draft, state, search, { search = it }, model::loadCatalogue,
+                SetupPicker.MESSAGE, SetupPicker.SCREENSAVER_MESSAGE, SetupPicker.BADGE -> EntityPicker(
+                    source, draft, state, search, ::updateSearch, model::loadCatalogue,
                 ) { entity ->
                     backToPrevious()
                     when (source) {
-                        SetupPicker.MESSAGE -> draft = draft.copy(messageEntity = entity.id)
+                        SetupPicker.MESSAGE -> model.updateSetupDraft(draft.copy(messageEntity = entity.id))
+                        SetupPicker.SCREENSAVER_MESSAGE -> model.updateSetupDraft(draft.copy(screensaverMessageEntity = entity.id))
                         else -> {
                             val states = if (entity.domain == "sensor") emptyList() else listOf("on")
                             navigateTo(SetupDestination.Badge(HomeBadge(entity.id, null, states)))
@@ -155,11 +173,11 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                     }
                 }
             }
-            is SetupDestination.Badge -> WarningBadgeEditor(current.badge, state) { saved ->
+            is SetupDestination.Badge -> WarningBadgeEditor(current.badge, state, model::touch) { saved ->
                 val existing = draft.homeBadges
                 val next = if (existing.none { it.entity == saved.entity }) existing + saved
                     else existing.map { if (it.entity == saved.entity) saved else it }
-                draft = draft.copy(homeBadges = next)
+                model.updateSetupDraft(draft.copy(homeBadges = next))
                 backToPrevious()
             }
             is SetupDestination.Room -> Column(Modifier.fillMaxWidth()) {
@@ -169,9 +187,12 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                     draft = draft,
                     state = state,
                     selectedTile = current.tile?.entity,
+                    onInput = model::touch,
                     openTile = { tile -> navigateTo(current.copy(tile = RoomTileTarget(tile.entity, state.label(tile)))) },
-                    update = { controls -> draft = draft.copy(roomTiles = draft.roomTiles + (current.area.id to controls)) },
-                    reset = { draft = draft.copy(roomTiles = draft.roomTiles - current.area.id) },
+                    update = { controls ->
+                        model.updateSetupDraft(draft.copy(roomTiles = draft.roomTiles + (current.area.id to controls)))
+                    },
+                    reset = { model.updateSetupDraft(draft.copy(roomTiles = draft.roomTiles - current.area.id)) },
                 )
             }
             is SetupDestination.Panel, null -> editorPages.SaveableStateProvider(section.name) {
@@ -186,17 +207,17 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                             },
                             edit = editTile,
                             resize = { selected ->
-                                draft = draft.copy(favourites = draft.favourites.map { tile ->
+                                model.updateSetupDraft(draft.copy(favourites = draft.favourites.map { tile ->
                                     if (tile.entity == selected.entity && tile.kind.resizable) {
                                         tile.copy(wideOnTablet = !tile.wideOnTablet)
                                     } else tile
-                                })
+                                }))
                             },
                             remove = { tile ->
                                 val index = draft.favourites.indexOf(tile)
                                 if (index >= 0) {
                                     removed = index to tile
-                                    draft = draft.copy(favourites = draft.favourites - tile)
+                                    model.updateSetupDraft(draft.copy(favourites = draft.favourites - tile))
                                 }
                             },
                             move = { id, delta ->
@@ -206,7 +227,7 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                                 val position = onHome.indexOfFirst { tiles[it].entity == id }
                                 if (position >= 0 && position + delta in onHome.indices) {
                                     java.util.Collections.swap(tiles, onHome[position], onHome[position + delta])
-                                    draft = draft.copy(favourites = tiles)
+                                    model.updateSetupDraft(draft.copy(favourites = tiles))
                                 }
                             },
                             undo = removed?.let { (index, tile) ->
@@ -214,28 +235,35 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                                     val tiles = draft.favourites.toMutableList()
                                     if (tiles.none { it.entity == tile.entity }) {
                                         tiles.add(index.coerceIn(0, tiles.size), tile)
-                                        draft = draft.copy(favourites = tiles)
+                                        model.updateSetupDraft(draft.copy(favourites = tiles))
                                     }
                                     removed = null
                                 }
                             },
                         )
-                        SetupSection.ROOMS -> RoomSetup(draft, state, customize = { navigateTo(SetupDestination.Room(it)) }) { draft = it }
-                        SetupSection.CAMERAS -> CameraSetup(draft, state, editTile) { draft = it }
+                        SetupSection.ROOMS -> RoomSetup(
+                            draft, state, customize = { navigateTo(SetupDestination.Room(it)) }, update = model::updateSetupDraft,
+                        )
+                        SetupSection.CAMERAS -> CameraSetup(draft, state, editTile, model::updateSetupDraft)
                         SetupSection.PANEL -> PanelSettings(
                             page = (current as? SetupDestination.Panel)?.page,
                             draft = draft,
                             state = state,
                             open = { navigateTo(SetupDestination.Panel(it)) },
-                            change = { draft = it },
+                            change = model::updateSetupDraft,
                             choosePhotos = { choosingPhotos = true },
                             chooseMessage = { choose(SetupPicker.MESSAGE) },
+                            chooseScreensaverMessage = { choose(SetupPicker.SCREENSAVER_MESSAGE) },
                             chooseBadge = { choose(SetupPicker.BADGE) },
                             editBadge = { navigateTo(SetupDestination.Badge(it)) },
+                            onInput = model::touch,
                             changeConnection = model::changeConnection,
                             linkPanel = model::linkPanel,
                             unlinkPanel = model::unlinkPanel,
-                            backup = backup,
+                            backup = { action ->
+                                if (action == PanelBackupAction.BACK_UP && dirty) confirmingExport = true
+                                else model.beginBackup(action, openFilePicker = backup)
+                            },
                         )
                     }
                 }
@@ -244,10 +272,60 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
     }
     if (confirmingDiscard) AlertDialog(onDismissRequest = { confirmingDiscard = false },
         title = { Text("Discard changes?") },
-        confirmButton = { TextButton(onClick = model::relock) { Text("Discard") } },
+        confirmButton = { TextButton(onClick = model::discardSetup) { Text("Discard") } },
         dismissButton = { TextButton(onClick = { confirmingDiscard = false }) { Text("Keep editing") } })
+    if (confirmingExport) AlertDialog(
+        onDismissRequest = { confirmingExport = false },
+        title = { Text("Include unsaved changes?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Save your edits and include them in the backup, or export the last saved layout.")
+                TextButton(onClick = {
+                    confirmingExport = false
+                    model.beginBackup(PanelBackupAction.BACK_UP, openFilePicker = backup)
+                }) { Text("Export last saved") }
+            }
+        },
+        dismissButton = { TextButton(onClick = { confirmingExport = false }) { Text("Cancel") } },
+        confirmButton = {
+            TextButton(onClick = {
+                confirmingExport = false
+                model.beginBackup(PanelBackupAction.BACK_UP, saveChanges = true, openFilePicker = backup)
+            }) { Text("Save and export") }
+        },
+    )
+    restorePreview?.let { config ->
+        AlertDialog(
+            onDismissRequest = { if (!state.busy) model.cancelRestore() },
+            title = { Text("Restore this backup?") },
+            text = {
+                val favourites = config.favourites.count { it.showOnHome }
+                val rooms = config.roomTiles.size
+                val cameras = config.favourites.count { it.kind == TileKind.CAMERA }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((label, count) in listOf("Favourites" to favourites, "Customised rooms" to rooms, "Saved cameras" to cameras)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(label)
+                            Text(count.toString())
+                        }
+                    }
+                    Text(if (dirty) "This replaces the saved layout and your unsaved edits."
+                        else "This replaces the saved layout and panel preferences.")
+                    ErrorText(state.error)
+                }
+            },
+            dismissButton = {
+                TextButton(enabled = !state.busy, onClick = model::cancelRestore) { Text("Cancel") }
+            },
+            confirmButton = {
+                TextButton(enabled = !state.busy, onClick = {
+                    model.restoreBackup { scope.launch { feedback.showSnackbar("Backup restored") } }
+                }) { Text("Restore layout") }
+            },
+        )
+    }
     if (choosingPhotos) PhotoAlbumPicker(draft.idleAlbum?.id, model::browsePhotos, { album ->
-        draft = draft.copy(idleAlbum = album)
+        model.updateSetupDraft(draft.copy(idleAlbum = album))
         choosingPhotos = false
     }, { choosingPhotos = false })
 }

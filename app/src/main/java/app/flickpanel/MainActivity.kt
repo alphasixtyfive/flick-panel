@@ -78,7 +78,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun chooseBackupFile(action: PanelBackupAction) {
-        if (!model.beginBackup(action)) return
         try {
             when (action) {
                 PanelBackupAction.BACK_UP -> backupWriter.launch("Flick-Panel-backup.json")

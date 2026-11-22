@@ -55,10 +55,10 @@ import kotlinx.coroutines.isActive
 
 private const val photoIntervalMillis = 25_000L
 private const val albumRetryMillis = 60_000L
-private val photoShade = Brush.verticalGradient(
-    0f to Color(0x99000000), 0.28f to Color(0x99000000),
-    0.42f to Color(0xa3000000), 0.74f to Color(0x99000000),
-    1f to Color(0x40000000),
+private val clockShade = Brush.radialGradient(
+    0f to Color(0x48000000),
+    0.45f to Color(0x36000000),
+    1f to Color.Transparent,
 )
 
 @Composable
@@ -108,7 +108,7 @@ internal fun IdlePhotos(
                 )
             }
         }
-        if (photo != null) Box(Modifier.matchParentSize().background(photoShade))
+        if (photo != null) Box(Modifier.matchParentSize().background(clockShade))
     }
 }
 

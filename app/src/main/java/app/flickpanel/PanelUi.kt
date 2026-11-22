@@ -119,7 +119,10 @@ internal data class PanelUi(
         }
     }
 
-    val message: String? get() = if (link != Link.ONLINE) null else config.messageEntity?.let(entities::get)
+    val message: String? get() = displayMessage(config.messageEntity)
+    val screensaverMessage: String? get() = displayMessage(config.screensaverMessageEntity)
+
+    private fun displayMessage(id: String?): String? = if (link != Link.ONLINE) null else id?.let(entities::get)
         ?.takeIf { it.available && it.state !in emptyMessages }
         ?.state?.replace(whitespace, " ")?.trim()?.take(120)?.takeIf(String::isNotEmpty)
 
@@ -131,6 +134,22 @@ internal data class PanelUi(
             ActiveHomeBadge(badge.label ?: entity.name, entity)
         }
     }
+}
+
+internal fun PanelUi.liveEntityIds(roomsRequested: Boolean): Set<String> = buildSet {
+    for (tile in config.favourites) {
+        if (tile.kind != TileKind.APP) add(tile.entity)
+        tile.statusEntity?.let(::add)
+        tile.cameraActions.forEach { add(it.entity) }
+        tile.cameraStream?.let(::add)
+    }
+    if (!screenBlank && (roomsRequested || config.roomIds?.isNotEmpty() == true)) {
+        roomSections.forEach { section -> section.tiles.mapTo(this) { it.entity } }
+    }
+    addAll(pending.keys)
+    config.messageEntity?.let(::add)
+    config.screensaverMessageEntity?.let(::add)
+    config.homeBadges.mapTo(this) { it.entity }
 }
 
 internal data class ActiveHomeBadge(val label: String, val entity: Entity) {

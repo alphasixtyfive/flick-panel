@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import app.flickpanel.config.TileAccent
 import app.flickpanel.ha.CoverAction
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.canMoveCover
@@ -38,12 +39,12 @@ private val coverDirections = listOf(CoverAction.OPEN, CoverAction.CLOSE)
 @Composable
 internal fun CoverTile(
     label: String, entity: Entity?, live: Entity?, online: Boolean, pending: String?,
-    modifier: Modifier, move: (CoverAction) -> Unit,
+    modifier: Modifier, accent: TileAccent?, compact: Boolean, move: (CoverAction) -> Unit,
 ) {
     val status = if (online) pending ?: live?.coverStatus() ?: "Unavailable" else "Unavailable"
     if (entity?.isGate == true) {
         val action = if (online) live?.gateToggleAction(pending) else null
-        GateToggleTile(label, status, online && live?.state == "open", action, modifier, move)
+        GateToggleTile(label, status, online && live?.state == "open", action, modifier, accent, compact, move)
         return
     }
     val showStop = online && (pending == CoverAction.STOP.progress || live?.canMoveCover(CoverAction.STOP, pending) == true)
@@ -54,7 +55,7 @@ internal fun CoverTile(
             Modifier.fillMaxWidth().padding(tileContentPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            TileTitle(label)
+            AccentedTileTitle(label, Icons.Rounded.Fence, accent)
             TileStatus(status)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 for (action in actions) {
@@ -76,9 +77,10 @@ internal fun CoverTile(
 @Composable
 private fun GateToggleTile(
     label: String, status: String, isOpen: Boolean, action: CoverAction?, modifier: Modifier,
-    move: (CoverAction) -> Unit,
+    accent: TileAccent?, compact: Boolean, move: (CoverAction) -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val surface = if (isOpen) colors.primaryContainer else colors.surfaceContainer
     Surface(
         onClick = { action?.let(move) },
         enabled = action != null,
@@ -88,14 +90,17 @@ private fun GateToggleTile(
             if (action != null) onClick(label = "${action.label} $label", action = null)
         },
         shape = panelCardShape,
-        color = if (isOpen) colors.primaryContainer else colors.surfaceContainer,
+        color = surface,
         contentColor = if (isOpen) colors.onPrimaryContainer else colors.onSurface,
     ) {
-        Column(Modifier.fillMaxSize().padding(tileContentPadding), verticalArrangement = Arrangement.SpaceBetween) {
-            val accent = if (isOpen) colors.onPrimaryContainer else colors.primary
-            ControlTileTitle(label, Icons.Rounded.Fence, accent)
-            if (action != null) TileValue(status, maxLines = 2)
-            else TileStatus(status, color = if (isOpen) colors.onPrimaryContainer else colors.onSurfaceVariant)
+        val maxLines = if (compact) 1 else 2
+        Column(Modifier.fillMaxSize().padding(horizontal = tileContentPadding, vertical = if (compact) 8.dp else 16.dp),
+            verticalArrangement = Arrangement.SpaceBetween) {
+            val tint = tileAccentColour(accent, surface, if (isOpen) colors.onPrimaryContainer else colors.primary)
+            ControlTileTitle(label, Icons.Rounded.Fence, tint, maxLines = maxLines)
+            if (action != null) TileValue(status, maxLines = maxLines)
+            else TileStatus(status, maxLines = maxLines,
+                color = if (isOpen) colors.onPrimaryContainer else colors.onSurfaceVariant)
         }
     }
 }

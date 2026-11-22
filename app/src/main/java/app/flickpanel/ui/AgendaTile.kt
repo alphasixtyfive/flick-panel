@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.flickpanel.AgendaContent
 import app.flickpanel.AgendaState
+import app.flickpanel.config.TileAccent
 import app.flickpanel.config.TileKind
 import app.flickpanel.ha.AgendaEvent
 import app.flickpanel.ha.AgendaTask
@@ -30,7 +31,7 @@ import app.flickpanel.ha.AgendaTask
 @Composable
 internal fun AgendaPreview(
     title: String, kind: TileKind, state: AgendaState, online: Boolean, modifier: Modifier,
-    expanded: Boolean, wide: Boolean, open: () -> Unit,
+    expanded: Boolean, wide: Boolean, accent: TileAccent?, open: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     val dates = rememberAgendaDates()
@@ -41,7 +42,7 @@ internal fun AgendaPreview(
         Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val icon = if (kind == TileKind.TASKS) Icons.Rounded.Checklist else Icons.Rounded.CalendarMonth
-                Icon(icon, null, Modifier.size(compactTileIconSize), tint = colors.primary)
+                Icon(icon, null, Modifier.size(compactTileIconSize), tint = tileAccentColour(accent))
                 TileTitle(title, Modifier.weight(1f))
                 if (expanded && tasks.isNotEmpty()) TileStatus("${tasks.size} left", maxLines = 1, color = colors.primary)
             }

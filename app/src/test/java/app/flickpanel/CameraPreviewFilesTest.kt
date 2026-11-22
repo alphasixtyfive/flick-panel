@@ -21,10 +21,22 @@ class CameraPreviewFilesTest {
         assertArrayEquals(preview, restored.read("camera.entry"))
         assertNull(CameraPreviewFiles(directory, "account-b", 1024).read("camera.entry"))
         assertNull(restored.read("camera.garage"))
-        val newer = byteArrayOf(4, 5)
-        restored.write("camera.entry", newer)
-        assertArrayEquals(newer, restored.read("camera.entry"))
         assertTrue(directory.listFiles().orEmpty().all { it.extension == "preview" })
+    }
+
+    @Test
+    fun persistenceKeepsThePreviousFrameUntilTheWriteIntervalElapses() = runBlocking {
+        val directory = files.newFolder()
+        val store = CameraPreviewFiles(directory, "account", 1024)
+        val preview = byteArrayOf(1, 2, 3)
+        val newer = byteArrayOf(4, 5)
+        store.write("camera.entry", preview)
+        store.write("camera.entry", newer)
+        assertArrayEquals(preview, store.read("camera.entry"))
+
+        assertTrue(directory.listFiles().orEmpty().single().setLastModified(System.currentTimeMillis() - 121_000))
+        store.write("camera.entry", newer)
+        assertArrayEquals(newer, store.read("camera.entry"))
     }
 
     @Test

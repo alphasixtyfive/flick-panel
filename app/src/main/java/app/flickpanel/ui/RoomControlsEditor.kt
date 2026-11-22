@@ -50,13 +50,14 @@ import app.flickpanel.config.RoomTilePreference
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
+import app.flickpanel.tileName
 import java.util.Collections
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RoomControlsEditor(
     room: Area, draft: PanelConfig, state: PanelUi, selectedTile: String?, openTile: (TileSpec) -> Unit,
-    update: (List<RoomTilePreference>) -> Unit, reset: () -> Unit,
+    update: (List<RoomTilePreference>) -> Unit, reset: () -> Unit, onInput: () -> Unit,
 ) {
     val controls = remember(room, draft, state.catalogue) { RoomLayout(draft, state.catalogue).controls(room) }
     val preferences = remember(controls) { controls.map { it.preference } }
@@ -68,7 +69,8 @@ internal fun RoomControlsEditor(
         val control = controls.firstOrNull { it.preference.entity == selectedTile }
         val tile = control?.tile
         if (control != null && tile != null) {
-            RoomTileSettings(tile.kind, control.preference, control.canDim, ::edit)
+            RoomTileSettings(tile, room.tileName(state.entityName(tile.entity)), control.preference, control.canDim,
+                onInput, ::edit)
         } else {
             EmptyState("This tile is unavailable", null)
         }
@@ -83,7 +85,8 @@ internal fun RoomControlsEditor(
         val term = search.trim()
         hidden.filter { control ->
             val tile = checkNotNull(control.tile)
-            state.label(tile).contains(term, ignoreCase = true) ||
+            state.entityName(tile.entity).contains(term, ignoreCase = true) ||
+                tile.label?.contains(term, ignoreCase = true) == true ||
                 tile.kind.label.contains(term, ignoreCase = true) || tile.entity.contains(term, ignoreCase = true)
         }
     }
@@ -106,7 +109,7 @@ internal fun RoomControlsEditor(
         itemsIndexed(visible, key = { _, control -> control.preference.entity }) { index, control ->
             val tile = checkNotNull(control.tile)
             val settings = control.preference
-            val label = state.label(tile)
+            val label = tile.label ?: room.tileName(state.entityName(tile.entity))
             val format = if (tile.kind == TileKind.SLIDER) "Dimmer" else tile.kind.label
             val size = if (settings.wideOnTablet) "Wide" else "Standard"
             RoomControlRow(label, "$format · $size", edit = { openTile(tile) }) {
@@ -120,7 +123,7 @@ internal fun RoomControlsEditor(
         }
         if (hidden.isNotEmpty()) item { RoomEditorHeading("Hidden controls", Modifier.padding(top = 6.dp)) }
         if (hidden.size >= 6 || search.isNotBlank()) item {
-            SetupSearchField(search, { search = it }, "Find a hidden control", Modifier.fillMaxWidth())
+            SetupSearchField(search, { onInput(); search = it }, "Find a hidden control", Modifier.fillMaxWidth())
         }
         if (hidden.isNotEmpty() && matching.isEmpty()) item {
             Text("No matching controls", Modifier.padding(horizontal = 16.dp),
@@ -128,7 +131,7 @@ internal fun RoomControlsEditor(
         }
         items(matching, key = { it.preference.entity }) { control ->
             val tile = checkNotNull(control.tile)
-            val label = state.label(tile)
+            val label = tile.label ?: room.tileName(state.entityName(tile.entity))
             RoomControlRow(label, tile.kind.label) {
                 IconButton(onClick = { edit(control.preference.copy(hidden = false)) }) {
                     Icon(Icons.Rounded.Visibility, "Show $label")
@@ -165,24 +168,36 @@ private fun RoomControlRow(
 }
 
 @Composable
-private fun RoomTileSettings(kind: TileKind, settings: RoomTilePreference, canDim: Boolean, edit: (RoomTilePreference) -> Unit) {
+private fun RoomTileSettings(
+    tile: TileSpec, defaultName: String, settings: RoomTilePreference, canDim: Boolean,
+    onInput: () -> Unit, edit: (RoomTilePreference) -> Unit,
+) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(horizontal = setupPadding, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
+        val format = if (tile.kind == TileKind.SLIDER) "Dimmer" else tile.kind.label
+        TileEditorPreview(tile.label ?: defaultName, format, entityIcon(tile.entity.substringBefore('.')), settings.accent)
+        TileNameField(settings.label.orEmpty(), defaultName) { name ->
+            onInput()
+            edit(settings.copy(label = name.takeIf(String::isNotEmpty)))
+        }
         SettingsListGroup {
             SetupSwitchRow("Show in room", null, !settings.hidden) { edit(settings.copy(hidden = !it)) }
         }
         if (canDim) {
             SettingsListGroup("Light control") {
-                SettingChoices(listOf(false, true), kind == TileKind.SLIDER, { if (it) "Dimmer" else "Switch" }) { dimmer ->
+                SettingChoices(listOf(false, true), tile.kind == TileKind.SLIDER, { if (it) "Dimmer" else "Switch" }) { dimmer ->
                     edit(settings.copy(lightFormat = if (dimmer) TileKind.SLIDER else TileKind.TOGGLE))
                 }
             }
         }
         TileSizePicker(settings.wideOnTablet) { wide ->
             edit(settings.copy(wideOnTablet = wide))
+        }
+        TileAccentPicker(settings.accent) { accent ->
+            edit(settings.copy(accent = accent))
         }
     }
 }

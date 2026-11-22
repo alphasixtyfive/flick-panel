@@ -37,8 +37,6 @@ import org.webrtc.audio.JavaAudioDeviceModule
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-private const val connectionTimeoutMs = 6_500L
-
 internal data class CameraAudio(val listen: Boolean = false, val talk: Boolean = false)
 
 internal suspend fun playIntercom(
@@ -46,6 +44,7 @@ internal suspend fun playIntercom(
     renderer: SurfaceViewRenderer,
     signaling: CameraSignaling,
     audio: StateFlow<CameraAudio>,
+    startupTimeoutMillis: Long,
     onLive: (hasAudio: Boolean, canTalk: Boolean) -> Unit,
     onMicrophone: (active: Boolean) -> Unit,
     onMicrophoneError: () -> Unit,
@@ -111,7 +110,7 @@ internal suspend fun playIntercom(
             val answerReady = CompletableDeferred<Unit>()
             var phase = "local offer"
             val session = this
-            withTimeoutOrNull(connectionTimeoutMs) {
+            withTimeoutOrNull(startupTimeoutMillis) {
                 val offer = connection.createLocalOffer()
                 session.launch {
                     val pending = mutableListOf<IceCandidate>()

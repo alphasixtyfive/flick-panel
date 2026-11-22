@@ -40,7 +40,7 @@ internal fun LazyListScope.tileRows(
 internal fun TileRow(
     row: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, compact: Boolean, resizeTiles: Boolean,
     modifier: Modifier = Modifier,
-    shortcutRow: Boolean = false, homeAgenda: Boolean = false, room: Area? = null,
+    shortcutRow: Boolean = false, homeAgenda: Boolean = false, room: Area? = null, compactControls: Boolean = false,
 ) {
     Layout(modifier = modifier.fillMaxWidth(), content = {
         for (tile in row) key(tile.entity) {
@@ -57,10 +57,10 @@ internal fun TileRow(
                 }
                 else -> if (compact) compactCellHeight else cellHeight
             }
-            val label = state.label(tile)
+            val label = tile.label ?: state.entityName(tile.entity).let { room?.tileName(it) ?: it }
             PanelTile(tile, state, model, Modifier.heightIn(min = minimum),
-                label = room?.tileName(label) ?: label, compactHistory = shortcutRow && tile.kind == TileKind.TREND,
-                expandedAgenda = homeAgenda)
+                label = label, compactHistory = shortcutRow && tile.kind == TileKind.TREND,
+                expandedAgenda = homeAgenda, compactControls = compactControls)
         }
     }) { children, constraints ->
         val width = constraints.maxWidth

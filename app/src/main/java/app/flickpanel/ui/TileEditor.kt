@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -46,7 +45,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -68,11 +66,11 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.PanelUi
+import app.flickpanel.PanelViewModel
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
@@ -84,7 +82,8 @@ import app.flickpanel.ha.Link
 import app.flickpanel.ha.readerAttributes
 
 internal enum class SetupPicker(val title: String) {
-    TILE("Add tile"), APP("Add app shortcut"), MESSAGE("Choose a message"),
+    TILE("Add tile"), APP("Add app shortcut"), MESSAGE("Choose a home message"),
+    SCREENSAVER_MESSAGE("Choose a screensaver message"),
     BADGE("Choose a warning sensor"),
 }
 
@@ -120,7 +119,8 @@ internal fun EntityPicker(
             SetupPicker.TILE -> entry.entity.id !in present &&
                 (entry.visible || entry.entity.available && entry.entity.domain in setOf("todo", "calendar"))
             SetupPicker.APP -> false
-            SetupPicker.MESSAGE -> entry.visible && entry.entity.domain in setOf("sensor", "input_text")
+            SetupPicker.MESSAGE, SetupPicker.SCREENSAVER_MESSAGE ->
+                entry.visible && entry.entity.domain in setOf("sensor", "input_text")
             SetupPicker.BADGE -> entry.entity.id !in badges && validBadgeSource(entry.entity.id)
         } }.map { entry ->
             val entity = entry.entity
@@ -206,7 +206,7 @@ internal fun SetupSearchField(query: String, change: (String) -> Unit, hint: Str
     )
 }
 
-private fun entityIcon(domain: String) = when (domain) {
+internal fun entityIcon(domain: String) = when (domain) {
     "light" -> Icons.Rounded.Lightbulb
     "switch", "input_boolean" -> Icons.Rounded.PowerSettingsNew
     "climate" -> Icons.Rounded.Thermostat
@@ -221,7 +221,7 @@ private fun entityIcon(domain: String) = when (domain) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -> Unit) {
+internal fun FormatPanel(format: TileFormat, state: PanelUi, model: PanelViewModel, apply: (TileSpec) -> Unit) {
     var kind by remember(format) { mutableStateOf(format.current?.kind ?: format.kinds.first()) }
     var label by remember(format) { mutableStateOf(format.current?.label.orEmpty()) }
     var status by remember(format) { mutableStateOf(format.current?.statusEntity) }
@@ -234,7 +234,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
     var cameraStream by remember(format) { mutableStateOf(format.current?.cameraStream) }
     var confirmAction by remember(format) { mutableStateOf(format.current?.confirmAction ?: false) }
     var readerAttribute by remember(format) { mutableStateOf(format.current?.readerAttribute) }
-    var graphColour by remember(format) { mutableStateOf(format.current?.graphColour) }
+    var accent by remember(format) { mutableStateOf(format.current?.accent) }
     Column(Modifier.widthIn(max = 680.dp).fillMaxSize()) {
         Column(Modifier.weight(1f, fill = false).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = setupPadding, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -250,22 +250,12 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                 TileKind.COVER -> preview.coverStatus().takeUnless { it == "Unavailable" } ?: kind.label
                 else -> displayValue(preview).takeUnless { it == "Unavailable" } ?: kind.label
             }
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
-                    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Icon(entityIcon(preview.domain), null) }
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(format.entity.name, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(example, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+            TileEditorPreview(label.trim().ifBlank { format.entity.name }, example, entityIcon(preview.domain),
+                accent.takeIf { kind.supportsAccent })
+            TileNameField(label, format.entity.name) {
+                model.touch()
+                label = it
             }
-            OutlinedTextField(label, { label = it.take(72) }, modifier = Modifier.fillMaxWidth(),
-                label = { Text("Tile name") }, placeholder = { Text(format.entity.name, maxLines = 1) }, singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done))
             if (format.kinds.size > 1) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Tile type", style = MaterialTheme.typography.titleMedium)
@@ -275,8 +265,8 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                     }
                 }
             }
-            if (kind == TileKind.TREND) {
-                GraphColourPicker(graphColour) { graphColour = it }
+            if (kind.supportsAccent) {
+                TileAccentPicker(accent) { accent = it }
             }
             if (kind.resizable) {
                 TileSizePicker(wideOnTablet) { wideOnTablet = it }
@@ -298,7 +288,10 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Intercom", Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
-                        intercomStream, { intercomStream = it }, Modifier.fillMaxWidth(),
+                        intercomStream, {
+                            model.touch()
+                            intercomStream = it
+                        }, Modifier.fillMaxWidth(),
                         label = { Text("go2rtc fallback (optional)") }, singleLine = true, isError = !validIntercom,
                         keyboardOptions = KeyboardOptions(
                             autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done,
@@ -315,8 +308,11 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                     LinkedEntitySetting(streamTitle, cameraStream, streams, state, defaultLabel = "This camera") {
                         cameraStream = it
                     }
+                    val camera = TileSpec(format.entity.id, TileKind.CAMERA, label.trim().takeIf(String::isNotEmpty),
+                        cameraStream = cameraStream, intercomStream = intercomAlias.takeIf(String::isNotEmpty))
+                    CameraConnectionCheck(camera, state, model, validIntercom)
                 }
-                CameraActionsEditor(cameraActions, state) { cameraActions = it }
+                CameraActionsEditor(cameraActions, state, onInput = model::touch) { cameraActions = it }
             }
             if (kind == TileKind.READER) {
                 val attributes = remember(preview.attributes) { preview.readerAttributes() }
@@ -333,7 +329,7 @@ internal fun FormatPanel(format: TileFormat, state: PanelUi, apply: (TileSpec) -
                     cameraStream = cameraStream.takeIf { kind == TileKind.CAMERA },
                     intercomStream = intercomAlias.takeIf { kind == TileKind.CAMERA && it.isNotEmpty() && validIntercom },
                     cameraActions = if (kind == TileKind.CAMERA) cameraActions else emptyList(),
-                    graphColour = graphColour.takeIf { kind == TileKind.TREND },
+                    accent = accent.takeIf { kind.supportsAccent },
                 ))
             }, enabled = kind != TileKind.CAMERA || validIntercom) { Text(if (format.current == null) "Add tile" else "Apply") }
         }

@@ -45,10 +45,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+private const val previewRefreshMillis = 30_000L
+private const val maxPreviewRetryMillis = 5 * 60_000L
+
 @Composable
 internal fun CameraStill(
     id: String, model: PanelViewModel, refresh: Boolean, modifier: Modifier,
-    placeholder: String? = null, blurred: Boolean = false, allowStored: Boolean = true,
+    placeholder: String? = null, blurred: Boolean = false, allowStored: Boolean = true, fit: Boolean = false,
 ) {
     val cache = model.cameraPreviews
     var still by remember(cache, id, allowStored) {
@@ -60,6 +63,7 @@ internal fun CameraStill(
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             if (allowStored && still == null) still = cache.restore(id)
             if (!refresh || blurred && still != null) return@repeatOnLifecycle
+            var refreshDelay = previewRefreshMillis
             while (isActive) {
                 try {
                     val fresh = model.refreshCameraPreview(id)
@@ -71,7 +75,10 @@ internal fun CameraStill(
                     unavailable = true
                 }
                 if (blurred) break
-                delay(30_000)
+                refreshDelay = if (unavailable) {
+                    (refreshDelay * 2).coerceAtMost(maxPreviewRetryMillis)
+                } else previewRefreshMillis
+                delay(refreshDelay)
             }
         }
     }
@@ -82,7 +89,7 @@ internal fun CameraStill(
         if (bitmap != null) {
             val image = Modifier.matchParentSize()
             Image(bitmap, null, if (blurred) image.blur(7.dp, BlurredEdgeTreatment.Rectangle) else image,
-                contentScale = ContentScale.Crop)
+                contentScale = if (fit) ContentScale.Fit else ContentScale.Crop)
             if ((!refresh || unavailable) && placeholder != null) {
                 Surface(Modifier.align(Alignment.TopStart).padding(10.dp), color = viewerSurface,
                     contentColor = Color.White, shape = CircleShape) {
@@ -101,10 +108,10 @@ internal fun CameraStill(
 internal fun CameraTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, widescreen: Boolean = false) {
     val online = state.link == Link.ONLINE && state.entity(tile.entity)?.available != false
     val previewActive = online && state.camera == null
-    val nativeCamera = cameraSources(tile.entity, tile, state.entities).nativeCamera
+    val nativeCamera = if (tile.intercomStream == null) cameraSources(tile.entity, tile, state.entities).nativeCamera else null
     var nativeTalk by remember(nativeCamera, online) { mutableStateOf(false) }
     LaunchedEffect(nativeCamera, previewActive) {
-        if (previewActive) nativeTalk = model.cameraCapabilities(nativeCamera).twoWayAudio
+        if (previewActive && nativeCamera != null) nativeTalk = model.cameraCapabilities(nativeCamera).twoWayAudio
     }
     val preview = if (widescreen) modifier.aspectRatio(16f / 9f) else modifier
     Surface(

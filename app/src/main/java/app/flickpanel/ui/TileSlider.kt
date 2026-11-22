@@ -10,6 +10,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -21,7 +26,7 @@ import kotlin.math.roundToInt
 
 @Composable
 internal fun Modifier.tileSlider(
-    enabled: Boolean, level: Int, preview: MutableState<Int?>, commit: (Int) -> Unit,
+    enabled: Boolean, level: Int, preview: MutableState<Int?>, step: Int, commit: (Int) -> Unit,
 ): Modifier {
     val direction = LocalLayoutDirection.current
     val submit by rememberUpdatedState(commit)
@@ -45,6 +50,16 @@ internal fun Modifier.tileSlider(
         } finally {
             preview.value = null
         }
+    }.onKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+        val delta = when (event.key) {
+            Key.DirectionRight -> step
+            Key.DirectionLeft -> -step
+            else -> return@onKeyEvent false
+        }
+        val target = (level + if (direction == LayoutDirection.Ltr) delta else -delta).coerceIn(0, 100)
+        if (target != level) submit(target)
+        target != level
     }.semantics {
         progressBarRangeInfo = ProgressBarRangeInfo(level.toFloat(), 0f..100f)
         setProgress {

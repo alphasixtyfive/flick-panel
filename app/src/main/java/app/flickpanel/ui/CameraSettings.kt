@@ -1,5 +1,6 @@
 package app.flickpanel.ui
 
+import android.os.SystemClock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,17 +38,46 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import app.flickpanel.PanelUi
+import app.flickpanel.PanelViewModel
 import app.flickpanel.config.CameraAction
 import app.flickpanel.config.CameraActionIcon
+import app.flickpanel.config.TileSpec
 import app.flickpanel.config.cameraActionLabelLimit
 import app.flickpanel.config.cameraActionLimit
 import app.flickpanel.config.defaultCameraActionLabel
 import app.flickpanel.ha.Entity
+import app.flickpanel.ha.Link
 import app.flickpanel.ha.cameraActionKind
 
 @Composable
-internal fun CameraActionsEditor(actions: List<CameraAction>, state: PanelUi, change: (List<CameraAction>) -> Unit) {
+internal fun CameraConnectionCheck(tile: TileSpec, state: PanelUi, model: PanelViewModel, valid: Boolean) {
+    var openedAt by remember(tile.entity) { mutableStateOf<Long?>(null) }
+    TextButton(onClick = {
+        model.touch()
+        openedAt = SystemClock.elapsedRealtime()
+    }, enabled = valid && state.link == Link.ONLINE) { Text("Test connection") }
+
+    openedAt?.let { start ->
+        val close = {
+            model.touch()
+            openedAt = null
+        }
+        Dialog(
+            onDismissRequest = close,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            CameraViewer(tile.entity, state.label(tile), start, tile, state, model, testMode = true, close = close)
+        }
+    }
+}
+
+@Composable
+internal fun CameraActionsEditor(
+    actions: List<CameraAction>, state: PanelUi, onInput: () -> Unit, change: (List<CameraAction>) -> Unit,
+) {
     var adding by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<String?>(null) }
     val editing = actions.firstOrNull { it.entity == editingId }
@@ -85,13 +115,13 @@ internal fun CameraActionsEditor(actions: List<CameraAction>, state: PanelUi, ch
                 .sortedBy { it.name.lowercase() }.toList()
         }
         if (adding) {
-            CameraActionPicker("Add camera action", options, dismiss = { adding = false }) { entity ->
+            CameraActionPicker("Add camera action", options, onInput, dismiss = { adding = false }) { entity ->
                 change(actions + CameraAction(entity))
                 adding = false
             }
         } else if (editing != null) {
             CameraActionDialog(
-                editing, state, options, dismiss = { editingId = null },
+                editing, state, options, onInput, dismiss = { editingId = null },
                 remove = {
                     change(actions - editing)
                     editingId = null
@@ -106,7 +136,7 @@ internal fun CameraActionsEditor(actions: List<CameraAction>, state: PanelUi, ch
 
 @Composable
 private fun CameraActionPicker(
-    title: String, options: List<Entity>, dismiss: () -> Unit, choose: (String) -> Unit,
+    title: String, options: List<Entity>, onInput: () -> Unit, dismiss: () -> Unit, choose: (String) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     val matches = remember(options, query) {
@@ -118,7 +148,10 @@ private fun CameraActionPicker(
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SetupSearchField(query, { query = it }, "Find a device or action", Modifier.fillMaxWidth())
+                SetupSearchField(query, {
+                    onInput()
+                    query = it
+                }, "Find a device or action", Modifier.fillMaxWidth())
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 248.dp).weight(1f, fill = false)) {
                     if (matches.isEmpty()) item {
                         ListItem(headlineContent = {
@@ -142,7 +175,7 @@ private fun CameraActionPicker(
 
 @Composable
 private fun CameraActionDialog(
-    editing: CameraAction, state: PanelUi, options: List<Entity>, dismiss: () -> Unit,
+    editing: CameraAction, state: PanelUi, options: List<Entity>, onInput: () -> Unit, dismiss: () -> Unit,
     remove: () -> Unit, save: (CameraAction) -> Unit,
 ) {
     var selected by remember(editing) { mutableStateOf(editing.entity) }
@@ -151,7 +184,7 @@ private fun CameraActionDialog(
     var icon by remember(editing) { mutableStateOf(editing.icon) }
     var choosingIcon by remember(editing) { mutableStateOf(false) }
     if (choosing) {
-        CameraActionPicker("Change entity", options, dismiss = { choosing = false }) { entity ->
+        CameraActionPicker("Change entity", options, onInput, dismiss = { choosing = false }) { entity ->
             selected = entity
             choosing = false
         }
@@ -165,7 +198,10 @@ private fun CameraActionDialog(
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SettingLink("Entity", entityName, { choosing = true })
                 OutlinedTextField(
-                    label, { label = it.take(cameraActionLabelLimit) }, Modifier.fillMaxWidth(),
+                    label, {
+                        onInput()
+                        label = it.take(cameraActionLabelLimit)
+                    }, Modifier.fillMaxWidth(),
                     label = { Text("Button name") }, placeholder = { Text(defaultCameraActionLabel(selected, entityName)) },
                     singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 )

@@ -21,7 +21,6 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -30,11 +29,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,6 +43,8 @@ import app.flickpanel.config.HomeBadge
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelBackupAction
 import app.flickpanel.config.PanelTheme
+import app.flickpanel.config.defaultScreensaverTimeoutSeconds
+import app.flickpanel.config.screensaverTimeoutRange
 import app.flickpanel.ha.Link
 import kotlin.math.roundToInt
 
@@ -66,15 +63,16 @@ internal enum class PanelPage(val label: String, val readOnly: Boolean = false) 
 @Composable
 internal fun PanelSettings(
     page: PanelPage?, draft: PanelConfig, state: PanelUi, open: (PanelPage) -> Unit, change: (PanelConfig) -> Unit,
-    choosePhotos: () -> Unit, chooseMessage: () -> Unit, changeConnection: () -> Unit,
+    choosePhotos: () -> Unit, chooseMessage: () -> Unit, chooseScreensaverMessage: () -> Unit,
+    changeConnection: () -> Unit,
     linkPanel: (String) -> Unit, unlinkPanel: () -> Unit,
     chooseBadge: () -> Unit, editBadge: (HomeBadge) -> Unit,
+    onInput: () -> Unit,
     backup: (PanelBackupAction) -> Unit,
 ) {
     val context = LocalContext.current
     val album = draft.idleAlbum?.title ?: "Clock only"
     val scroll = key(page) { rememberScrollState() }
-    var confirmRestore by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxWidth().verticalScroll(scroll)
             .padding(start = setupPadding, end = setupPadding, top = 12.dp, bottom = 24.dp),
@@ -116,15 +114,21 @@ internal fun PanelSettings(
                 SettingsListGroup("Screensaver") {
                     SettingLink("Idle photos", album, choosePhotos,
                         clear = draft.idleAlbum?.let { { change(draft.copy(idleAlbum = null)) } })
+                    val messageId = draft.screensaverMessageEntity
+                    val messageName = messageId?.let { state.entity(it)?.name ?: it } ?: "Off"
+                    SettingLink("Screensaver message", messageName, chooseScreensaverMessage,
+                        clear = messageId?.let { { change(draft.copy(screensaverMessageEntity = null)) } })
                     SettingLink(PanelPage.SCREENSAVER_TIMEOUT.label, idleDelay(draft.idleSeconds),
                         { open(PanelPage.SCREENSAVER_TIMEOUT) })
-                    BrightnessSetting(
-                        "Screensaver brightness", draft.screensaverBrightness, "Automatic", draft.defaultScreensaverBrightness,
-                    ) { change(draft.copy(screensaverBrightness = it)) }
+                    val automatic = draft.defaultScreensaverBrightness
+                    BrightnessSetting("Screensaver brightness", draft.screensaverBrightness, "Auto · $automatic%", automatic) {
+                        change(draft.copy(screensaverBrightness = it))
+                    }
                 }
             }
             PanelPage.SCREENSAVER_TIMEOUT -> SettingsListGroup {
-                val choices = (listOf(0, 15, 30, 60, 120, 300, 600, 900) + draft.idleSeconds).distinct().sorted()
+                val choices = (listOf(0, 15, 30, 60, 120, defaultScreensaverTimeoutSeconds, 600, 900,
+                    screensaverTimeoutRange.last) + draft.idleSeconds).distinct().sorted()
                 SettingChoices(choices, draft.idleSeconds, ::idleDelay) { change(draft.copy(idleSeconds = it)) }
             }
             PanelPage.APPEARANCE -> {
@@ -158,40 +162,24 @@ internal fun PanelSettings(
                         { open(PanelPage.HOME_BADGES) })
                 }
             }
-            PanelPage.REMOTE_CONTROL -> PanelLinkSettings(state, linkPanel, unlinkPanel)
+            PanelPage.REMOTE_CONTROL -> PanelLinkSettings(state, linkPanel, unlinkPanel, onInput)
             PanelPage.HOME_BADGES -> WarningBadgeSettings(draft.homeBadges, state, chooseBadge, editBadge) { removed ->
                 change(draft.copy(homeBadges = draft.homeBadges - removed))
             }
             PanelPage.BACKUP -> {
-                if (draft != state.config) {
-                    Text("Save your changes before choosing a backup file.", style = MaterialTheme.typography.bodyLarge)
-                } else {
-                    SettingsListGroup {
-                        SettingLink("Back up", "Save your layout and panel preferences",
-                            { backup(PanelBackupAction.BACK_UP) })
-                        SettingLink("Restore", "Replace the layout from a Flick Panel backup",
-                            { confirmRestore = true })
-                    }
-                    Text("Backups leave your setup PIN and Home Assistant connection on this device.",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SettingsListGroup {
+                    SettingLink("Back up", "Export your layout and panel preferences",
+                        { backup(PanelBackupAction.BACK_UP) })
+                    SettingLink("Restore", "Review a backup before replacing your layout",
+                        { backup(PanelBackupAction.RESTORE) })
                 }
+                Text("Backups leave your setup PIN and Home Assistant connection on this device.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             PanelPage.ABOUT -> PanelAbout { open(PanelPage.FONT_LICENCE) }
             PanelPage.FONT_LICENCE -> FontLicence()
         }
     }
-    if (confirmRestore) AlertDialog(
-        onDismissRequest = { confirmRestore = false },
-        title = { Text("Restore a backup?") },
-        text = { Text("The selected file will replace the saved layout and panel preferences.") },
-        dismissButton = { TextButton(onClick = { confirmRestore = false }) { Text("Cancel") } },
-        confirmButton = {
-            TextButton(onClick = {
-                confirmRestore = false
-                backup(PanelBackupAction.RESTORE)
-            }) { Text("Choose file") }
-        },
-    )
 }
 
 @Composable

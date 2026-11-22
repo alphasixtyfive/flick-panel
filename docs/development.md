@@ -23,7 +23,7 @@ Camera previews restore from a bounded disk cache and refresh only while visible
 1. Run the tests, lint, and optimized APK build. Check setup, local Home Assistant controls, the camera gallery, and a live viewer on a tablet.
 2. Build the universal release APK. For smaller downloads, build again with `-PpanelAbi=arm64-v8a` or `-PpanelAbi=armeabi-v7a`. The same option accepts `x86_64` and `x86`. Copy each build to a distinct filename before running the next one because Gradle uses the same output path.
 3. Sign release APKs with the certificate used for the existing public release. Use `apksigner verify --print-certs` and compare with the published APK before offering an in-place update. Generate a SHA-256 checksum for each signed binary.
-4. Use the [release notes](releases/0.1.85.md) for the release page. Attach the signed APKs and checksums.
+4. Use the version's notes in [releases](releases/) for the release page. Attach the signed APKs and checksums.
 
 Suggested GitHub description
 

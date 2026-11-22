@@ -1,8 +1,7 @@
 package app.flickpanel.ui
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -36,14 +35,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.flickpanel.ActiveHomeBadge
 import app.flickpanel.Page
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
@@ -79,6 +81,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val fullAlert = headerWidth >= tabsWidth + inlineAlertWidth + navigationGap
         val alertIcon = short && !fullAlert && headerWidth >= tabsWidth + dashboardPillHeight + navigationGap
         val alertsInNavigation = alerts.isNotEmpty() && (fullAlert || alertIcon)
+        val alertsInHeader = short && alerts.isNotEmpty() && !alertsInNavigation
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
                 "Home",
@@ -86,6 +89,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 wide = wide,
                 short = short,
                 stacked = compact && !short && fontScale >= 1.3f,
+                alerts = if (alertsInHeader) alerts else emptyList(),
                 unlock = model::showUnlock,
                 idle = model::showIdleScreen,
             )
@@ -124,7 +128,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                     Page.ROOMS -> Rooms(state, model, roomId, { roomId = it }, body)
                     Page.FAVOURITES -> Favourites(
                         homeTiles, state, model, tileColumns, body,
-                        alerts = if (alertsInNavigation) emptyList() else alerts,
+                        alerts = if (alertsInNavigation || alertsInHeader) emptyList() else alerts,
                     )
                 }
             }
@@ -132,11 +136,10 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DashboardHeader(
     title: String, weather: Entity?, wide: Boolean, short: Boolean, stacked: Boolean,
-    unlock: () -> Unit, idle: () -> Unit,
+    alerts: List<ActiveHomeBadge>, unlock: () -> Unit, idle: () -> Unit,
 ) {
     val padding = if (short) 6.dp else if (wide) 22.dp else 18.dp
     val prominent = wide && !short
@@ -152,10 +155,15 @@ private fun DashboardHeader(
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = modifier.combinedClickable(
-                interactionSource = null, indication = null, onClick = {},
-                onLongClickLabel = "Unlock setup", onLongClick = unlock,
-            ).heightIn(min = 48.dp).semantics { heading() },
+            modifier = modifier.heightIn(min = 48.dp)
+                .pointerInput(unlock) { detectTapGestures(onLongPress = { unlock() }) }
+                .semantics {
+                    heading()
+                    onLongClick("Unlock setup") {
+                        unlock()
+                        true
+                    }
+                },
         )
     }
     val details: @Composable () -> Unit = {
@@ -174,6 +182,7 @@ private fun DashboardHeader(
         Row(Modifier.fillMaxWidth().padding(top = padding), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             titleContent(Modifier.weight(1f))
+            if (alerts.isNotEmpty()) HomeWarnings(alerts, iconOnly = true)
             details()
         }
     }

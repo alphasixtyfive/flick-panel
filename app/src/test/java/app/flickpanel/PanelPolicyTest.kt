@@ -1,6 +1,8 @@
 package app.flickpanel
 
-import app.flickpanel.config.GraphColour
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import app.flickpanel.config.TileAccent
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelConfigCodec
 import app.flickpanel.config.PanelTheme
@@ -12,6 +14,7 @@ import app.flickpanel.ha.Area
 import app.flickpanel.ha.Catalogue
 import app.flickpanel.ha.Entry
 import app.flickpanel.ha.Entity
+import app.flickpanel.ha.Link
 import app.flickpanel.ha.PhotoFolder
 import app.flickpanel.ha.adjacentTemperature
 import app.flickpanel.ha.parseServer
@@ -19,6 +22,7 @@ import app.flickpanel.ha.reduceEntities
 import app.flickpanel.ha.sameOrigin
 import app.flickpanel.ha.weather
 import app.flickpanel.ui.timerSecondsRemaining
+import app.flickpanel.ui.accentInk
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -29,16 +33,38 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PanelPolicyTest {
-    @Test fun graphColoursRoundTripAndOlderLayoutsUseTheTheme() {
-        val graph = TileSpec("sensor.power", TileKind.TREND, graphColour = GraphColour.AMBER)
-        val value = TileSpec("sensor.temperature", TileKind.VALUE)
+    @Test fun namedAccentsRoundTripAndKeepTheLegacyGraphKey() {
+        val graph = TileSpec("sensor.power", TileKind.TREND, accent = TileAccent.AMBER)
+        val value = TileSpec("sensor.temperature", TileKind.VALUE, accent = TileAccent.BLUE)
         val saved = PanelConfigCodec.encode(PanelConfig(favourites = listOf(graph, value)))
         assertEquals(listOf(graph, value), PanelConfigCodec.decode(saved).favourites)
+        val tiles = JSONObject(saved).getJSONArray("tiles")
+        assertEquals("AMBER", tiles.getJSONObject(0).getString("graphColour"))
+        assertEquals("BLUE", tiles.getJSONObject(1).getString("accent"))
 
         val oldTile = """{"version":1,"tiles":[{"entity":"sensor.power","kind":"TREND"}]}"""
-        assertEquals(graph.copy(graphColour = null), PanelConfigCodec.decode(oldTile).favourites.single())
+        assertEquals(graph.copy(accent = null), PanelConfigCodec.decode(oldTile).favourites.single())
         val unknownColour = saved.replace("AMBER", "UNRECOGNISED")
-        assertEquals(listOf(graph.copy(graphColour = null), value), PanelConfigCodec.decode(unknownColour).favourites)
+        assertEquals(listOf(graph.copy(accent = null), value), PanelConfigCodec.decode(unknownColour).favourites)
+    }
+
+    @Test fun namedAccentsStayLegibleAcrossRestingAndFilledTileSurfaces() {
+        val surfaces = listOf(
+            Color(0xff242b35) to Color(0xff314f6e),
+            Color(0xff332d26) to Color(0xff513d27),
+            Color(0xffe6eaf0) to Color(0xffb5d2f0),
+        )
+        for ((resting, filled) in surfaces) {
+            for (accent in TileAccent.entries) {
+                val ink = accentInk(accent, resting, Color.Transparent, filled)
+                assertTrue(ink != Color.Transparent)
+                for (surface in listOf(resting, filled)) {
+                    val first = ink.luminance() + .05f
+                    val second = surface.luminance() + .05f
+                    assertTrue("$accent should contrast with $surface", maxOf(first, second) / minOf(first, second) >= 3f)
+                }
+            }
+        }
     }
 
     @Test fun temperatureStepsRespectDeviceLimitsAndAvailability() {
@@ -60,6 +86,7 @@ class PanelPolicyTest {
             ),
             theme = PanelTheme.AMBER,
             messageEntity = "input_text.panel_notice",
+            screensaverMessageEntity = "sensor.next_appointment",
             idleSeconds = 120, wallMode = false,
             idleAlbum = PhotoFolder("media-source://synology_dsm/nas/album", "TV Gallery")
         )
@@ -77,8 +104,15 @@ class PanelPolicyTest {
           {"entity":"light.lamp","kind":"unknown"}],
           "theme":"unsupported"}""")
         assertEquals(listOf(TileSpec("sensor.temperature", TileKind.VALUE)), parsed.favourites)
-        assertEquals(900, parsed.idleSeconds)
+        assertEquals(1_800, parsed.idleSeconds)
         assertEquals(PanelTheme.SLATE, parsed.theme)
+    }
+
+    @Test fun screensaverTimeoutUsesLongerDefaultAndKeepsSavedChoices() {
+        assertEquals(300, PanelConfig().idleSeconds)
+        assertEquals(300, PanelConfigCodec.decode("""{"version":1}""").idleSeconds)
+        assertEquals(60, PanelConfigCodec.decode("""{"version":1,"idle":60}""").idleSeconds)
+        assertEquals(0, PanelConfigCodec.decode("""{"version":1,"idle":0}""").idleSeconds)
     }
 
     @Test fun configurationIgnoresTheRetiredWakeSetting() {
@@ -89,6 +123,31 @@ class PanelPolicyTest {
 
         assertEquals(config, restored)
         assertFalse(JSONObject(PanelConfigCodec.encode(restored)).has("presence"))
+    }
+
+    @Test fun oldLayoutsShareTheirMessageAndCanTurnOffOnlyTheScreensaverLine() {
+        val previous = PanelConfigCodec.decode("""{"version":1,"message":"input_text.panel_notice"}""")
+        assertEquals(previous.messageEntity, previous.screensaverMessageEntity)
+
+        val homeOnly = previous.copy(screensaverMessageEntity = null)
+        assertEquals(homeOnly, PanelConfigCodec.decode(PanelConfigCodec.encode(homeOnly)))
+    }
+
+    @Test fun screensaverMessageUsesOnlyItsSelectedLiveEntity() {
+        val config = PanelConfig(
+            messageEntity = "input_text.home_message",
+            screensaverMessageEntity = "sensor.next_appointment",
+        )
+        val home = Entity(checkNotNull(config.messageEntity), "Welcome home")
+        val appointment = Entity(checkNotNull(config.screensaverMessageEntity), "17:30 · Football\npractice")
+        val state = PanelUi(
+            layout = RoomLayout(config), link = Link.ONLINE,
+            entities = listOf(home, appointment).associateBy(Entity::id),
+        )
+        assertEquals("Welcome home", state.message)
+        assertEquals("17:30 · Football practice", state.screensaverMessage)
+        assertNull(state.copy(link = Link.OFFLINE).screensaverMessage)
+        assertNull(state.copy(entities = mapOf(home.id to home)).screensaverMessage)
     }
 
     @Test fun configurationKeepsEverySavedCameraAndRoom() {

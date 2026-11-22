@@ -43,8 +43,14 @@ internal fun MusicPlaybackBar(
                     Column {
                         Text(playback.title, style = MaterialTheme.typography.titleMedium, maxLines = 1,
                             overflow = TextOverflow.Ellipsis)
-                        Text(playback.speaker, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val status = playback.status
+                        if (status == null) {
+                            Text(playback.speaker, style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        } else {
+                            val label = if (playback.trackTitle != null) "${status.label} · ${playback.speaker}" else status.label
+                            PlaybackIndicator(status, label)
+                        }
                     }
                 }
                 PlayPauseButton(playback, transport, Modifier.size(48.dp), enabled = !starting)

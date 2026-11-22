@@ -36,7 +36,8 @@ import app.flickpanel.PanelUi
 internal fun ConnectionForm(
     state: PanelUi,
     connect: (String, String, String, String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onInput: () -> Unit = {},
 ) {
     var url by remember(state.serverAddress) { mutableStateOf(state.serverAddress.orEmpty()) }
     var token by remember { mutableStateOf("") }
@@ -56,11 +57,17 @@ internal fun ConnectionForm(
             Text(if (state.configured) "Home Assistant connection" else "Flick Panel", style = MaterialTheme.typography.headlineMedium)
             if (!state.configured) Text("Connect with your server address and a long-lived access token.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedTextField(url, { url = it }, label = { Text("Home Assistant URL") },
+            OutlinedTextField(url, {
+                url = it
+                onInput()
+            }, label = { Text("Home Assistant URL") },
                 placeholder = { Text("https://home.example") }, singleLine = true, enabled = !state.busy,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                 modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(token, { token = it }, label = { Text("Long-lived access token") }, singleLine = true,
+            OutlinedTextField(token, {
+                token = it
+                onInput()
+            }, label = { Text("Long-lived access token") }, singleLine = true,
                 enabled = !state.busy, visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password,
                     imeAction = if (state.configured) ImeAction.Done else ImeAction.Next),

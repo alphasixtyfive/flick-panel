@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Numbers
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -30,12 +31,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import app.flickpanel.config.TileAccent
 import app.flickpanel.ha.Entity
 
 @Composable
 internal fun ChoiceTile(
     label: String, entity: Entity?, pending: String?, enabled: Boolean,
-    modifier: Modifier, select: (String) -> Unit,
+    modifier: Modifier, accent: TileAccent?, select: (String) -> Unit,
 ) {
     val options = remember(entity?.attributes) { entity?.options.orEmpty() }
     var open by remember(entity?.id) { mutableStateOf(false) }
@@ -46,7 +48,7 @@ internal fun ChoiceTile(
             Column(Modifier.fillMaxWidth().padding(tileContentPadding), verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TileTitle(label, Modifier.weight(1f))
-                    Icon(Icons.Rounded.ExpandMore, null, Modifier.size(compactTileIconSize), tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Rounded.ExpandMore, null, Modifier.size(compactTileIconSize), tint = tileAccentColour(accent))
                 }
                 TileValue(pending ?: entity?.takeIf(Entity::available)?.state ?: "Unavailable", maxLines = 2)
             }
@@ -63,14 +65,14 @@ internal fun ChoiceTile(
 @Composable
 internal fun NumberTile(
     label: String, entity: Entity?, pending: String?, enabled: Boolean,
-    modifier: Modifier, step: (Boolean) -> Unit,
+    modifier: Modifier, accent: TileAccent?, step: (Boolean) -> Unit,
 ) {
     val value = entity?.numberValue
     val range = entity?.numberRange
     Surface(modifier, shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().padding(tileContentPadding),
             verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            TileTitle(label)
+            AccentedTileTitle(label, Icons.Rounded.Numbers, accent)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TileValue(pending ?: displayValue(entity), Modifier.weight(1f), maxLines = 2)

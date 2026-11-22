@@ -32,7 +32,7 @@ import app.flickpanel.ha.Link
 import app.flickpanel.ha.PanelRemoteState
 
 @Composable
-internal fun PanelLinkSettings(state: PanelUi, link: (String) -> Unit, unlink: () -> Unit) {
+internal fun PanelLinkSettings(state: PanelUi, link: (String) -> Unit, unlink: () -> Unit, onInput: () -> Unit) {
     val device = state.remoteName
     var name by rememberSaveable { mutableStateOf("Flick Panel") }
     var confirmUnlink by rememberSaveable { mutableStateOf(false) }
@@ -40,7 +40,10 @@ internal fun PanelLinkSettings(state: PanelUi, link: (String) -> Unit, unlink: (
         Text("Link this tablet to send display commands and see battery information in Home Assistant.",
             style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(
-            name, { name = it.take(48) }, Modifier.widthIn(max = 400.dp).fillMaxWidth(),
+            name, {
+                name = it.take(48)
+                onInput()
+            }, Modifier.widthIn(max = 400.dp).fillMaxWidth(),
             label = { Text("Tablet name") }, singleLine = true, enabled = !state.busy,
         )
         Button(onClick = { link(name) }, enabled = !state.busy && state.link == Link.ONLINE && name.isNotBlank()) {

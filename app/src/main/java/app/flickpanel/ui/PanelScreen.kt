@@ -102,7 +102,10 @@ internal fun PanelScreen(
                         when {
                             state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                             !state.configured -> ConnectionForm(state, model::connect)
-                            state.clock -> AmbientClock(state.message, state.config.idleAlbum?.id, state.config.reduceMotion, model)
+                            state.clock -> AmbientClock(
+                                state.screensaverMessage, state.config.screensaverMessageEntity != null,
+                                state.config.idleAlbum?.id, state.config.reduceMotion, model,
+                            )
                             else -> Dashboard(state, model)
                         }
                     }
@@ -112,7 +115,7 @@ internal fun PanelScreen(
         if (viewer is PanelViewer.Light && !state.editor && !state.screenBlank) {
             LightControlsSheet(viewer.id, state, model)
         }
-        if (state.unlocking) UnlockEditor(state, model::unlock, model::relock)
+        if (state.unlocking) UnlockEditor(state, model::unlock, model::cancelUnlock)
         BackHandler(state.configured && state.page != Page.FAVOURITES && !state.clock && !state.screenBlank &&
             !state.editor && !state.unlocking && !state.hasViewer) {
             model.selectPage(Page.FAVOURITES)

@@ -6,7 +6,7 @@ enum class PanelTheme(val label: String) {
     SLATE("Graphite"), AMBER("Charcoal amber"), PORCELAIN("Porcelain"), SYSTEM("Android colours")
 }
 
-enum class GraphColour(val label: String) {
+enum class TileAccent(val label: String) {
     BLUE("Blue"), TEAL("Teal"), GREEN("Green"), AMBER("Amber"), ROSE("Rose")
 }
 
@@ -20,6 +20,10 @@ enum class TileKind(val label: String) {
     internal val resizable get() = this != CAMERA && this != WEATHER && this != APP
     internal val isAgenda get() = this == TASKS || this == CALENDAR
     internal val hasContentScreen get() = this == PERSON || this == READER
+    internal val supportsAccent get() = when (this) {
+        CAMERA, WEATHER, APP, IMAGE, PERSON -> false
+        else -> true
+    }
 }
 
 data class TileSpec(
@@ -32,7 +36,7 @@ data class TileSpec(
     val confirmAction: Boolean = false,
     val readerAttribute: String? = null,
     val cameraStream: String? = null,
-    val graphColour: GraphColour? = null,
+    val accent: TileAccent? = null,
     val intercomStream: String? = null,
     val cameraActions: List<CameraAction> = emptyList(),
 ) {
@@ -44,13 +48,20 @@ internal data class RoomTilePreference(
     val lightFormat: TileKind? = null,
     val wideOnTablet: Boolean = false,
     val hidden: Boolean = false,
+    val label: String? = null,
+    val accent: TileAccent? = null,
+    val followsArea: Boolean = false,
 )
+
+internal const val defaultScreensaverTimeoutSeconds = 300
+internal val screensaverTimeoutRange = 15..1_800
 
 internal data class PanelConfig(
     val favourites: List<TileSpec> = emptyList(),
     val theme: PanelTheme = PanelTheme.SLATE,
     val messageEntity: String? = null,
-    val idleSeconds: Int = 60,
+    val screensaverMessageEntity: String? = null,
+    val idleSeconds: Int = defaultScreensaverTimeoutSeconds,
     val wallMode: Boolean = true,
     val dashboardBrightness: Int? = null,
     val screensaverBrightness: Int? = null,
@@ -62,7 +73,7 @@ internal data class PanelConfig(
     internal val idleAlbum: PhotoFolder? = null,
     val homeBadges: List<HomeBadge> = emptyList(),
 ) {
-    val defaultScreensaverBrightness get() = if (idleAlbum == null) 13 else 22
+    val defaultScreensaverBrightness get() = if (idleAlbum == null) 13 else 55
 }
 
 internal const val roomTileLimit = 32

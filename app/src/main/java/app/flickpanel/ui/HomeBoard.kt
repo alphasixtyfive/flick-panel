@@ -84,10 +84,8 @@ internal fun homeBands(
 
 internal fun homePages(bands: List<HomeBand>, height: Dp): List<List<HomeBand>> {
     if (bands.isEmpty()) return emptyList()
-    val fullHeight = bands.fold(tileGap * (bands.size - 1)) { sum, band -> sum + band.height }
-    if (fullHeight <= height) return listOf(bands)
-
     val pageHeight = (height - homePagerHeight).coerceAtLeast(0.dp)
+    if (homePageHeight(bands) <= height || bands.first().height > pageHeight) return listOf(bands)
     val pages = mutableListOf<MutableList<HomeBand>>()
     var used = 0.dp
     for (band in bands) {
@@ -102,3 +100,6 @@ internal fun homePages(bands: List<HomeBand>, height: Dp): List<List<HomeBand>> 
     }
     return pages
 }
+
+internal fun homePageHeight(bands: List<HomeBand>): Dp =
+    bands.fold(tileGap * (bands.size - 1).coerceAtLeast(0)) { sum, band -> sum + band.height }

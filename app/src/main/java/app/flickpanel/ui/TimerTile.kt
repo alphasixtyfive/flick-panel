@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -16,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import app.flickpanel.config.TileAccent
 import app.flickpanel.ha.Entity
 import app.flickpanel.ha.text
 import kotlinx.coroutines.delay
@@ -25,7 +28,7 @@ import java.time.Instant
 internal data class TimerReadout(val label: String, val progress: Float? = null)
 
 @Composable
-internal fun TimerTile(label: String, entity: Entity?, modifier: Modifier) {
+internal fun TimerTile(label: String, entity: Entity?, modifier: Modifier, accent: TileAccent?) {
     val colors = MaterialTheme.colorScheme
     val countdown = timerReadout(entity)
     Surface(modifier, shape = panelCardShape, color = colors.surfaceContainer) {
@@ -33,7 +36,7 @@ internal fun TimerTile(label: String, entity: Entity?, modifier: Modifier) {
             Modifier.fillMaxSize().tileFill(countdown.progress ?: 0f, colors.primaryContainer).padding(tileContentPadding),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            TileTitle(label)
+            AccentedTileTitle(label, Icons.Rounded.Timer, accent, filledSurface = colors.primaryContainer)
             TileValue(countdown.label, maxLines = 2)
         }
     }

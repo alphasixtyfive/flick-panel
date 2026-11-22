@@ -11,11 +11,12 @@ Use HTTPS for remote connections. A private IPv4 address such as `http://192.168
 
 ## Favourites and rooms
 
-Choose **Add tile** in setup and search by entity name, ID, or room. Choose a tile format and optionally give it a shorter label. **Standard** and **Wide** preview how the tile uses the grid. To reorder a tile, drag its handle or tap the handle to move it one place. Use the tile menu to resize or remove it. **Undo removal** is available before saving.
+Choose **Add tile** in setup and search by entity name, ID, or room. Choose a tile format and optionally give it a shorter label. **Standard** and **Wide** set its size in the grid. Choose **Accent** on supported tiles to personalise the icon or graph line. **Theme** follows the panel's colours. To reorder a tile, drag its handle or tap the handle to move it one place. Use the tile menu to resize or remove it. **Undo removal** is available before saving.
 
-Under **Rooms**, choose which Home Assistant areas to show and set their order. Open a room to hide, show, resize, or reorder individual controls. Search hidden controls by name, entity ID, or type. A room can include lights, switches, fans, covers, thermostats, selectors, number controls, scenes, and music players. Use **Switch** or **Dimmer** for dimmable lights. **Use automatic layout** restores that room's defaults. **Heating controls** controls whether assigned thermostats appear in rooms.
+Under **Rooms**, choose which Home Assistant areas to show and set their order. Open a room to hide, show, resize, rename, recolour, or reorder controls. A custom name applies to that room. Search hidden controls by name, entity ID, or type. Use **Switch** or **Dimmer** for dimmable lights. **Use automatic layout** restores that room's defaults. **Heating controls** determines whether assigned thermostats appear in rooms.
 
 Wide displays show the room list beside the tiles. On a small display, tap the room name to choose another room.
+On very short screens, Favourites uses one scrollable board so the alert and navigation leave space for the tiles.
 
 To pin an installed app, choose **Add tile** and tap **Apps** in the header. Open **Panel → Android Home app** in setup to make Flick Panel the launcher on a dedicated tablet. The Android Home gesture brings you back after using another app.
 
@@ -27,10 +28,10 @@ To pin an installed app, choose **Add tile** and tap **Apps** in the header. Ope
 | Fan | Tap to turn a fan on or off and swipe to set its speed when the device supports those controls. |
 | Cover | Operate blinds, shades, garage doors, or gates. A gate uses one tap and shows its current state. |
 | Thermostat | See the current and target temperatures and adjust the target. |
-| Value, Percentage or Small graph | Read a sensor, show a fill bar for a 0–100% sensor, or see recent numeric history. Pick an accent for a graph in the tile editor. |
+| Value, Percentage or Small graph | Read a sensor, show a fill bar for a 0–100% sensor, or see recent numeric history. |
 | Button or Countdown | Run a scene, script, or button action. Link a timer to a Button or show it on its own as a Countdown. Enable confirmation for actions that deserve a second tap. |
 | Selector or Number control | Choose one of a Home Assistant select entity's options or adjust a number using its configured range and step. |
-| Music player | Open artwork, playback, position, volume, and the player's media library when supported. |
+| Music player | See whether the player is playing, buffering, or paused. Open artwork, playback controls, position, volume, and the media library when supported. |
 | Tasks or Calendar | Check off and add items, restore completed items, or see the next seven days of events. |
 | Person location | Show a person's Home Assistant picture and zone. Open the built-in map when Home Assistant supplies a position. |
 | Image or Content reader | Show an image entity such as a vacuum map, or open text such as a recipe from a sensor state or attribute. |
@@ -44,6 +45,8 @@ Edit a camera under **Cameras** in setup. Use **Pin to Favourites** to show it t
 
 A microphone badge marks cameras configured for Talk. Flick Panel prefers native Home Assistant two-way audio where the camera advertises it. In Home Assistant 2026.11, the **Two-way audio** option is under **Settings → System → Labs**. Use **go2rtc fallback (optional)** for a named stream configured with the WebRTC Camera integration. [Home Assistant camera compatibility](https://www.home-assistant.io/integrations/camera/#two-way-audio) · [WebRTC Camera integration](https://github.com/AlexxIT/WebRTC)
 
+Use **Test connection** before saving to check the selected feed and see whether Talk connects. The test keeps the tablet's microphone and camera actions idle.
+
 Live sound plays when the stream provides audio. Tap the speaker to mute it. Tap **Talk** to use the tablet microphone and **End call** to release it. The first use requires Android microphone permission. Closing the viewer or leaving the app also releases it.
 
 Flick Panel can show the last saved preview as the camera loads or when it goes offline. The tablet keeps previews in its private cache for up to three days, scoped to the current Home Assistant connection. Use **Clear cache** in Android's Flick Panel app settings to remove them. The viewer shows **Live** once video starts.
@@ -53,12 +56,19 @@ Flick Panel can show the last saved preview as the camera loads or when it goes 
 - **Appearance** has Graphite, Charcoal amber, Porcelain, and Android colours, plus **Higher contrast** and **Reduce motion**.
 - Under **Panel → Home Assistant**, choose a text source for **Home message** or select the sensor states that should appear as **Home alerts**. Tap an alert on Home to read the details.
 - Set **Panel → Display → Idle photos** to a Home Assistant media folder or an album exposed by your Home Assistant server. Choose **Use this folder** and save, then tap the dashboard clock to preview it.
-- **Dashboard brightness** can follow Android or use a fixed level. **Screensaver brightness** sets a lower backlight level for the clock and photos. **Wall display** keeps Flick Panel awake while it is visible.
-- Set **Screensaver timeout** to **Never automatically** to leave the timing to a Home Assistant automation or a tap on the clock.
+- Under **Panel → Display → Screensaver message**, choose a Home Assistant text sensor or input text. The message appears beneath the date on the photo clock. The dashboard has a separate **Home message** setting.
+- **Dashboard brightness** can follow Android or use a fixed level. **Screensaver brightness** sets the backlight for the clock and photos. **Reset** returns to 55% for photos or 13% for the clock alone. **Wall display** keeps Flick Panel awake while it is visible.
+- **Screensaver timeout** defaults to five minutes of dashboard inactivity. Set it to **Never automatically** to leave the timing to a Home Assistant automation or a tap on the clock.
+
+Enter a message or template under **Flick Panel → Configure** in the [Home Assistant integration](https://github.com/alphasixtyfive/flick-panel-home-assistant#screensaver-text). Then choose that tablet's **Screensaver message** sensor in the app. An existing [Template sensor](https://www.home-assistant.io/integrations/template/#creating-a-template-helper-from-the-user-interface) works too.
+
+For an appointment, return a short line such as `17:30 · Football practice` and leave the result empty when there is nothing to show. Use a shared calendar or a time-only message for a tablet in a common area. The [Calendar integration](https://www.home-assistant.io/integrations/calendar/) exposes the next event and provides a separate action to list events.
 
 ## Backup and restore
 
-Open **Panel → Backup & restore** in setup. Save the layout as a JSON file through Android's file picker. Restore it on a tablet connected to the same Home Assistant instance so entity IDs match. The layout includes tiles, rooms, appearance, and the photo folder reference. Keep the connection token and setup PIN available separately.
+Open **Panel → Backup & restore** in setup. Export the last saved layout, or choose **Save and export** to include edits from this setup session. To restore, select a backup and review its summary before replacing the layout. Use the same Home Assistant instance so entity IDs match. The layout includes tiles, rooms, appearance, and the photo folder reference. Keep the connection token and setup PIN available separately.
+
+Setup locks after five minutes of inactivity. Enter the PIN again to continue applied edits while Flick Panel remains running.
 
 ## Home Assistant actions and tablet sensors
 

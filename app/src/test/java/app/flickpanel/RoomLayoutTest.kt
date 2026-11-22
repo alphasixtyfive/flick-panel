@@ -3,6 +3,7 @@ package app.flickpanel
 import app.flickpanel.config.PanelConfig
 import app.flickpanel.config.PanelConfigCodec
 import app.flickpanel.config.RoomTilePreference
+import app.flickpanel.config.TileAccent
 import app.flickpanel.config.TileKind
 import app.flickpanel.config.TileSpec
 import app.flickpanel.ha.Area
@@ -37,6 +38,37 @@ class RoomLayoutTest {
         val tiles = RoomLayout(restored, catalogue).sections.single().tiles
         assertEquals(listOf("light.stairs", "media_player.landing"), tiles.map { it.entity })
         assertEquals(listOf(TileKind.TOGGLE, TileKind.MEDIA), tiles.map { it.kind })
+    }
+
+    @Test
+    fun trackedAreaControlsFollowAssignmentsAndKeepRoomAppearanceIfTheyReturn() {
+        val kitchen = Area("kitchen", "Kitchen")
+        val hall = Area("hall", "Hall")
+        val pendant = Entity("light.pendant", "on")
+        val lamp = Entity("light.lamp", "on")
+        val config = PanelConfig(roomIds = listOf(kitchen.id, hall.id))
+        fun catalogue(pendantArea: Area) = Catalogue(
+            listOf(Entry(pendant, pendantArea.id, false, true), Entry(lamp, kitchen.id, false, true)),
+            listOf(kitchen, hall),
+        )
+        val preferences = RoomLayout(config, catalogue(kitchen)).controls(kitchen).map { control ->
+            if (control.preference.entity == pendant.id) {
+                control.preference.copy(label = "Kitchen pendant", accent = TileAccent.AMBER, wideOnTablet = true)
+            } else control.preference
+        }
+        val edited = config.copy(roomTiles = mapOf(kitchen.id to preferences))
+        val restored = PanelConfigCodec.decode(PanelConfigCodec.encode(edited))
+        assertEquals(edited, restored)
+
+        val moved = RoomLayout(restored, catalogue(hall))
+        assertEquals(listOf(lamp.id), moved.sections.first().tiles.map(TileSpec::entity))
+        assertEquals(listOf(pendant.id), moved.sections.last().tiles.map(TileSpec::entity))
+        assertEquals(preferences, moved.controls(kitchen).map(RoomControl::preference))
+
+        val returned = RoomLayout(restored, catalogue(kitchen)).sections.single().tiles.first { it.entity == pendant.id }
+        assertEquals("Kitchen pendant", returned.label)
+        assertEquals(TileAccent.AMBER, returned.accent)
+        assertTrue(returned.wideOnTablet)
     }
 
     @Test

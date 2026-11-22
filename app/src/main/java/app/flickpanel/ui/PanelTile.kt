@@ -38,7 +38,7 @@ internal val tileArtworkSize = 36.dp
 @Composable
 internal fun PanelTile(
     tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
-    label: String, compactHistory: Boolean = false, expandedAgenda: Boolean = false,
+    label: String, compactHistory: Boolean = false, expandedAgenda: Boolean = false, compactControls: Boolean = false,
 ) {
     if (tile.kind == TileKind.CAMERA) {
         CameraTile(tile, state, model, modifier)
@@ -58,6 +58,7 @@ internal fun PanelTile(
         modifier = modifier,
         compactHistory = compactHistory,
         expandedAgenda = expandedAgenda,
+        compactControls = compactControls,
     )
 }
 
@@ -65,7 +66,7 @@ internal fun PanelTile(
 private fun TileContent(
     tile: TileSpec, label: String, entity: Entity?, live: Entity?, status: Entity?, pending: String?,
     link: Link, history: GraphHistory?, reduceMotion: Boolean, model: PanelViewModel,
-    modifier: Modifier, compactHistory: Boolean, expandedAgenda: Boolean,
+    modifier: Modifier, compactHistory: Boolean, expandedAgenda: Boolean, compactControls: Boolean,
 ) {
     val online = link == Link.ONLINE
     val available = online && live?.available == true
@@ -74,23 +75,23 @@ private fun TileContent(
         TileKind.TOGGLE, TileKind.ACTION -> {
             val on = entity?.state == "on"
             val adjust = if (entity?.canDim == true) ({ model.openLight(tile.entity) }) else null
-            ToggleActionTile(tile, label, on, status, pending, available, reduceMotion, modifier, adjust) {
+            ToggleActionTile(tile, label, on, status, pending, available, reduceMotion, modifier, adjust, compactControls) {
                 live?.let { if (tile.kind == TileKind.ACTION) model.action(it) else model.toggle(it, !on) }
             }
         }
-        TileKind.SLIDER -> BrightnessTile(label, entity, live, pending.takeIf { online }, ready, model, modifier)
-        TileKind.FAN -> FanTile(label, entity, live, pending.takeIf { online }, ready, model, modifier)
-        TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier) { increase ->
+        TileKind.SLIDER -> BrightnessTile(label, entity, live, pending.takeIf { online }, ready, model, modifier, tile.accent)
+        TileKind.FAN -> FanTile(label, entity, live, pending.takeIf { online }, ready, model, modifier, tile.accent)
+        TileKind.CLIMATE -> ClimateTile(label, entity, live, pending, ready, modifier, tile.accent) { increase ->
             model.stepTemperature(tile.entity, increase)
         }
-        TileKind.MEDIA -> MusicTile(label, entity, available, model, modifier)
-        TileKind.CHOICE -> ChoiceTile(label, entity, pending, ready, modifier) { option ->
+        TileKind.MEDIA -> MusicTile(label, entity, available, model, modifier, tile.accent, compactControls)
+        TileKind.CHOICE -> ChoiceTile(label, entity, pending, ready, modifier, tile.accent) { option ->
             live?.let { model.selectOption(it, option) }
         }
-        TileKind.NUMBER -> NumberTile(label, entity, pending, ready, modifier) { increase ->
+        TileKind.NUMBER -> NumberTile(label, entity, pending, ready, modifier, tile.accent) { increase ->
             live?.let { model.stepNumber(it, increase) }
         }
-        TileKind.COVER -> CoverTile(label, entity, live, online, pending, modifier) { action ->
+        TileKind.COVER -> CoverTile(label, entity, live, online, pending, modifier, tile.accent, compactControls) { action ->
             model.controlCover(tile.entity, action)
         }
         TileKind.TASKS, TileKind.CALENDAR -> AgendaTile(tile, label, available, model, modifier, expandedAgenda)
@@ -99,14 +100,14 @@ private fun TileContent(
                 model::cachedPersonAvatar, model::loadPersonAvatar)
             PersonTile(label, live, online, modifier, avatar = photo) { model.openContent(tile.entity) }
         }
-        TileKind.READER -> ReaderTile(label, readContent(entity, tile.readerAttribute), modifier) {
+        TileKind.READER -> ReaderTile(label, readContent(entity, tile.readerAttribute), modifier, tile.accent) {
             model.openContent(tile.entity)
         }
         TileKind.IMAGE -> ImageTile(tile.entity, label, entity?.state, online && entity?.available == true, model, modifier)
         TileKind.WEATHER -> WeatherTile(label, entity, modifier)
-        TileKind.TIMER -> TimerTile(label, entity, modifier)
-        TileKind.VALUE -> ValueTile(label, entity, link, modifier)
-        TileKind.PERCENTAGE -> PercentageTile(label, entity, link, modifier)
+        TileKind.TIMER -> TimerTile(label, entity, modifier, tile.accent)
+        TileKind.VALUE -> ValueTile(label, entity, link, modifier, tile.accent)
+        TileKind.PERCENTAGE -> PercentageTile(label, entity, link, modifier, tile.accent)
         TileKind.TREND -> GraphTile(tile, label, entity, link, history, model::loadGraph, modifier, compactHistory)
         TileKind.APP -> AppTile(tile, modifier)
         TileKind.CAMERA -> Unit
@@ -116,9 +117,10 @@ private fun TileContent(
 @Composable
 internal fun ControlTileTitle(
     label: String, icon: ImageVector, tint: Color, adjust: (() -> Unit)? = null, enabled: Boolean = true,
+    maxLines: Int = 2,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        TileTitle(label, Modifier.weight(1f).align(Alignment.Top))
+        TileTitle(label, Modifier.weight(1f).align(Alignment.Top), maxLines = maxLines)
         if (adjust == null) Icon(icon, null, tint = tint, modifier = Modifier.size(tileIconSize))
         else IconButton(onClick = adjust, enabled = enabled) {
             Icon(Icons.Rounded.Tune, "Adjust $label", tint = if (enabled) tint else Color.Unspecified,
