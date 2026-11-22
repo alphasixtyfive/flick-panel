@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -33,7 +35,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.SnackbarHost
@@ -44,9 +45,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -220,19 +223,33 @@ private fun SetupCategoryPane(
 
 @Composable
 private fun SetupNavigationBar(section: SetupSection, busy: Boolean, open: (SetupSection) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val labelStyle = MaterialTheme.typography.labelMedium
+    val widths = rememberNavigationLabelWidths(SetupSection.entries.map(SetupSection::label), labelStyle, padding = 4.dp)
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 0.dp,
         windowInsets = WindowInsets(0, 0, 0, 0),
     ) {
-        for (destination in SetupSection.entries) {
-            NavigationBarItem(
-                selected = destination == section,
-                onClick = { open(destination) },
-                enabled = !busy,
-                icon = { Icon(destination.icon, null) },
-                label = { Text(destination.label, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            )
+        for ((index, destination) in SetupSection.entries.withIndex()) {
+            val selected = destination == section
+            Column(
+                Modifier.weight(widths[index].value).heightIn(min = 80.dp).clip(MaterialTheme.shapes.large)
+                    .selectable(selected, enabled = !busy, role = Role.Tab, onClick = { open(destination) })
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+            ) {
+                Box(
+                    Modifier.size(56.dp, 32.dp)
+                        .background(if (selected) colors.secondaryContainer else Color.Transparent, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(destination.icon, null, tint = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant)
+                }
+                Text(destination.label, style = labelStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = if (selected) colors.onSurface else colors.onSurfaceVariant)
+            }
         }
     }
 }

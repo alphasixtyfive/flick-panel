@@ -44,7 +44,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -201,14 +200,7 @@ private fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page
         val gap = 6.dp
         val compactPadding = 6.dp
         val tabWidths = if (stacked) {
-            val textMeasurer = rememberTextMeasurer()
-            remember(density, style, textMeasurer) {
-                val selectedStyle = style.copy(fontWeight = FontWeight.SemiBold)
-                Page.entries.map { page ->
-                    val size = textMeasurer.measure(page.label, style = selectedStyle, maxLines = 1).size
-                    maxOf(48.dp, with(density) { size.width.toDp() } + compactPadding * 2)
-                }
-            }
+            rememberNavigationLabelWidths(Page.entries.map(Page::label), style.copy(fontWeight = FontWeight.SemiBold), compactPadding)
         } else emptyList()
         val scrollable = stacked && tabWidths.fold(gap * (Page.entries.size - 1)) { sum, width -> sum + width } > maxWidth
         val row = when {
