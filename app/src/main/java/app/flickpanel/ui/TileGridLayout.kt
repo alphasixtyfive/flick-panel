@@ -82,7 +82,9 @@ internal data class HomeTileGroups(
     val history: List<List<TileSpec>>,
 )
 
-internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolean, resizeTiles: Boolean): HomeTileGroups {
+internal fun homeTileGroups(
+    tiles: List<TileSpec>, columns: Int, compact: Boolean, resizeTiles: Boolean, inlineGraph: Boolean = compact,
+): HomeTileGroups {
     val groups = tiles.groupBy { it.kind.homeGroup }
     val cameras = groups[HomeGroup.CAMERAS].orEmpty()
     val agenda = groups[HomeGroup.AGENDA].orEmpty()
@@ -91,7 +93,7 @@ internal fun homeTileGroups(tiles: List<TileSpec>, columns: Int, compact: Boolea
     val apps = groups[HomeGroup.APPS].orEmpty()
     val history = groups[HomeGroup.HISTORY].orEmpty()
     val peopleColumns = minOf(columns, 2)
-    val compactGraph = if (compact && apps.size % columns == columns - 1) {
+    val compactGraph = if (inlineGraph && columns > 1 && apps.size % columns == columns - 1) {
         history.firstOrNull { !it.wideOnTablet }
     } else null
     return HomeTileGroups(

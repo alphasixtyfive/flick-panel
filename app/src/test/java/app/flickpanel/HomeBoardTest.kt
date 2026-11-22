@@ -46,6 +46,16 @@ class HomeBoardTest {
     }
 
     @Test
+    fun shortLandscapeShowsTheFourPrimaryKitchenControlsOnItsFirstPage() {
+        val height = 249.dp
+        val groups = homeTileGroups(tiles, 2, compact = false, resizeTiles = true, inlineGraph = true)
+        val pages = homePages(homeBands(groups, 1f, height), height)
+        assertEquals(7, pages.size)
+        assertEquals(tiles.take(4), pages.first().flatMap { it.lanes.flatten().flatMap { row -> row.tiles } })
+        assertEquals(TileKind.TREND, groups.shortcuts.last().kind)
+    }
+
+    @Test
     fun narrowWindowsReserveSpaceForPageButtonsAndKeepEveryTile() {
         val groups = homeTileGroups(tiles, 2, compact = false, resizeTiles = true)
         val height = 400.dp

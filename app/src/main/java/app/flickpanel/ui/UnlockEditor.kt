@@ -55,16 +55,21 @@ internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -
     Dialog(onDismissRequest = cancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BoxWithConstraints(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
             val sideBySide = maxWidth >= 560.dp && maxHeight < 500.dp
+            val compact = maxHeight < 324.dp
             Surface(Modifier.widthIn(max = if (sideBySide) 640.dp else 448.dp).fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.extraLarge) {
                 if (sideBySide) {
-                    Row(Modifier.verticalScroll(rememberScrollState()).padding(28.dp),
+                    Row(Modifier.verticalScroll(rememberScrollState()).padding(
+                        horizontal = if (compact) 20.dp else 28.dp,
+                        vertical = if (compact) 12.dp else 28.dp,
+                    ),
                         horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                             PinPrompt(pin.length, state.error)
                             PinActions(state.busy, pin.length >= 4, cancel, submit)
                         }
-                        PinKeys(pin.length, state.busy, 52.dp, { pin += it }, { pin = pin.dropLast(1) }, Modifier.weight(1f))
+                        PinKeys(pin.length, state.busy, if (compact) 48.dp else 52.dp, { pin += it },
+                            { pin = pin.dropLast(1) }, Modifier.weight(1f), compact = compact)
                     }
                 } else {
                     Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 32.dp),
@@ -98,8 +103,11 @@ private fun PinPrompt(length: Int, error: String?) {
 }
 
 @Composable
-private fun PinKeys(length: Int, busy: Boolean, keyHeight: Dp, add: (Char) -> Unit, delete: () -> Unit, modifier: Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun PinKeys(
+    length: Int, busy: Boolean, keyHeight: Dp, add: (Char) -> Unit, delete: () -> Unit, modifier: Modifier,
+    compact: Boolean = false,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp)) {
         for (digits in keypadRows) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 for (digit in digits) {
@@ -110,7 +118,7 @@ private fun PinKeys(length: Int, busy: Boolean, keyHeight: Dp, add: (Char) -> Un
                         val deleting = digit == '⌫'
                         FilledTonalButton(
                             onClick = { if (deleting) delete() else add(digit) },
-                            modifier = key, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                            modifier = key, contentPadding = PaddingValues(horizontal = 4.dp, vertical = if (compact) 2.dp else 8.dp),
                             shape = MaterialTheme.shapes.medium,
                             enabled = !busy && if (deleting) length > 0 else length < 8,
                         ) {

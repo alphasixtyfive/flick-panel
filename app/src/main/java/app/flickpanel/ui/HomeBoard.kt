@@ -43,12 +43,14 @@ internal fun homeBands(
     } else groups.controls
 
     fun HomeTileRow.band() = HomeBand(listOf(listOf(this)))
+    val standardControlHeight = if (columns == 1) 100.dp else 110.dp
     fun controlHeight(tiles: List<TileSpec>) = tiles.maxOf { tile ->
         when (tile.kind) {
             TileKind.COVER -> 128.dp
             TileKind.CHOICE, TileKind.CLIMATE, TileKind.NUMBER -> 152.dp
             TileKind.IMAGE -> 164.dp
-            else -> if (columns == 1) 100.dp else 110.dp
+            TileKind.TOGGLE, TileKind.ACTION, TileKind.MEDIA -> if (availableHeight < 300.dp) 88.dp else standardControlHeight
+            else -> standardControlHeight
         }
     } * scale
 

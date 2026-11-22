@@ -76,7 +76,9 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
         val headerWidth = minOf(maxWidth, panelMaxWidth) - side * 2
         val tabsWidth = inlineTabsWidth * fontScale.coerceAtLeast(1f)
-        val alertsInNavigation = alerts.isNotEmpty() && headerWidth >= tabsWidth + inlineAlertWidth + navigationGap
+        val fullAlert = headerWidth >= tabsWidth + inlineAlertWidth + navigationGap
+        val alertIcon = short && !fullAlert && headerWidth >= tabsWidth + dashboardPillHeight + navigationGap
+        val alertsInNavigation = alerts.isNotEmpty() && (fullAlert || alertIcon)
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
                 "Home",
@@ -110,7 +112,9 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(navigationGap),
             ) {
                 DashboardNavigation(state.page, short, model::selectPage, Modifier.weight(1f))
-                if (alertsInNavigation) HomeWarnings(alerts, Modifier.widthIn(max = inlineAlertWidth), prominent = !short)
+                if (alertsInNavigation) HomeWarnings(
+                    alerts, Modifier.widthIn(max = inlineAlertWidth), prominent = !short, iconOnly = alertIcon,
+                )
             }
             pages.SaveableStateProvider(state.page.name) {
                 val body = Modifier.fillMaxSize().panelEntrance(state.page, state.config.reduceMotion)

@@ -72,9 +72,12 @@ internal fun NowPlaying(
             .safeDrawingPadding().padding(horizontal = 18.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
+        val shortLandscape = maxHeight < 420.dp && maxWidth >= 520.dp && maxWidth > maxHeight
         val artworkHeight = (maxHeight * if (volume == null) .51f else .46f).coerceIn(146.dp, 380.dp)
+        val artworkSize = (maxHeight * .56f).coerceIn(128.dp, 212.dp)
+        val width = if (shortLandscape) 720.dp else playerWidth
         Column(
-            Modifier.widthIn(max = playerWidth).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
+            Modifier.widthIn(max = width).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -85,33 +88,57 @@ internal fun NowPlaying(
                     Icon(Icons.Rounded.Close, "Close music")
                 }
             }
-            val current = playback.current
-            MusicArtwork(artwork, Modifier.fillMaxWidth().height(artworkHeight), fallbackSize = 52.dp,
-                shape = MaterialTheme.shapes.large)
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    playback.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = if (current == null) colors.onSurfaceVariant else colors.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                playback.artist?.let { artist ->
-                    Text(artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (shortLandscape) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    MusicArtwork(artwork, Modifier.size(artworkSize), fallbackSize = 48.dp,
+                        shape = MaterialTheme.shapes.large)
+                    PlayerControls(playback, browse, transport, seek, volume, Modifier.weight(1f), compact = true)
                 }
-                current?.playbackProgress()?.let { timeline ->
-                    val track = current.attributes.text("media_content_id") ?: playback.title
-                    PlaybackTimeline(timeline, track, playback.features.hasMediaFeature(MEDIA_SEEK), playback.ready, seek)
-                }
+            } else {
+                MusicArtwork(artwork, Modifier.fillMaxWidth().height(artworkHeight), fallbackSize = 52.dp,
+                    shape = MaterialTheme.shapes.large)
+                PlayerControls(playback, browse, transport, seek, volume, Modifier.fillMaxWidth(), compact = false)
             }
-            PlayerActionRow(playback, browse, transport)
-            if (volume != null) {
-                PlayerVolumeControl(
-                    volume,
-                    Modifier.align(Alignment.CenterHorizontally).widthIn(max = 300.dp).fillMaxWidth().padding(top = 40.dp),
-                )
+        }
+    }
+}
+
+@Composable
+private fun PlayerControls(
+    playback: MusicPlayback, browse: (() -> Unit)?, transport: (MediaTransport) -> Unit,
+    seek: (Double) -> Unit, volume: SpeakerVolume?, modifier: Modifier, compact: Boolean,
+) {
+    val colors = MaterialTheme.colorScheme
+    val current = playback.current
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                playback.title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = if (current == null) colors.onSurfaceVariant else colors.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            playback.artist?.let { artist ->
+                Text(artist, style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            current?.playbackProgress()?.let { timeline ->
+                val track = current.attributes.text("media_content_id") ?: playback.title
+                PlaybackTimeline(timeline, track, playback.features.hasMediaFeature(MEDIA_SEEK), playback.ready, seek)
+            }
+        }
+        PlayerActionRow(playback, browse, transport)
+        if (volume != null) {
+            PlayerVolumeControl(
+                volume,
+                Modifier.align(Alignment.CenterHorizontally).widthIn(max = 300.dp).fillMaxWidth()
+                    .padding(top = if (compact) 8.dp else 40.dp),
+            )
         }
     }
 }

@@ -1,6 +1,7 @@
 package app.flickpanel.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
@@ -32,12 +33,15 @@ import app.flickpanel.ActiveHomeBadge
 import app.flickpanel.config.badgeStateLabel
 
 @Composable
-internal fun HomeWarnings(badges: List<ActiveHomeBadge>, modifier: Modifier = Modifier, prominent: Boolean = false) {
+internal fun HomeWarnings(
+    badges: List<ActiveHomeBadge>, modifier: Modifier = Modifier, prominent: Boolean = false, iconOnly: Boolean = false,
+) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     val dark = MaterialTheme.colorScheme.surface.luminance() < .45f
     val container = if (dark) Color(0xff48391e) else Color(0xffffedc2)
     val content = if (dark) Color(0xffffdfa0) else Color(0xff533800)
     val single = badges.singleOrNull()
+    val label = single?.label ?: "${badges.size} alerts"
     Surface(
         modifier = modifier,
         shape = CircleShape,
@@ -45,13 +49,15 @@ internal fun HomeWarnings(badges: List<ActiveHomeBadge>, modifier: Modifier = Mo
         color = container,
         contentColor = content,
     ) {
-        Row(
+        if (iconOnly) Box(Modifier.size(dashboardPillHeight), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.WarningAmber, label, Modifier.size(22.dp))
+        } else Row(
             Modifier.heightIn(min = dashboardPillHeight).padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Rounded.WarningAmber, null, Modifier.size(20.dp))
-            Text(single?.label ?: "${badges.size} alerts",
+            Text(label,
                 style = if (prominent) MaterialTheme.typography.titleMedium else MaterialTheme.typography.labelLarge,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

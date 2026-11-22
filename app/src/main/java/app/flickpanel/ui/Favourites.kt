@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -47,8 +48,9 @@ internal fun Favourites(
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val fontScale = LocalDensity.current.fontScale
             val height = maxHeight
-            val groups = remember(tiles, columns) {
-                homeTileGroups(tiles, columns, compact = columns == 4, resizeTiles = true)
+            val inlineGraph = columns == 4 || height < 300.dp && maxWidth >= 560.dp * fontScale.coerceAtLeast(1f)
+            val groups = remember(tiles, columns, inlineGraph) {
+                homeTileGroups(tiles, columns, compact = columns == 4, resizeTiles = true, inlineGraph = inlineGraph)
             }
             val gates = if (columns == 4) {
                 tiles.asSequence().filter { it.kind == TileKind.COVER && state.entity(it.entity)?.isGate == true }
@@ -98,11 +100,11 @@ private fun FavouritesPager(page: Int, count: Int, select: (Int) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
     ) {
-        FilledTonalIconButton(onClick = { select(page - 1) }, enabled = page > 0) {
+        FilledTonalIconButton(onClick = { select(page - 1) }, enabled = page > 0, modifier = Modifier.size(48.dp)) {
             Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Previous favourites page")
         }
         Text("${page + 1} of $count", style = MaterialTheme.typography.labelLarge)
-        FilledTonalIconButton(onClick = { select(page + 1) }, enabled = page + 1 < count) {
+        FilledTonalIconButton(onClick = { select(page + 1) }, enabled = page + 1 < count, modifier = Modifier.size(48.dp)) {
             Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Next favourites page")
         }
     }
