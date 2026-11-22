@@ -2,6 +2,7 @@ package app.flickpanel.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,7 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -41,8 +44,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.flickpanel.ActiveHomeBadge
@@ -192,11 +195,29 @@ private fun DashboardHeader(
 private fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page) -> Unit, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     BoxWithConstraints(modifier) {
-        val stacked = maxWidth < inlineTabsWidth * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val density = LocalDensity.current
+        val stacked = maxWidth < inlineTabsWidth * density.fontScale.coerceAtLeast(1f)
         val style = if (short || stacked) MaterialTheme.typography.labelLarge else MaterialTheme.typography.titleMedium
-        val row = if (stacked) Modifier.fillMaxWidth() else Modifier
-        Row(row.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (page in Page.entries) {
+        val gap = 6.dp
+        val compactPadding = 6.dp
+        val tabWidths = if (stacked) {
+            val textMeasurer = rememberTextMeasurer()
+            remember(density, style, textMeasurer) {
+                val selectedStyle = style.copy(fontWeight = FontWeight.SemiBold)
+                Page.entries.map { page ->
+                    val size = textMeasurer.measure(page.label, style = selectedStyle, maxLines = 1).size
+                    maxOf(48.dp, with(density) { size.width.toDp() } + compactPadding * 2)
+                }
+            }
+        } else emptyList()
+        val scrollable = stacked && tabWidths.fold(gap * (Page.entries.size - 1)) { sum, width -> sum + width } > maxWidth
+        val row = when {
+            scrollable -> Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            stacked -> Modifier.fillMaxWidth()
+            else -> Modifier
+        }
+        Row(row.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+            for ((index, page) in Page.entries.withIndex()) {
                 val selected = current == page
                 val color = if (selected) colors.onSecondaryContainer else colors.onSurfaceVariant
                 val icon = when (page) {
@@ -204,15 +225,19 @@ private fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page
                     Page.ROOMS -> Icons.Rounded.GridView
                     Page.CAMERAS -> Icons.Rounded.Videocam
                 }
-                val width = if (stacked) Modifier.weight(1f) else Modifier
+                val width = when {
+                    scrollable -> Modifier.width(tabWidths[index])
+                    stacked -> Modifier.weight(tabWidths[index].value)
+                    else -> Modifier
+                }
                 val tab = width.clip(CircleShape).selectable(selected, role = Role.Tab, onClick = { selectPage(page) })
                     .background(if (selected) colors.secondaryContainer else Color.Transparent)
                     .heightIn(min = if (stacked) 56.dp else dashboardPillHeight)
-                    .padding(horizontal = if (stacked) 4.dp else 12.dp, vertical = 6.dp)
+                    .padding(horizontal = if (stacked) compactPadding else 12.dp, vertical = 6.dp)
                 val label: @Composable () -> Unit = {
                     Text(page.label, style = style, color = color,
                         fontWeight = if (selected) FontWeight.SemiBold else style.fontWeight,
-                        textAlign = if (stacked) TextAlign.Center else TextAlign.Start, maxLines = if (stacked) 2 else 1,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
                 }
                 if (stacked) {
