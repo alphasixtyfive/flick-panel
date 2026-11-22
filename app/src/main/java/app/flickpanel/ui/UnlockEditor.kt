@@ -58,13 +58,13 @@ internal fun UnlockEditor(state: PanelUi, unlock: (String) -> Unit, cancel: () -
             val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
             val sideBySide = maxWidth >= 420.dp * fontScale && maxHeight < 480.dp
             val compact = maxHeight < 360.dp
-            Surface(Modifier.padding(vertical = if (compact) 4.dp else 12.dp)
+            Surface(Modifier.padding(vertical = if (compact) 0.dp else 12.dp)
                 .widthIn(max = if (sideBySide) 640.dp else 448.dp).fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.extraLarge) {
                 if (sideBySide) {
                     Row(Modifier.verticalScroll(rememberScrollState()).padding(
                         horizontal = if (compact) 20.dp else 28.dp,
-                        vertical = if (compact) 4.dp else 28.dp,
+                        vertical = if (compact) 0.dp else 28.dp,
                     ),
                         horizontalArrangement = Arrangement.spacedBy(if (compact) 20.dp else 32.dp),
                         verticalAlignment = Alignment.CenterVertically) {
