@@ -17,8 +17,8 @@ android {
         applicationId = "app.flickpanel"
         minSdk = 28
         targetSdk = 35
-        versionCode = 93
-        versionName = "0.1.92"
+        versionCode = 94
+        versionName = "0.1.93"
         if (panelAbi != null) ndk.abiFilters += panelAbi
     }
     buildTypes {
