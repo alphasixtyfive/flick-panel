@@ -95,7 +95,7 @@ internal fun PanelSettings(
                         Link.ONLINE -> "Connected"
                         Link.CONNECTING -> "Connecting…"
                         Link.AUTH_REJECTED -> "Sign-in required"
-                        Link.OFFLINE -> "Offline"
+                        Link.OFFLINE -> if (state.serverAddress == null) "Setup required" else "Offline"
                     }
                     SettingLink(PanelPage.HOME_ASSISTANT.label, connection, { open(PanelPage.HOME_ASSISTANT) }, Icons.Rounded.Hub)
                 }

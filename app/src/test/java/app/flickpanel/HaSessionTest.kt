@@ -26,6 +26,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class HaSessionTest {
@@ -56,8 +57,8 @@ class HaSessionTest {
             try {
                 client.select(setOf("light.lamp", "sensor.power"))
                 client.start()
-                withTimeout(6_000) { client.link.first { it == Link.ONLINE } }
-                assertEquals("off", client.entities.value.getValue("light.lamp").state)
+                withTimeout(6_000) { client.connectionState.first { it.link == Link.ONLINE } }
+                assertEquals("off", client.connectionState.value.entities.getValue("light.lamp").state)
                 val catalogue = withContext(Dispatchers.Default) { client.catalogue() }
                 assertEquals("Kitchen", catalogue.areas.single().name)
                 assertEquals("light.lamp", catalogue.room("kitchen").single().entity.id)
@@ -70,8 +71,8 @@ class HaSessionTest {
                 client.command("media_player.kitchen", "media_player", "play_media", JSONObject()
                     .put("media_content_id", music.single().id).put("media_content_type", music.single().type))
                 client.command("light.lamp", "light", "turn_on", JSONObject().put("brightness_pct", 50))
-                withTimeout(6_000) { client.entities.first { it["light.lamp"]?.state == "on" } }
-                assertEquals(50, client.entities.value.getValue("light.lamp").brightness)
+                withTimeout(6_000) { client.connectionState.first { it.entities["light.lamp"]?.state == "on" } }
+                assertEquals(50, client.connectionState.value.entities.getValue("light.lamp").brightness)
                 val history = client.history("sensor.power")
                 assertEquals(listOf(801.0, 840.0), history.points.map { it.value })
                 assertEquals(6L * 3600 * 1000, history.end - history.start)
@@ -82,8 +83,8 @@ class HaSessionTest {
                 assertEquals(listOf("media-source://synology_dsm/nas/album/photo"), album.photos)
                 assertEquals("cover photo", client.photo(album.photos.single())?.decodeToString())
                 client.select(setOf("sensor.power"))
-                withTimeout(6_000) { client.entities.first { it.keys == setOf("sensor.power") } }
-                assertFalse(client.entities.value.containsKey("light.lamp"))
+                withTimeout(6_000) { client.connectionState.first { it.entities.keys == setOf("sensor.power") } }
+                assertFalse(client.connectionState.value.entities.containsKey("light.lamp"))
                 assertEquals(1, fixture.connections.get())
             } finally { client.stop() }
         }
@@ -124,9 +125,64 @@ class HaSessionTest {
             val client = HaClient(HaCredentials(address, "wrong-token"), this)
             try {
                 client.start()
-                withTimeout(6_000) { client.link.first { it == Link.AUTH_REJECTED } }
-                assertEquals(emptyMap<String, Any>(), client.entities.value)
+                withTimeout(6_000) { client.connectionState.first { it.link == Link.AUTH_REJECTED } }
+                assertEquals(emptyMap<String, Any>(), client.connectionState.value.entities)
             } finally { client.stop() }
+        }
+    }
+
+    @Test fun retrySkipsTheActiveBackoffAndStartsOneConnection() = runBlocking {
+        val fixture = FakeHome()
+        val attempts = AtomicInteger()
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse =
+                    if (attempts.incrementAndGet() <= 3) MockResponse().setResponseCode(503)
+                    else fixture.dispatch(request)
+            }
+            server.start()
+            val address = parseServer(server.url("/").newBuilder().host("127.0.0.1").build().toString())
+            val client = HaClient(HaCredentials(address, "test-fixture-token"), this)
+            try {
+                client.start()
+                withContext(Dispatchers.IO) {
+                    repeat(3) { assertNotNull(server.takeRequest(5, TimeUnit.SECONDS)) }
+                }
+                withTimeout(2_000) { client.connectionState.first { it.link == Link.OFFLINE } }
+                client.retry()
+                client.retry()
+                withTimeout(2_000) { client.connectionState.first { it.link == Link.ONLINE } }
+                assertEquals(4, attempts.get())
+                assertEquals(1, fixture.connections.get())
+            } finally {
+                client.stop()
+            }
+        }
+    }
+
+    @Test fun reconnectPublishesFreshReadingsWithOnlineStatus() = runBlocking {
+        val fixture = FakeHome()
+        MockWebServer().use { server ->
+            server.dispatcher = fixture
+            server.start()
+            val address = parseServer(server.url("/").newBuilder().host("127.0.0.1").build().toString())
+            val client = HaClient(HaCredentials(address, "test-fixture-token"), this)
+            try {
+                client.select(setOf("sensor.power"))
+                client.start()
+                val first = withTimeout(6_000) { client.connectionState.first { it.link == Link.ONLINE } }
+                assertEquals("840", first.entities.getValue("sensor.power").state)
+
+                fixture.power = "925"
+                assertTrue(fixture.disconnect())
+                val offline = withTimeout(6_000) { client.connectionState.first { it.link == Link.OFFLINE } }
+                assertEquals("840", offline.entities.getValue("sensor.power").state)
+                val recovered = withTimeout(6_000) { client.connectionState.first { it.link == Link.ONLINE } }
+                assertEquals("925", recovered.entities.getValue("sensor.power").state)
+                assertEquals(2, fixture.connections.get())
+            } finally {
+                client.stop()
+            }
         }
     }
 
@@ -140,9 +196,9 @@ class HaSessionTest {
             try {
                 client.select(setOf("sensor.power"))
                 client.start()
-                withTimeout(15_000) { client.link.first { it == Link.ONLINE } }
+                withTimeout(15_000) { client.connectionState.first { it.link == Link.ONLINE } }
                 assertEquals(2, fixture.connections.get())
-                assertEquals("840", client.entities.value.getValue("sensor.power").state)
+                assertEquals("840", client.connectionState.value.entities.getValue("sensor.power").state)
             } finally {
                 client.stop()
             }
@@ -179,6 +235,11 @@ class HaSessionTest {
 private class FakeHome(private val omitFirstSnapshot: Boolean = false) : Dispatcher() {
     val connections = AtomicInteger()
 
+    @Volatile var power = "840"
+    @Volatile private var currentSocket: WebSocket? = null
+
+    fun disconnect(): Boolean = currentSocket?.close(1001, "Test reconnect") == true
+
     override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl?.encodedPath) {
         "/api/" -> authorized(request, MockResponse().setBody("""{"message":"API running."}"""))
         "/api/camera_proxy/camera.front_door", "/api/image_proxy/image.vacuum_map", "/api/media_player_proxy/cover" -> authorized(request,
@@ -189,6 +250,7 @@ private class FakeHome(private val omitFirstSnapshot: Boolean = false) : Dispatc
             private var subscription = 0
             private var lastId = 0
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                currentSocket = webSocket
                 connections.incrementAndGet()
                 webSocket.send("""{"type":"auth_required"}""")
             }
@@ -213,7 +275,7 @@ private class FakeHome(private val omitFirstSnapshot: Boolean = false) : Dispatc
                         result()
                         if (omitFirstSnapshot && connections.get() == 1) return
                         val light = if (ids.contains("light.lamp")) """"light.lamp":{"s":"off"},""" else ""
-                        webSocket.send("""{"id":$id,"type":"event","event":{"a":{$light"sensor.power":{"s":"840","a":{"unit_of_measurement":"W"}}}}}""")
+                        webSocket.send("""{"id":$id,"type":"event","event":{"a":{$light"sensor.power":{"s":"$power","a":{"unit_of_measurement":"W"}}}}}""")
                     }
                     "unsubscribe_events" -> result()
                     "get_states" -> result("""[{"entity_id":"light.lamp","state":"off","attributes":{"friendly_name":"Lamp","supported_color_modes":["brightness"]}}]""")

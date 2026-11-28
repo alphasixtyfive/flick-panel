@@ -73,7 +73,7 @@ class HaPanelRemoteTest {
             val client = HaClient(HaCredentials(address, "test-access-token"), this)
             try {
                 client.start()
-                withTimeout(6_000) { client.link.first { it == Link.ONLINE } }
+                withTimeout(6_000) { client.connectionState.first { it.link == Link.ONLINE } }
                 client.setPanelWebhook("test-private-webhook")
                 withTimeout(6_000) { client.panelRemoteState.first { it == PanelRemoteState.READY } }
                 assertEquals(2, fixture.subscriptionAttempts.get())
@@ -91,7 +91,7 @@ class HaPanelRemoteTest {
                 client.setPanelWebhook(null)
                 assertEquals(PanelRemoteState.DISABLED, client.panelRemoteState.value)
                 assertEquals(id, withTimeout(6_000) { fixture.unsubscribed.await() })
-                assertEquals(Link.ONLINE, client.link.value)
+                assertEquals(Link.ONLINE, client.connectionState.value.link)
                 val stale = async(start = CoroutineStart.UNDISPATCHED) {
                     withTimeoutOrNull(200) { client.panelCommands.first() }
                 }
@@ -135,7 +135,7 @@ class HaPanelRemoteTest {
                 client.setPanelWebhook("test-private-webhook")
                 client.start()
                 withTimeout(8_000) { client.panelRemoteState.first { it == PanelRemoteState.UNAVAILABLE } }
-                assertEquals(Link.ONLINE, client.link.value)
+                assertEquals(Link.ONLINE, client.connectionState.value.link)
                 withTimeout(14_000) { client.panelRemoteState.first { it == PanelRemoteState.READY } }
                 assertEquals(6, fixture.subscriptionAttempts.get())
                 assertEquals(1, server.requestCount)

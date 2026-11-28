@@ -78,7 +78,7 @@ class VacuumTest {
             try {
                 client.select(setOf(tile.entity))
                 client.start()
-                withTimeout(6_000) { client.link.first { it == Link.ONLINE } }
+                withTimeout(6_000) { client.connectionState.first { it.link == Link.ONLINE } }
                 val rooms = client.vacuumRooms(tile.entity)
                 assertEquals(listOf("Kitchen", "Study"), rooms.map { it.name })
                 client.command(tile.entity, "vacuum", VacuumAction.CLEAN_AREA.service, VacuumAction.CLEAN_AREA.data(rooms.map { it.id }))

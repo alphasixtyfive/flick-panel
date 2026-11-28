@@ -40,7 +40,7 @@ internal class DeviceCommandQueue(
                 active.command(id, entity.domain, service, payload)
                 if (matches != null) {
                     val confirmed = withTimeoutOrNull(4_500) {
-                        active.entities.first { it[id]?.let(matches) == true }
+                        active.connectionState.first { it.link == Link.ONLINE && it.entities[id]?.let(matches) == true }
                     }
                     if (confirmed == null) throw HaProblem("Home Assistant hasn't confirmed the change")
                 }

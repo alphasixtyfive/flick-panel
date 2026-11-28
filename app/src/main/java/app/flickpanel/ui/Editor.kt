@@ -1,19 +1,26 @@
 package app.flickpanel.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.flickpanel.Page
 import app.flickpanel.PanelUi
 import app.flickpanel.PanelViewModel
 import app.flickpanel.config.HomeBadge
@@ -53,8 +61,15 @@ private sealed class SetupDestination(val title: String, val allowsSaving: Boole
 internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBackupAction) -> Unit) {
     val restorePreview by model.restorePreview.collectAsStateWithLifecycle()
     val draft by remember(state.config) { derivedStateOf { model.setupDraft.value ?: state.config } }
-    var section by rememberSaveable { mutableStateOf(SetupSection.FAVOURITES) }
-    var destinations by remember { mutableStateOf(emptyList<SetupDestination>()) }
+    var section by rememberSaveable {
+        mutableStateOf(if (state.connectionEditor) SetupSection.PANEL else SetupSection.FAVOURITES)
+    }
+    var destinations by remember {
+        mutableStateOf<List<SetupDestination>>(
+            if (state.connectionEditor) listOf(SetupDestination.Panel(PanelPage.HOME_ASSISTANT)) else emptyList(),
+        )
+    }
+    var previewingFavourites by rememberSaveable { mutableStateOf(false) }
     var choosingPhotos by remember { mutableStateOf(false) }
     var confirmingDiscard by remember { mutableStateOf(false) }
     var confirmingExport by remember { mutableStateOf(false) }
@@ -65,6 +80,24 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
     val scope = rememberCoroutineScope()
     val current = destinations.lastOrNull()
     val dirty = draft != state.config
+    if (previewingFavourites) {
+        val close = {
+            previewingFavourites = false
+            model.touch()
+        }
+        BackHandler(onBack = close)
+        PanelColors(draft.theme, draft.highContrast) {
+            Surface(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout)) {
+                    Dashboard(
+                        state.copy(layout = state.layout.copy(config = draft), page = Page.FAVOURITES),
+                        model, closePreview = close,
+                    )
+                }
+            }
+        }
+        return
+    }
     fun navigateTo(destination: SetupDestination) {
         model.touch()
         destinations = destinations + destination
@@ -135,7 +168,10 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
         feedback = feedback,
     ) {
         if (state.connectionEditor) {
-            ConnectionForm(state, model::connect, onInput = model::touch)
+            ConnectionForm(state, model::connect, onInput = {
+                model.touch()
+                model.clearError()
+            })
         } else when (current) {
             is SetupDestination.Format -> FormatPanel(current.tile, state, model) { spec ->
                 val original = current.tile.current
@@ -204,6 +240,10 @@ internal fun EditPanel(state: PanelUi, model: PanelViewModel, backup: (PanelBack
                             add = {
                                 editorPages.removeState("device-picker")
                                 choose(SetupPicker.TILE)
+                            },
+                            preview = {
+                                model.touch()
+                                previewingFavourites = true
                             },
                             edit = editTile,
                             resize = { selected ->

@@ -36,7 +36,7 @@ internal fun PercentageTile(
                     TileValue(value)
                     LinearProgressIndicator(progress = { reading / 100f }, modifier = Modifier.fillMaxWidth(),
                         color = tileAccentColour(accent, surface))
-                    if (link == Link.OFFLINE) TileStatus("Last reported")
+                    if (link != Link.ONLINE) TileStatus("Last reported")
                 }
             }
         }

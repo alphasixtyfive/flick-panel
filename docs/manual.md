@@ -5,7 +5,9 @@
 1. Download the APK for your tablet from [GitHub Releases](https://github.com/alphasixtyfive/flick-panel/releases/latest). Use the universal APK if you are unsure which processor the tablet uses. Android may ask you to allow installation from your browser or file manager.
 2. In Home Assistant, open the Security page of the account you want to use and create a long-lived access token. A dedicated non-admin account works for everyday dashboard use.
 3. Open Flick Panel, enter your Home Assistant URL and token, then set a PIN for setup.
-4. Add a few tiles and tap **Save changes**. Close settings when you’re ready to use the dashboard. To reopen setup later, hold **Home** in Flick Panel and enter the PIN.
+4. Add a few tiles and tap **Save changes**. Close settings when you’re ready to use the dashboard. To reopen setup, tap **Settings** or hold **Home**, then enter the PIN.
+
+If the dashboard shows that Home Assistant is offline, tap **Retry** to reconnect immediately. If Home Assistant rejected the token, tap **Replace token**, unlock setup with your PIN, and paste a new token.
 
 Use HTTPS for remote connections. A private IPv4 address such as `http://192.168.1.5:8123` works on a LAN. Flick Panel stores the token using Android Keystore. To upgrade in place, install an APK signed with the same certificate. If you are moving from a development-signed Pilot APK to a signed release, export the layout before switching builds.
 
@@ -15,7 +17,7 @@ Hold **Home**, enter the setup PIN, then open **Panel → Updates**. If a newer 
 
 ## Favourites and rooms
 
-Choose **Add tile** in setup and search by entity name, ID, or room. Choose a tile format and optionally give it a shorter label. **Standard** and **Wide** set its size in the grid. Choose **Accent** on supported tiles to tint the tile and its icon, or to colour a graph line. **Theme** follows the panel's colours. To reorder a tile, drag its handle or tap the handle to move it one place. Use the tile menu to resize or remove it. **Undo removal** is available before saving.
+Choose **Add tile** in setup and search by entity name, ID, or room. Choose a tile format and optionally give it a shorter label. **Standard** and **Wide** set its size in the grid. Choose **Accent** on supported tiles to tint the tile and its icon, or to colour a graph line. **Theme** follows the panel's colours. To reorder a tile, drag its handle or tap the handle to move it one place. Use the tile menu to resize or remove it. **Undo removal** is available before saving. Tap **Preview layout** to see your draft on the full dashboard and check which tiles fit on the first page. Close the preview to keep editing.
 
 Under **Rooms**, choose which Home Assistant areas to show and set their order. Open a room to hide, show, resize, rename, recolour, or reorder controls. A custom name applies to that room. Search hidden controls by name, entity ID, or type. Use **Switch** or **Dimmer** for dimmable lights. **Use automatic layout** restores that room's defaults. **Heating controls** determines whether assigned thermostats appear in rooms.
 

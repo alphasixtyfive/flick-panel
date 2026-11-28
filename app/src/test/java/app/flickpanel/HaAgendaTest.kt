@@ -72,7 +72,7 @@ class HaAgendaTest {
             try {
                 client.select(setOf("todo.household", "todo.read_only", "calendar.family"))
                 client.start()
-                withTimeout(6_000) { client.link.first { it == Link.ONLINE } }
+                withTimeout(6_000) { client.connectionState.first { it.link == Link.ONLINE } }
                 val list = client.tasks("todo.household")
                 val start = Instant.parse("2026-11-21T07:00:00Z")
                 val end = Instant.parse("2026-11-27T07:00:00Z")

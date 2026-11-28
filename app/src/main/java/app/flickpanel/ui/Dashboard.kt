@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,13 +22,17 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,8 +46,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -62,8 +70,9 @@ private val inlineAlertWidth = 230.dp
 private val navigationGap = 16.dp
 
 @Composable
-internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
+internal fun Dashboard(state: PanelUi, model: PanelViewModel, closePreview: (() -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
+    val preview = closePreview != null
     var roomId by rememberSaveable { mutableStateOf<String?>(null) }
     val pages = rememberSaveableStateHolder()
     val favourites = state.config.favourites
@@ -77,7 +86,8 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val fontScale = LocalDensity.current.fontScale
         val tileColumns = dashboardTileColumns(maxWidth.value, fontScale)
         val cameraColumns = minOf(tileColumns, if (maxWidth >= 1100.dp) 4 else if (wide) 3 else 2)
-        val side = if (wide) panelWidePadding else if (maxWidth < 360.dp) 14.dp else 20.dp
+        val narrow = maxWidth < 360.dp
+        val side = if (wide) panelWidePadding else if (narrow) 14.dp else 20.dp
         val headerWidth = minOf(maxWidth, panelMaxWidth) - side * 2
         val tabsWidth = inlineTabsWidth * fontScale.coerceAtLeast(1f)
         val fullAlert = headerWidth >= tabsWidth + inlineAlertWidth + navigationGap
@@ -86,14 +96,15 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
         val alertsInHeader = short && alerts.isNotEmpty() && !alertsInNavigation
         Column(Modifier.widthIn(max = panelMaxWidth).fillMaxSize().padding(horizontal = side)) {
             DashboardHeader(
-                "Home",
+                if (preview) "Preview" else "Home",
                 weather?.let { state.entity(it.entity) },
                 wide = wide,
                 short = short,
-                stacked = compact && !short && fontScale >= 1.3f,
+                stacked = compact && !short && (fontScale >= 1.3f || narrow),
                 alerts = if (alertsInHeader) alerts else emptyList(),
-                unlock = model::showUnlock,
-                idle = model::showIdleScreen,
+                preview = preview,
+                headerAction = closePreview ?: model::showUnlock,
+                idle = if (preview) null else model::showIdleScreen,
             )
             state.message?.let { message ->
                 Row(Modifier.fillMaxWidth().padding(top = 9.dp), horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -103,21 +114,14 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                         overflow = TextOverflow.Ellipsis)
                 }
             }
-            val status = when (state.link) {
-                Link.OFFLINE -> "Home Assistant is offline"
-                Link.CONNECTING -> "Connecting to Home Assistant…"
-                Link.AUTH_REJECTED -> "Home Assistant rejected the token"
-                Link.ONLINE -> null
-            }
-            if (status != null) Text(status, style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+            ConnectionStatus(state.link, state.serverAddress != null, preview, model::retryConnection, model::showConnectionUnlock)
             Row(
                 Modifier.fillMaxWidth().padding(top = if (short) 10.dp else 24.dp)
                     .heightIn(min = if (short) dashboardPillHeight else 56.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(navigationGap),
             ) {
-                DashboardNavigation(state.page, short, model::selectPage, Modifier.weight(1f))
+                DashboardNavigation(state.page, short, if (preview) null else model::selectPage, Modifier.weight(1f))
                 if (alertsInNavigation) HomeWarnings(
                     alerts, Modifier.widthIn(max = inlineAlertWidth), prominent = !short, iconOnly = alertIcon,
                 )
@@ -131,6 +135,7 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
                     Page.FAVOURITES -> Favourites(
                         homeTiles, state, model, tileColumns, body,
                         alerts = if (alertsInNavigation || alertsInHeader) emptyList() else alerts,
+                        preview = preview,
                     )
                 }
             }
@@ -138,13 +143,50 @@ internal fun Dashboard(state: PanelUi, model: PanelViewModel) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ConnectionStatus(
+    link: Link, hasConnection: Boolean, preview: Boolean, retry: () -> Unit, openConnection: () -> Unit,
+) {
+    val status = when (link) {
+        Link.OFFLINE -> if (hasConnection) "Home Assistant is offline" else "Home Assistant connection needs setup"
+        Link.CONNECTING -> "Connecting to Home Assistant…"
+        Link.AUTH_REJECTED -> "Home Assistant rejected the token"
+        Link.ONLINE -> return
+    }
+    FlowRow(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            status, Modifier.align(Alignment.CenterVertically).semantics { liveRegion = LiveRegionMode.Polite },
+            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        when (link) {
+            Link.OFFLINE -> TextButton(onClick = if (hasConnection) retry else openConnection, enabled = !preview,
+                modifier = Modifier.heightIn(min = 48.dp)) { Text(if (hasConnection) "Retry" else "Set up connection") }
+            Link.AUTH_REJECTED -> TextButton(onClick = openConnection, enabled = !preview,
+                modifier = Modifier.heightIn(min = 48.dp)) { Text("Replace token") }
+            else -> Unit
+        }
+    }
+}
+
 @Composable
 private fun DashboardHeader(
     title: String, weather: Entity?, wide: Boolean, short: Boolean, stacked: Boolean,
-    alerts: List<ActiveHomeBadge>, unlock: () -> Unit, idle: () -> Unit,
+    alerts: List<ActiveHomeBadge>, preview: Boolean, headerAction: () -> Unit, idle: (() -> Unit)?,
 ) {
     val padding = if (short) 6.dp else if (wide) 22.dp else 18.dp
     val prominent = wide && !short
+    val homeGesture = if (preview) Modifier else Modifier
+        .pointerInput(headerAction) { detectTapGestures(onLongPress = { headerAction() }) }
+        .semantics {
+            onLongClick("Unlock setup") {
+                headerAction()
+                true
+            }
+        }
     val titleContent: @Composable (Modifier) -> Unit = { modifier ->
         Text(
             title,
@@ -157,15 +199,7 @@ private fun DashboardHeader(
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = modifier.heightIn(min = 48.dp)
-                .pointerInput(unlock) { detectTapGestures(onLongPress = { unlock() }) }
-                .semantics {
-                    heading()
-                    onLongClick("Unlock setup") {
-                        unlock()
-                        true
-                    }
-                },
+            modifier = modifier.heightIn(min = 48.dp).then(homeGesture).semantics { heading() },
         )
     }
     val details: @Composable () -> Unit = {
@@ -175,23 +209,38 @@ private fun DashboardHeader(
             HeaderClock(prominent, idle)
         }
     }
+    val action: @Composable () -> Unit = {
+        IconButton(onClick = headerAction, modifier = Modifier.size(dashboardPillHeight)) {
+            if (preview) Icon(Icons.Rounded.Close, "Close Favourites preview")
+            else Icon(Icons.Rounded.Settings, "Settings")
+        }
+    }
     if (stacked) {
         Column(Modifier.fillMaxWidth().padding(top = padding)) {
-            titleContent(Modifier.fillMaxWidth())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                titleContent(Modifier.weight(1f))
+                action()
+            }
             Box(Modifier.align(Alignment.End)) { details() }
         }
     } else {
-        Row(Modifier.fillMaxWidth().padding(top = padding), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            titleContent(Modifier.weight(1f))
-            if (alerts.isNotEmpty()) HomeWarnings(alerts, iconOnly = true)
-            details()
+        Box(Modifier.fillMaxWidth().padding(top = padding)) {
+            Row(
+                Modifier.fillMaxWidth().padding(end = dashboardPillHeight + 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                titleContent(Modifier.weight(1f))
+                if (alerts.isNotEmpty()) HomeWarnings(alerts, iconOnly = true)
+                details()
+            }
+            Box(Modifier.align(Alignment.CenterEnd)) { action() }
         }
     }
 }
 
 @Composable
-private fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page) -> Unit, modifier: Modifier) {
+private fun DashboardNavigation(current: Page, short: Boolean, selectPage: ((Page) -> Unit)?, modifier: Modifier) {
     val colors = MaterialTheme.colorScheme
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
@@ -222,7 +271,8 @@ private fun DashboardNavigation(current: Page, short: Boolean, selectPage: (Page
                     stacked -> Modifier.weight(tabWidths[index].value)
                     else -> Modifier
                 }
-                val tab = width.clip(CircleShape).selectable(selected, role = Role.Tab, onClick = { selectPage(page) })
+                val tab = width.clip(CircleShape)
+                    .selectable(selected, enabled = selectPage != null, role = Role.Tab, onClick = { selectPage?.invoke(page) })
                     .background(if (selected) colors.secondaryContainer else Color.Transparent)
                     .heightIn(min = if (stacked) 56.dp else dashboardPillHeight)
                     .padding(horizontal = if (stacked) compactPadding else 12.dp, vertical = 6.dp)

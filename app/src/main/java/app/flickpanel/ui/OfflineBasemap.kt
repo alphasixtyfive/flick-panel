@@ -22,7 +22,7 @@ internal data class OfflineBasemap(
 )
 
 internal data class OfflineRegion(val asset: String, val bounds: Rect)
-internal data class OfflineDetail(val cells: List<DetailCell>, val roadNames: List<BasemapPlace>)
+internal data class OfflineDetail(val cells: List<DetailCell>, val roadNames: MapLabelIndex)
 internal data class DetailCell(val bounds: Rect, val layers: List<Path>)
 internal enum class DetailLayer(val closed: Boolean = false) { PARK(true), WATER(true), RIVER, LOCAL_ROAD, MAIN_ROAD }
 
@@ -129,7 +129,7 @@ private fun readOfflineDetail(assets: AssetManager, region: OfflineRegion, check
             BasemapPlace(point, 0, ByteArray(length).also(input::readFully).toString(Charsets.UTF_8))
         }
         if (input.read() != -1) throw IOException("Unexpected map detail data")
-        OfflineDetail(cells, roads)
+        OfflineDetail(cells, MapLabelIndex(roads))
     }
 
 private fun DataInputStream.readDetailHeader(): Rect {

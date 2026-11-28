@@ -21,6 +21,11 @@ import java.util.concurrent.atomic.AtomicReference
 private const val FIRST_RETRY_DELAY_MS = 750L
 private const val MAX_RETRY_DELAY_MS = 15_000L
 
+internal data class HaConnectionState(
+    val link: Link = Link.OFFLINE,
+    val entities: Map<String, Entity> = emptyMap(),
+)
+
 internal class HaConnection(
     private val credentials: HaCredentials,
     private val scope: CoroutineScope,
@@ -30,10 +35,8 @@ internal class HaConnection(
     private val socket = AtomicReference<HaSocket?>()
     private val selected = MutableStateFlow<Set<String>>(emptySet())
 
-    private val _link = MutableStateFlow(Link.OFFLINE)
-    val link = _link.asStateFlow()
-    private val _entities = MutableStateFlow<Map<String, Entity>>(emptyMap())
-    val entities = _entities.asStateFlow()
+    private val _state = MutableStateFlow(HaConnectionState())
+    val state = _state.asStateFlow()
     private val panel = HaPanelRemote()
     val panelState = panel.state
     val panelCommands = panel.commands
@@ -47,12 +50,27 @@ internal class HaConnection(
     fun start() {
         synchronized(lifecycle) {
             if (job?.isActive == true) return
-            val worker = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
-                reconnect(coroutineContext.job)
-            }
-            job = worker
-            worker.start()
+            launchWorker()
         }
+    }
+
+    fun retry() {
+        val waiting = synchronized(lifecycle) {
+            val previous = job ?: return
+            if (_state.value.link != Link.OFFLINE || !previous.isActive) return
+            launchWorker()
+            previous
+        }
+        waiting.cancel()
+    }
+
+    private fun launchWorker() {
+        val worker = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            reconnect(coroutineContext.job)
+        }
+        job = worker
+        setLink(Link.CONNECTING, PanelRemoteState.CONNECTING)
+        worker.start()
     }
 
     fun stop() {
@@ -60,8 +78,7 @@ internal class HaConnection(
             val worker = job
             job = null
             val session = socket.getAndSet(null)
-            _link.value = Link.OFFLINE
-            panel.updateConnection(PanelRemoteState.UNAVAILABLE)
+            setLink(Link.OFFLINE, PanelRemoteState.UNAVAILABLE)
             worker to session
         }
         worker?.cancel()
@@ -75,8 +92,7 @@ internal class HaConnection(
     private suspend fun reconnect(worker: Job) {
         var wait = FIRST_RETRY_DELAY_MS
         while (updateIfRunning(worker) {
-                _link.value = Link.CONNECTING
-                panel.updateConnection(PanelRemoteState.CONNECTING)
+                setLink(Link.CONNECTING, PanelRemoteState.CONNECTING)
             }) {
             var opened: HaSocket? = null
             try {
@@ -84,8 +100,7 @@ internal class HaConnection(
                 opened = session
                 if (!session.authenticate()) {
                     updateIfRunning(worker) {
-                        _link.value = Link.AUTH_REJECTED
-                        panel.updateConnection(PanelRemoteState.UNAVAILABLE)
+                        setLink(Link.AUTH_REJECTED, PanelRemoteState.UNAVAILABLE)
                     }
                     return
                 }
@@ -95,10 +110,9 @@ internal class HaConnection(
                 throw cancelled
             } catch (_: Exception) {
                 if (!updateIfRunning(worker) {
-                        if (_link.value == Link.ONLINE) wait = FIRST_RETRY_DELAY_MS
+                        if (_state.value.link == Link.ONLINE) wait = FIRST_RETRY_DELAY_MS
                         if (opened != null) socket.compareAndSet(opened, null)
-                        _link.value = Link.OFFLINE
-                        panel.updateConnection(PanelRemoteState.UNAVAILABLE)
+                        setLink(Link.OFFLINE, PanelRemoteState.UNAVAILABLE)
                     }) return
             } finally {
                 if (opened != null) {
@@ -128,8 +142,7 @@ internal class HaConnection(
                 if (ids.isEmpty()) {
                     updateIfRunning(worker) {
                         subscription = null
-                        _entities.value = emptyMap()
-                        _link.value = Link.ONLINE
+                        publishEntities(emptyMap())
                     }
                     previousId = null
                 } else {
@@ -153,15 +166,26 @@ internal class HaConnection(
             val running = updateIfRunning(worker) {
                 val current = subscription
                 if (current != null && current.id == id) {
-                    _entities.value = reduceEntities(
-                        _entities.value, event, current.entities, initial = !current.snapshot.isCompleted,
-                    )
-                    _link.value = Link.ONLINE
-                    current.snapshot.complete(Unit)
+                    val initial = !current.snapshot.isCompleted
+                    publishEntities(reduceEntities(_state.value.entities, event, current.entities, initial))
+                    if (initial) current.snapshot.complete(Unit)
                     handled = true
                 }
             }
             if (running && !handled) panelChannel.dispatch(id, event)
+        }
+    }
+
+    private fun setLink(link: Link, remote: PanelRemoteState) {
+        val current = _state.value
+        if (current.link != link) _state.value = current.copy(link = link)
+        panel.updateConnection(remote)
+    }
+
+    private fun publishEntities(entities: Map<String, Entity>) {
+        val current = _state.value
+        if (current.link != Link.ONLINE || current.entities !== entities) {
+            _state.value = HaConnectionState(Link.ONLINE, entities)
         }
     }
 

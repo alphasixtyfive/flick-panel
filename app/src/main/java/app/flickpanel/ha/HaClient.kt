@@ -27,14 +27,14 @@ internal class HaClient(
     scope: CoroutineScope,
 ) {
     private val connection = HaConnection(credentials, scope)
-    val link = connection.link
-    val entities = connection.entities
+    val connectionState = connection.state
     val panelRemoteState = connection.panelState
     val panelCommands = connection.panelCommands
     private val videoClient: OkHttpClient by lazy { HaHttp.videoClient(credentials.server) }
     private val cameraCapabilities = ConcurrentHashMap<String, Pair<Long, CameraCapabilities>>()
 
     fun start() = connection.start()
+    fun retry() = connection.retry()
     fun stop() = connection.stop()
     fun select(ids: Set<String>) = connection.select(ids)
     fun setPanelWebhook(webhookId: String?) = connection.setPanelWebhook(webhookId)
@@ -100,7 +100,7 @@ internal class HaClient(
         returnResponse: Boolean = false,
     ): JSONObject {
         require(validEntity(entity) && domain == entity.substringBefore('.'))
-        if (link.value != Link.ONLINE) throw HaProblem("Home Assistant is reconnecting")
+        if (connectionState.value.link != Link.ONLINE) throw HaProblem("Home Assistant is reconnecting")
         val data = JSONObject().put("domain", domain).put("service", service)
             .put("target", JSONObject().put("entity_id", entity)).put("service_data", values)
         if (returnResponse) data.put("return_response", true)
@@ -124,7 +124,7 @@ internal class HaClient(
 
     suspend fun setTaskCompleted(entity: String, uid: String, completed: Boolean) {
         require(validTaskUid(uid))
-        val taskList = entities.value[entity]
+        val taskList = connectionState.value.entities[entity]
         if (taskList?.available != true || !taskList.canUpdateTasks) {
             throw HaProblem("This task list does not support completing tasks")
         }
@@ -134,7 +134,7 @@ internal class HaClient(
 
     suspend fun addTask(entity: String, summary: String) {
         val title = normalizedTaskTitle(summary) ?: throw HaProblem("Enter a task name of up to $MAX_TASK_TITLE_LENGTH characters")
-        val taskList = entities.value[entity]
+        val taskList = connectionState.value.entities[entity]
         if (taskList?.available != true || !taskList.canAddTasks) {
             throw HaProblem("This task list does not support adding tasks")
         }

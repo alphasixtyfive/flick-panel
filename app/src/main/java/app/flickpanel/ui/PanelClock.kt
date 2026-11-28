@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +32,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import app.flickpanel.PanelViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -56,10 +61,14 @@ private fun dateFormatter(): DateTimeFormatter {
 
 @Composable
 private fun clockTime(): ZonedDateTime {
-    val now by produceState(ZonedDateTime.now()) {
-        while (isActive) {
-            value = ZonedDateTime.now()
-            delay(60_025 - System.currentTimeMillis() % 60_000)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var now by remember { mutableStateOf(ZonedDateTime.now()) }
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                now = ZonedDateTime.now()
+                delay(60_025 - System.currentTimeMillis() % 60_000)
+            }
         }
     }
     return now
@@ -103,10 +112,13 @@ internal fun AmbientClock(message: String?, messageEnabled: Boolean, albumId: St
 }
 
 @Composable
-internal fun HeaderClock(wide: Boolean, showIdleScreen: () -> Unit) {
-    Box(Modifier.heightIn(min = 48.dp).clickable(interactionSource = null, indication = null,
-        onClickLabel = "Show idle screen", role = Role.Button, onClick = showIdleScreen),
-        contentAlignment = Alignment.Center) {
+internal fun HeaderClock(wide: Boolean, showIdleScreen: (() -> Unit)?) {
+    val clock = Modifier.heightIn(min = 48.dp)
+    val modifier = if (showIdleScreen == null) clock else clock.clickable(
+        interactionSource = null, indication = null,
+        onClickLabel = "Show idle screen", role = Role.Button, onClick = showIdleScreen,
+    )
+    Box(modifier, contentAlignment = Alignment.Center) {
         val style = if (wide) MaterialTheme.typography.displaySmall else MaterialTheme.typography.titleLarge
         Text(clockTime().format(clockFormatter()), style = style.copy(fontFeatureSettings = "'tnum'"), maxLines = 1)
     }

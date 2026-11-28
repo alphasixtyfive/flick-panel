@@ -40,13 +40,13 @@ import app.flickpanel.config.TileSpec
 @Composable
 internal fun Favourites(
     tiles: List<TileSpec>, state: PanelUi, model: PanelViewModel, columns: Int, modifier: Modifier,
-    alerts: List<ActiveHomeBadge>,
+    alerts: List<ActiveHomeBadge>, preview: Boolean,
 ) {
     Column(modifier.padding(bottom = 12.dp)) {
         if (alerts.isNotEmpty()) HomeWarnings(alerts, Modifier.padding(bottom = tileGap))
         if (tiles.isEmpty() && alerts.isEmpty()) {
             EmptyState("No favourites yet", "Add tiles for the devices you use most.") {
-                TextButton(onClick = model::showUnlock) { Text("Open setup") }
+                TextButton(onClick = model::showUnlock, enabled = !preview) { Text("Open setup") }
             }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
@@ -76,13 +76,13 @@ internal fun Favourites(
                     if (homePageHeight(page) > boardHeight) {
                         LazyColumn(board, verticalArrangement = Arrangement.spacedBy(tileGap)) {
                             items(page, key = { it.lanes.first().first().tiles.first().entity }) { band ->
-                                FavouriteBand(band, groups, state, model)
+                                FavouriteBand(band, groups, state, model, preview)
                             }
                         }
                     } else {
                         Column(board, verticalArrangement = Arrangement.spacedBy(tileGap)) {
                             for (band in page) key(band.lanes.first().first().tiles.first().entity) {
-                                FavouriteBand(band, groups, state, model)
+                                FavouriteBand(band, groups, state, model, preview)
                             }
                         }
                     }
@@ -95,7 +95,7 @@ internal fun Favourites(
 
 @Composable
 private fun FavouriteBand(
-    band: HomeBand, groups: HomeTileGroups, state: PanelUi, model: PanelViewModel,
+    band: HomeBand, groups: HomeTileGroups, state: PanelUi, model: PanelViewModel, preview: Boolean,
 ) {
     val shortControlHeight = 110.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
     Row(Modifier.fillMaxWidth().height(band.height), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
@@ -104,7 +104,7 @@ private fun FavouriteBand(
                 for (row in lane) {
                     TileRow(row.tiles, state, model, row.columns, groups.compact, groups.resizeTiles,
                         shortcutRow = row.shortcuts, homeAgenda = row.expandedAgenda, modifier = Modifier.height(row.height),
-                        compactControls = row.height <= shortControlHeight)
+                        compactControls = row.height <= shortControlHeight, preview = preview)
                 }
             }
         }

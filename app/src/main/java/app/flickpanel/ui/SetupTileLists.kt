@@ -65,18 +65,19 @@ import app.flickpanel.ha.Area
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun FavouriteEditor(
-    draft: PanelConfig, state: PanelUi, add: () -> Unit, edit: (TileSpec) -> Unit,
+    draft: PanelConfig, state: PanelUi, add: () -> Unit, preview: () -> Unit, edit: (TileSpec) -> Unit,
     resize: (TileSpec) -> Unit, remove: (TileSpec) -> Unit, move: (String, Int) -> Unit, undo: (() -> Unit)?,
 ) {
     val groups = remember(draft.favourites) {
         draft.favourites.filter { it.showOnHome }.groupBy { it.kind.homeGroup }.toSortedMap()
     }
     Column(Modifier.fillMaxSize().padding(horizontal = setupPadding)) {
-        FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilledTonalButton(onClick = add, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(Icons.Rounded.Add, null, Modifier.padding(end = 7.dp))
                 Text("Add tile")
             }
+            TextButton(onClick = preview, modifier = Modifier.heightIn(min = 48.dp)) { Text("Preview layout") }
             if (undo != null) TextButton(onClick = undo) { Text("Undo removal") }
         }
         if (groups.isEmpty()) {

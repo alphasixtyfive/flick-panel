@@ -57,7 +57,6 @@ import app.flickpanel.ha.fanPowerService
 import app.flickpanel.ha.fanSpeed
 import app.flickpanel.ha.fanSpeedTarget
 import app.flickpanel.ha.hasMediaFeature
-import app.flickpanel.ha.parseServer
 import app.flickpanel.ha.playbackProgress
 import app.flickpanel.ha.supportsColour
 import kotlinx.coroutines.CancellationException
@@ -81,8 +80,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     val ui = _ui.asStateFlow()
     val agenda = PanelAgenda(viewModelScope)
     private var client: HaClient? = null
-    private var linkJob: Job? = null
-    private var stateJob: Job? = null
+    private var connectionJob: Job? = null
     private var remoteJob: Job? = null
     private var telemetryJob: Job? = null
     private var catalogueJob: Job? = null
@@ -108,6 +106,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     private var foreground = false
     private var roomControlsRequested = false
     private var securityEpoch = 0
+    private var unlockConnection = false
     private var pendingBackup: Pair<PanelBackupAction, PanelConfig>? = null
 
     init {
@@ -188,9 +187,19 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (_ui.value.catalogue.entries.isEmpty()) loadCatalogue()
     }
 
-    fun showUnlock() {
+    fun retryConnection() {
+        if (!foreground || !_ui.value.showingDashboard) return
+        client?.retry()
+    }
+
+    fun showUnlock() = showUnlock(openConnection = false)
+
+    fun showConnectionUnlock() = showUnlock(openConnection = true)
+
+    private fun showUnlock(openConnection: Boolean) {
         if (!_ui.value.showingDashboard) return
         cancelIdle()
+        unlockConnection = openConnection
         _ui.update { it.copy(unlocking = true, error = null) }
     }
 
@@ -200,7 +209,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         submitSettingsOperation {
             if (!validPin(pin)) throw HaProblem("Enter your 4 to 8 digit PIN")
             if (!withContext(Dispatchers.IO) { store.verify(pin) }) throw HaProblem("Incorrect setup PIN")
-            if (epoch == securityEpoch && foreground) openEditor()
+            if (epoch == securityEpoch && foreground) openEditor(connection = unlockConnection)
         }
     }
 
@@ -211,6 +220,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
 
     fun relock() {
         securityEpoch++
+        unlockConnection = false
         setupIdle.cancel()
         _ui.update { it.copy(unlocking = false, editor = false, connectionEditor = false, error = null) }
         touch()
@@ -228,8 +238,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         relock()
     }
 
-    private fun openEditor() {
-        _ui.update { it.copy(unlocking = false, editor = true, error = null) }
+    private fun openEditor(connection: Boolean = false) {
+        unlockConnection = false
+        _ui.update { it.copy(unlocking = false, editor = true, connectionEditor = connection, error = null) }
         touch()
         if (_ui.value.catalogue.entries.isEmpty()) loadCatalogue()
     }
@@ -280,14 +291,9 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         if (current.configured && !current.editor) return
         val epoch = securityEpoch
         submitSettingsOperation {
-            if (!current.configured && (!validPin(pin) || pin != confirmation)) {
-                throw HaProblem("Enter the same 4 to 8 digit setup PIN twice")
-            }
-            val secret = token.trim()
-            if (secret.length !in 16..4096 || secret.any(Char::isWhitespace)) {
-                throw HaProblem("Paste a Home Assistant long-lived access token")
-            }
-            val credentials = HaCredentials(parseServer(address), secret)
+            val input = validateConnectionInput(address, token, pin, confirmation, needsPin = !current.configured)
+            input.errors.values.firstOrNull()?.let { throw HaProblem(it) }
+            val credentials = HaCredentials(checkNotNull(input.server), token.trim())
             HaClient.validate(credentials)
             if (epoch != securityEpoch || !foreground) return@submitSettingsOperation
             val remote = withContext(Dispatchers.IO) {
@@ -809,8 +815,7 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     private fun setupClient(credentials: HaCredentials, remote: SavedRemote? = null) {
-        linkJob?.cancel()
-        stateJob?.cancel()
+        connectionJob?.cancel()
         remoteJob?.cancel()
         telemetryJob?.cancel()
         cancelCatalogueLoad()
@@ -838,21 +843,18 @@ internal class PanelViewModel(application: Application) : AndroidViewModel(appli
         client = active
         bindRemote(active, remote?.webhookId)
         updateSelection()
-        linkJob = viewModelScope.launch {
-            active.link.collect { state ->
-                _ui.update { it.copy(link = state) }
-                val current = _ui.value
-                if (state == Link.ONLINE && current.catalogue.entries.isEmpty() &&
-                    (current.editor || current.page == Page.ROOMS || current.config.roomIds?.isNotEmpty() == true)
+        connectionJob = viewModelScope.launch {
+            active.connectionState.collect { (link, entities) ->
+                val previous = _ui.value
+                _ui.update { it.copy(link = link, entities = entities) }
+                if (link != Link.ONLINE) return@collect
+                if (previous.link != Link.ONLINE && previous.catalogue.entries.isEmpty() &&
+                    (previous.editor || previous.page == Page.ROOMS || previous.config.roomIds?.isNotEmpty() == true)
                 ) loadCatalogue()
-            }
-        }
-        stateJob = viewModelScope.launch {
-            active.entities.collect { states ->
-                val current = _ui.value
-                _ui.update { it.copy(entities = states) }
-                val list = current.agendaOpen?.takeIf { it.startsWith("todo.") }
-                if (list != null && current.entities[list]?.state != states[list]?.state) loadAgenda(list, force = true)
+                val list = previous.agendaOpen?.takeIf { it.startsWith("todo.") }
+                if (list != null && (previous.link != Link.ONLINE || previous.entities[list]?.state != entities[list]?.state)) {
+                    loadAgenda(list, force = true)
+                }
             }
         }
         remoteJob = viewModelScope.launch {

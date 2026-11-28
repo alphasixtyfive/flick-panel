@@ -84,14 +84,12 @@ internal fun PersonMapCanvas(
         val marker = viewport.screenPoint(location.mapPoint(), center, scale)
         val origin = center - Offset(viewport.centre.x * scale.x, viewport.centre.y * scale.y)
         drawWorld(map, colours, origin, scale)
-        val close = viewport.latitudeSpan <= .24f
-        if (detail != null && close) {
-            val window = Rect(
-                viewport.centre - Offset(center.x / scale.x, center.y / scale.y),
-                viewport.centre + Offset(center.x / scale.x, center.y / scale.y),
-            )
+        val places = if (detail != null && viewport.latitudeSpan <= .24f) {
+            val halfWindow = Offset(center.x / scale.x, center.y / scale.y)
+            val window = Rect(viewport.centre - halfWindow, viewport.centre + halfWindow)
             drawDetail(detail, colours, origin, scale, window, viewport.latitudeSpan)
-        }
+            if (viewport.latitudeSpan < .085f) detail.roadNames.within(window) else map.places
+        } else map.places
 
         val placeRank = when {
             viewport.latitudeSpan > 40f -> 1
@@ -99,7 +97,6 @@ internal fun PersonMapCanvas(
             viewport.latitudeSpan > 6f -> 5
             else -> Int.MAX_VALUE
         }
-        val places = if (detail != null && viewport.latitudeSpan < .085f) detail.roadNames else map.places
         drawLabels(places, viewport, scale, marker, paint, halo, placeRank)
 
         val accuracy = location.accuracyMetres
@@ -172,13 +169,15 @@ private fun DrawScope.drawLabels(
         (size.width - 72.dp.toPx()).coerceAtLeast(12.dp.toPx()), (size.height - 122.dp.toPx()).coerceAtLeast(28.dp.toPx()))
     val occupied = mutableListOf<Rect>()
     val names = mutableSetOf<String>()
+    val ascent = paint.ascent()
+    val descent = paint.descent()
     for (place in places) {
         if (place.rank > rankLimit || occupied.size >= 18) break
         if (place.name in names) continue
         val point = viewport.screenPoint(place.point, center, scale)
         if (!safeArea.contains(point)) continue
         val x = point.x + 4.dp.toPx()
-        val textBox = Rect(x, point.y + paint.ascent(), x + paint.measureText(place.name), point.y + paint.descent())
+        val textBox = Rect(x, point.y + ascent, x + paint.measureText(place.name), point.y + descent)
         if (!safeArea.contains(textBox.topRight) || !safeArea.contains(textBox.bottomLeft) ||
             textBox.inflate(16.dp.toPx()).contains(marker) || occupied.any { it.overlaps(textBox) }
         ) continue

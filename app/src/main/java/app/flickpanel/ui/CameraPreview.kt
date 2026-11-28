@@ -105,19 +105,22 @@ internal fun CameraStill(
 }
 
 @Composable
-internal fun CameraTile(tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier, widescreen: Boolean = false) {
+internal fun CameraTile(
+    tile: TileSpec, state: PanelUi, model: PanelViewModel, modifier: Modifier,
+    widescreen: Boolean = false, preview: Boolean = false,
+) {
     val online = state.link == Link.ONLINE && state.entity(tile.entity)?.available != false
-    val previewActive = online && state.camera == null
+    val previewActive = !preview && online && state.camera == null
     val nativeCamera = if (tile.intercomStream == null) cameraSources(tile.entity, tile, state.entities).nativeCamera else null
     var nativeTalk by remember(nativeCamera, online) { mutableStateOf(false) }
     LaunchedEffect(nativeCamera, previewActive) {
         if (previewActive && nativeCamera != null) nativeTalk = model.cameraCapabilities(nativeCamera).twoWayAudio
     }
-    val preview = if (widescreen) modifier.aspectRatio(16f / 9f) else modifier
+    val frame = if (widescreen) modifier.aspectRatio(16f / 9f) else modifier
     Surface(
         onClick = { model.openCamera(tile.entity) },
-        enabled = online,
-        modifier = preview.semantics { if (online) onClick(label = "Open live camera", action = null) },
+        enabled = online && !preview,
+        modifier = frame.semantics { if (online && !preview) onClick(label = "Open live camera", action = null) },
         shape = panelCardShape, color = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         Box(Modifier.fillMaxSize()) {

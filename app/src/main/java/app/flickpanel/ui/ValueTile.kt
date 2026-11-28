@@ -31,7 +31,7 @@ internal fun ValueTile(
             if (entity?.available == true) {
                 val numeric = entity.state.toDoubleOrNull()?.isFinite() == true
                 TileValue(value, prominent = numeric, maxLines = 2)
-                if (link == Link.OFFLINE) TileStatus("Last reported")
+                if (link != Link.ONLINE) TileStatus("Last reported")
             } else TileStatus(value)
         }
     }

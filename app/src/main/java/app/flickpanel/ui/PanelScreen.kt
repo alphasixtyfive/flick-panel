@@ -108,7 +108,7 @@ internal fun PanelScreen(
                     Box(Modifier.fillMaxSize().padding(padding)) {
                         when {
                             state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                            !state.configured -> ConnectionForm(state, model::connect)
+                            !state.configured -> ConnectionForm(state, model::connect, onInput = model::clearError)
                             state.clock -> AmbientClock(
                                 state.screensaverMessage, state.config.screensaverMessageEntity != null,
                                 state.config.idleAlbum?.id, state.config.reduceMotion, model,
